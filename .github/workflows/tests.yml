@@ -1,0 +1,31 @@
+# The two claims this project rests on are that the numbers are computed and
+# that a report cannot state one the data layer never produced. Both are
+# checked by scripts that need no network and no API keys, so both run here on
+# every push rather than depending on someone remembering to run them.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Indicator computations
+        run: python tests/test_indicators.py
+
+      - name: Sourcing gate
+        run: python tests/test_verify.py

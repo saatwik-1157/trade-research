@@ -1,0 +1,15 @@
+{
+  "ticker": "TEST",
+  "generated_at": "2026-08-23T00:00:00Z",
+  "mode": "fixture",
+  "technical": {
+    "price": 214.72,
+    "sma200": 195.12,
+    "rsi14": 51.0
+  },
+  "edgar": {
+    "period_alignment": "aligned",
+    "revenue": 215900000000
+  },
+  "data_gaps": []
+}

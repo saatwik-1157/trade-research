@@ -67,7 +67,13 @@ class RefuseToTrade(RuntimeError):
 
 
 def connect(path: str | None = None):
-    import MetaTrader5 as mt5
+    try:
+        import MetaTrader5 as mt5
+    except ImportError as exc:  # optional, Windows-only: keep the rest usable without it
+        raise RefuseToTrade(
+            "MetaTrader5 is not installed. It is an optional, Windows-only "
+            "dependency: pip install MetaTrader5"
+        ) from exc
 
     if not mt5.initialize(path=path or DEFAULT_TERMINAL, timeout=60000):
         if not mt5.initialize(timeout=60000):
