@@ -34,9 +34,20 @@ data and flags anything that does not trace back.
 ## Setup
 
 ```bash
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-export SEC_USER_AGENT="your-project/1.0 your@email.com"   # the SEC requires this
+export SEC_USER_AGENT="your-project/1.0 your@email.com"   # identifies you to the SEC
 ```
+
+Install into a virtual environment rather than a global interpreter. `requests`
+validates the versions of its own transitive dependencies at import and warns
+when a globally installed package has displaced one of them - `urllib3-future`
+and newer `chardet` builds both do it - which puts a spurious warning on top of
+every run. A clean environment is the fix; there is nothing to pin here,
+because this project depends on `requests` and not on what sits underneath it.
+
+`SEC_USER_AGENT` should carry a real contact string. Requests still succeed
+without it, but the SEC throttles unidentified traffic under load.
 
 ## Use
 
@@ -56,6 +67,7 @@ python tools/backtest.py --universe tools/universe.txt --years 6 --horizon 63
 python tests/test_indicators.py
 python tests/test_verify.py
 python tests/test_cache.py
+python tests/test_edgar.py
 ```
 
 In Claude Code, `/trade-analyze NVDA` runs the whole pipeline: snapshot, five
@@ -116,6 +128,7 @@ tests/
   test_indicators.py   indicator maths checked against independent calculations
   test_verify.py       the sourcing gate, against a fixture snapshot
   test_cache.py        cache pruning removes only what is past its age
+  test_edgar.py        fiscal period alignment, against faked SEC responses
 ```
 
 ## Design rules

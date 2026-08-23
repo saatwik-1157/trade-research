@@ -45,13 +45,17 @@ Present it as a description of current state, never as a prediction.
 
 ## Environment
 
-`SEC_USER_AGENT` must be set to a contact string or the SEC will throttle.
+`SEC_USER_AGENT` should carry a contact string. Requests still succeed
+without it - the SEC throttles unidentified traffic rather than refusing it -
+so an unset variable shows up as slowness under load, not as an error.
+Work inside a virtualenv; see the README on the `requests` import warning.
 
 Run `python tests/test_indicators.py` after touching `tools/indicators.py`,
-`python tests/test_verify.py` after touching `tools/verify.py`, and
+`python tests/test_verify.py` after touching `tools/verify.py`,
 `python tests/test_cache.py` after touching the cache logic in
-`tools/market.py`. All three run in CI on every push, against Python 3.10,
-3.12 and 3.14.
+`tools/market.py`, and `python tests/test_edgar.py` after touching period
+alignment in `tools/edgar.py`. All four run in CI on every push, against
+Python 3.10, 3.12 and 3.14.
 
 The disk cache sweeps entries older than 7 days on first write of each
 process. `python tools/market.py --prune` runs it on demand.

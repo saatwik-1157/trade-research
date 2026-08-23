@@ -42,3 +42,6 @@ jobs:
 
       - name: Cache pruning
         run: python tests/test_cache.py
+
+      - name: SEC period alignment
+        run: python tests/test_edgar.py
