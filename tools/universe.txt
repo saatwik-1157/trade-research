@@ -1,0 +1,37 @@
+# Default backtest universe: large-cap US names across sectors.
+# Survivorship-biased by construction (these all still trade today).
+AAPL
+MSFT
+NVDA
+AMZN
+GOOGL
+META
+TSLA
+AMD
+INTC
+AVGO
+CRM
+ORCL
+ADBE
+JPM
+BAC
+GS
+UNH
+JNJ
+PFE
+LLY
+XOM
+CVX
+WMT
+COST
+HD
+PG
+KO
+DIS
+NFLX
+BA
+CAT
+GE
+T
+VZ
+NKE
