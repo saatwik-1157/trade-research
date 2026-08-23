@@ -54,6 +54,7 @@ python tools/verify.py reports/NVDA.report.md reports/NVDA.snapshot.json --stric
 python tools/backtest.py --universe tools/universe.txt --years 6 --horizon 63
 
 python tests/test_indicators.py
+python tests/test_verify.py
 ```
 
 In Claude Code, `/trade-analyze NVDA` runs the whole pipeline: snapshot, five
@@ -112,6 +113,7 @@ tools/
   agents/         technical, fundamental, sentiment, risk, thesis
 tests/
   test_indicators.py   indicator maths checked against independent calculations
+  test_verify.py       the sourcing gate, against a fixture snapshot
 ```
 
 ## Design rules

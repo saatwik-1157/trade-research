@@ -47,4 +47,6 @@ Present it as a description of current state, never as a prediction.
 
 `SEC_USER_AGENT` must be set to a contact string or the SEC will throttle.
 
-Run `python tests/test_indicators.py` after touching `tools/indicators.py`.
+Run `python tests/test_indicators.py` after touching `tools/indicators.py`,
+and `python tests/test_verify.py` after touching `tools/verify.py`. Both run
+in CI on every push.

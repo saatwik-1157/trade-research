@@ -44,7 +44,13 @@ TRADE_MODES = {0: "DEMO", 1: "CONTEST", 2: "REAL"}
 
 
 def connect(path: str | None = None, timeout: int = 60000):
-    import MetaTrader5 as mt5
+    try:
+        import MetaTrader5 as mt5
+    except ImportError as exc:  # optional, Windows-only: keep the rest usable without it
+        raise RuntimeError(
+            "MetaTrader5 is not installed. It is an optional, Windows-only "
+            "dependency: pip install MetaTrader5"
+        ) from exc
 
     # An explicit terminal path is materially more reliable than letting the
     # package discover a running instance; bare initialize() returns IPC
