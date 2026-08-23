@@ -1,0 +1,14 @@
+# Regenerable outputs. Excluded because they can carry account details:
+# mt5_account.json holds a login number, server and balance, and the alert and
+# paper-trade logs are a record of live activity.
+data/
+reports/
+
+# Local environment
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.log
+.venv/
+venv/
