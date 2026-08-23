@@ -1,7 +1,8 @@
-# The two claims this project rests on are that the numbers are computed and
-# that a report cannot state one the data layer never produced. Both are
-# checked by scripts that need no network and no API keys, so both run here on
-# every push rather than depending on someone remembering to run them.
+# The claims this project rests on are that the numbers are computed, that a
+# report cannot state one the data layer never produced, and that the cache
+# sweep deletes only what is dead. All three are checked by scripts that need
+# no network and no API keys, so all three run here on every push rather than
+# depending on someone remembering to run them.
 name: tests
 
 on:
@@ -13,12 +14,21 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10 is the floor claimed in requirements.txt; running it here is what
+        # makes that claim true rather than asserted. 3.14 is what development
+        # actually happens on.
+        python-version: ["3.10", "3.12", "3.14"]
 
-      - uses: actions/setup-python@v5
+    name: test (python ${{ matrix.python-version }})
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Install dependencies
@@ -29,3 +39,6 @@ jobs:
 
       - name: Sourcing gate
         run: python tests/test_verify.py
+
+      - name: Cache pruning
+        run: python tests/test_cache.py
