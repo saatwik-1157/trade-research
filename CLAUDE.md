@@ -48,5 +48,10 @@ Present it as a description of current state, never as a prediction.
 `SEC_USER_AGENT` must be set to a contact string or the SEC will throttle.
 
 Run `python tests/test_indicators.py` after touching `tools/indicators.py`,
-and `python tests/test_verify.py` after touching `tools/verify.py`. Both run
-in CI on every push.
+`python tests/test_verify.py` after touching `tools/verify.py`, and
+`python tests/test_cache.py` after touching the cache logic in
+`tools/market.py`. All three run in CI on every push, against Python 3.10,
+3.12 and 3.14.
+
+The disk cache sweeps entries older than 7 days on first write of each
+process. `python tools/market.py --prune` runs it on demand.

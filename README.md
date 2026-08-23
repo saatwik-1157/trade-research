@@ -55,6 +55,7 @@ python tools/backtest.py --universe tools/universe.txt --years 6 --horizon 63
 
 python tests/test_indicators.py
 python tests/test_verify.py
+python tests/test_cache.py
 ```
 
 In Claude Code, `/trade-analyze NVDA` runs the whole pipeline: snapshot, five
@@ -114,6 +115,7 @@ tools/
 tests/
   test_indicators.py   indicator maths checked against independent calculations
   test_verify.py       the sourcing gate, against a fixture snapshot
+  test_cache.py        cache pruning removes only what is past its age
 ```
 
 ## Design rules
@@ -167,6 +169,7 @@ Two sources, one report format, so the numbers are directly comparable.
 
 ```bash
 python tools/mt5_account.py --days 730          # MetaTrader 5, read-only
+python tools/market.py --prune                  # drop cache entries past 7 days
 python tools/tv_import.py "List of Trades.csv"  # TradingView export
 python tools/tv_import.py trades.csv --inspect  # check column detection first
 ```

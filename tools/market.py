@@ -40,7 +40,45 @@ def _read_cache(key: str, max_age_s: int = 3600):
     return None
 
 
+# Cache entries are named per (key, UTC day), so each day writes a fresh set
+# beside the previous one and nothing ever overwrites. Read freshness is capped
+# at 12 hours, so anything older than a few days is dead weight: a single day of
+# ordinary use leaves ~175 files. Sweep it once per process rather than on every
+# write, which would mean a directory scan per cached call.
+CACHE_MAX_AGE_DAYS = 7
+_PRUNED = False
+
+
+def prune_cache(max_age_days: int = CACHE_MAX_AGE_DAYS) -> int:
+    """Delete cache entries older than max_age_days. Returns how many were removed."""
+    cutoff = time.time() - max_age_days * 86400
+    removed = 0
+    try:
+        names = os.listdir(CACHE_DIR)
+    except OSError:
+        return 0
+    for name in names:
+        if not name.endswith(".json"):
+            continue
+        path = os.path.join(CACHE_DIR, name)
+        try:
+            if os.path.getmtime(path) < cutoff:
+                os.remove(path)
+                removed += 1
+        except OSError:
+            continue  # a file that vanished or is locked is not worth failing over
+    return removed
+
+
+def _prune_once() -> None:
+    global _PRUNED
+    if not _PRUNED:
+        _PRUNED = True
+        prune_cache()
+
+
 def _write_cache(key: str, payload) -> None:
+    _prune_once()
     try:
         with open(_cache_path(key), "w", encoding="utf-8") as fh:
             json.dump(payload, fh, default=str)
@@ -250,3 +288,18 @@ def provenance(ticker: str, df: pd.DataFrame) -> dict:
         "benchmark": {"source": PROVIDER, "ticker": BENCHMARK},
         "retrieved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
+
+
+if __name__ == "__main__":
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Market data cache maintenance.")
+    ap.add_argument("--prune", action="store_true", help="delete stale cache entries")
+    ap.add_argument("--max-age-days", type=int, default=CACHE_MAX_AGE_DAYS,
+                    help=f"age threshold in days (default {CACHE_MAX_AGE_DAYS})")
+    args = ap.parse_args()
+    if not args.prune:
+        ap.print_help()
+        raise SystemExit(0)
+    n = prune_cache(args.max_age_days)
+    print(f"removed {n} cache entries older than {args.max_age_days} days from {CACHE_DIR}")
