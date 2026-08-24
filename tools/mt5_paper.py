@@ -206,13 +206,7 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
     sl = price - sl_atr * atr if is_buy else price + sl_atr * atr
     tp = price + tp_atr * atr if is_buy else price - tp_atr * atr
 
-    # Broker fill policy varies; pick one the symbol actually accepts.
-    filling = mt5.ORDER_FILLING_IOC
-    if hasattr(info, "filling_mode"):
-        if info.filling_mode & 2:
-            filling = mt5.ORDER_FILLING_RETURN
-        elif info.filling_mode & 1:
-            filling = mt5.ORDER_FILLING_IOC
+    filling = filling_for(mt5, info)
 
     request = {
         "action": mt5.TRADE_ACTION_DEAL,
@@ -246,6 +240,24 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
     return out
 
 
+
+def filling_for(mt5, info):
+    """Pick an order filling mode the symbol actually accepts.
+
+    symbol_info().filling_mode is a bitmask over SYMBOL_FILLING_* (FOK=1,
+    IOC=2). The ORDER_FILLING_* request constants are a different enumeration
+    (FOK=0, IOC=1, RETURN=2), so the bitmask bits must be translated, not used
+    directly - conflating them sends IOC to a FOK-only symbol and the server
+    rejects it with retcode 10030.
+    """
+    mask = getattr(info, "filling_mode", 0) or 0
+    if mask & 1:
+        return mt5.ORDER_FILLING_FOK
+    if mask & 2:
+        return mt5.ORDER_FILLING_IOC
+    return mt5.ORDER_FILLING_RETURN
+
+
 def close_own(mt5, live: bool) -> list[dict]:
     out = []
     for p in own_positions(mt5):
@@ -265,7 +277,7 @@ def close_own(mt5, live: bool) -> list[dict]:
             "magic": MAGIC,
             "comment": "trade-research close",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": filling_for(mt5, mt5.symbol_info(p.symbol)),
         }
         if not live:
             out.append({"ticket": p.ticket, "symbol": p.symbol, "status": "DRY_RUN"})

@@ -43,6 +43,21 @@ It has been backtested and shows **no reliable forward-return edge** (mean IC
 ≈0.00–0.03, t < 1, negative quintile spreads; see `reports/backtest_*.json`).
 Present it as a description of current state, never as a prediction.
 
+## Before quoting any mt5_paper trading rule
+
+`rsi_reversion` and `sma_cross` have been measured on 20,000 H1 bars across 7
+FX majors and neither separates from a coin flip (`reports/rule_backtest.json`).
+A 36-cell sweep of SL/TP bracket ratios found no configuration reaching even an
+uncorrected t of 1.96, while the `random` rule searching the identical grid
+scored higher in-sample and then collapsed out of sample
+(`reports/bracket_sweep.json`).
+
+The only effect that replicates out of sample is negative: tight brackets trade
+often and pay the spread every time. Frequency is the one lever with a proven
+sign, and it points down - which is the reason not to wire these rules to an
+interval and leave them running. Describe a rule's behaviour; never present one
+as an entry signal, and never tune the grid until a cell looks profitable.
+
 ## Environment
 
 `SEC_USER_AGENT` should carry a contact string. Requests still succeed
@@ -53,9 +68,11 @@ Work inside a virtualenv; see the README on the `requests` import warning.
 Run `python tests/test_indicators.py` after touching `tools/indicators.py`,
 `python tests/test_verify.py` after touching `tools/verify.py`,
 `python tests/test_cache.py` after touching the cache logic in
-`tools/market.py`, and `python tests/test_edgar.py` after touching period
-alignment in `tools/edgar.py`. All four run in CI on every push, against
-Python 3.10, 3.12 and 3.14.
+`tools/market.py`, `python tests/test_edgar.py` after touching period
+alignment in `tools/edgar.py`, and `python tests/test_rule_backtest.py` after
+touching `tools/rule_backtest.py`, `tools/bracket_sweep.py` or the order
+construction in `tools/mt5_paper.py`. All five run in CI on every push,
+against Python 3.10, 3.12 and 3.14.
 
 The disk cache sweeps entries older than 7 days on first write of each
 process. `python tools/market.py --prune` runs it on demand.
