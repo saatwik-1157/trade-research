@@ -36,7 +36,8 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from rule_backtest import (SYMBOLS, atr_series, choose_spread, connect,
-                           fetch_rates, simulate, sma, stats, wilder_rsi)
+                           fetch_rates, simulate, sma, stats, trim_to_years,
+                           wilder_rsi)
 
 
 # ------------------------------------------------------------- indicators
@@ -210,13 +211,18 @@ def main():
                     help="permutation draws of the whole candidate set")
     ap.add_argument("--spread-source", default="median", choices=["median", "p90", "live"])
     ap.add_argument("--min-trades", type=int, default=100)
+    ap.add_argument("--timeframe", default="H1", choices=["H1", "H4", "D1"])
+    ap.add_argument("--years", type=float, default=3.2,
+                    help="trim history to this many years, so timeframes are "
+                         "comparable and backfilled bars are excluded")
     ap.add_argument("--out")
     ap.add_argument("--path")
     args = ap.parse_args()
 
     mt5 = connect(args.path)
     symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
-    result = {"timeframe": "H1", "sl_atr": args.sl_atr, "tp_atr": args.tp_atr,
+    result = {"timeframe": args.timeframe, "years": args.years,
+              "sl_atr": args.sl_atr, "tp_atr": args.tp_atr,
               "spread_source": args.spread_source, "split": args.split,
               "null_rounds": args.null_rounds, "data_gaps": []}
 
@@ -225,7 +231,8 @@ def main():
         if not mt5.symbol_select(sym, True):
             result["data_gaps"].append(f"{sym}: could not select")
             continue
-        rates = fetch_rates(mt5, sym, args.bars)
+        rates = fetch_rates(mt5, sym, args.bars, args.timeframe, min_bars=300)
+        rates = trim_to_years(rates, args.years)
         info, tick = mt5.symbol_info(sym), mt5.symbol_info_tick(sym)
         if rates is None or info is None:
             result["data_gaps"].append(f"{sym}: insufficient history")

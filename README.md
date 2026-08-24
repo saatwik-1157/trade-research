@@ -124,6 +124,8 @@ tools/
   bracket_sweep.py  SL/TP grid with an out-of-sample holdout and a random-search null
   cost_hurdle.py    breakeven win rate the spread imposes, before any strategy
   rule_search.py    many candidate rule families against a permutation null
+  exit_search.py    entry x exit combinations, including exits that let winners run
+  cost_profile.py   where the spread hurdle is smallest: by symbol, hour and timeframe
   tv_import.py    TradingView CSV trade-export importer
   tv_webhook.py   TradingView alert receiver (records signals, never trades)
 .claude/

@@ -59,20 +59,41 @@ def choose_spread(rates, info, tick, source="median"):
     return live, "single live quote at run time"
 
 
-def fetch_rates(mt5, symbol, want):
-    """Ask for `want` H1 bars, stepping down until the terminal agrees.
+def timeframe_const(mt5, name):
+    return {"H1": mt5.TIMEFRAME_H1, "H4": mt5.TIMEFRAME_H4,
+            "D1": mt5.TIMEFRAME_D1}[name]
+
+
+def fetch_rates(mt5, symbol, want, timeframe="H1", min_bars=500):
+    """Ask for `want` bars, stepping down until the terminal agrees.
 
     The terminal rejects an over-large request with "Invalid params" rather
     than returning what it has, so an unconditional big ask silently yields
     nothing for every symbol.
     """
-    for count in (want, 50000, 20000, 10000, 5000, 2000):
+    tf = timeframe_const(mt5, timeframe)
+    for count in (want, 50000, 20000, 10000, 5000, 2000, 1000):
         if count > want:
             continue
-        rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, count)
-        if rates is not None and len(rates) >= 500:
+        rates = mt5.copy_rates_from_pos(symbol, tf, 0, count)
+        if rates is not None and len(rates) >= min_bars:
             return rates
     return None
+
+
+def trim_to_years(rates, years):
+    """Drop everything older than `years` before the last bar.
+
+    The D1 series on this feed reaches back to 1971 - decades before EURUSD
+    existed. Those backfilled bars carry synthetic prices and a placeholder
+    spread (50 points against 3 for a real quote), so leaving them in makes a
+    daily test both fictional and, through the spread, wrong in the expensive
+    direction. Trimming also keeps timeframes comparable to one another.
+    """
+    if rates is None or not years:
+        return rates
+    t = rates["time"].astype("int64")
+    return rates[t >= int(t[-1]) - int(years * 365.25 * 86400)]
 
 
 # ---------------------------------------------------------------- indicators

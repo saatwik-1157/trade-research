@@ -222,6 +222,8 @@ def test_fetch_rates_steps_down():
     class Terminal:
         """Rejects anything above `cap`, the way the real terminal does."""
         TIMEFRAME_H1 = 16385
+        TIMEFRAME_H4 = 16388
+        TIMEFRAME_D1 = 16408
 
         def __init__(self, cap):
             self.cap = cap
