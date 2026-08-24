@@ -70,9 +70,15 @@ Run `python tests/test_indicators.py` after touching `tools/indicators.py`,
 `python tests/test_cache.py` after touching the cache logic in
 `tools/market.py`, `python tests/test_edgar.py` after touching period
 alignment in `tools/edgar.py`, and `python tests/test_rule_backtest.py` after
-touching `tools/rule_backtest.py`, `tools/bracket_sweep.py` or the order
-construction in `tools/mt5_paper.py`. All five run in CI on every push,
-against Python 3.10, 3.12 and 3.14.
+touching `tools/rule_backtest.py`, `tools/bracket_sweep.py`, or the order
+construction or history windows in `tools/mt5_paper.py` and
+`tools/mt5_account.py`. All five run in CI on every push, against Python
+3.10, 3.12 and 3.14.
+
+The MT5 server clock is not the local clock. Bound a history query with
+`mt5_paper.history_end()` and `server_now()`, never `datetime.now()` — a local
+upper bound drops every deal the server stamped later, returns no error, and
+reads as "no trades" instead of a fault.
 
 The disk cache sweeps entries older than 7 days on first write of each
 process. `python tools/market.py --prune` runs it on demand.

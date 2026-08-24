@@ -44,7 +44,7 @@ import os
 import random
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -180,10 +180,42 @@ def own_positions(mt5):
     return [p for p in (mt5.positions_get() or []) if p.magic == MAGIC]
 
 
+
+def server_now(mt5) -> datetime:
+    """The terminal's own clock, which is not the local one.
+
+    Deal timestamps come from the broker's server. Bounding a history query
+    with local `datetime.now()` silently drops everything the server stamped
+    later than the local clock reads - which, on a server running ahead, is
+    every trade closed today. The failure is invisible: the query succeeds and
+    returns fewer deals, so the caller reports "no trades" rather than an
+    error. A live tick carries the server's clock, so ask it.
+    """
+    for sym in ("EURUSD", "GBPUSD", "USDJPY", "XAUUSD"):
+        tick = mt5.symbol_info_tick(sym)
+        if tick and getattr(tick, "time", 0):
+            return datetime.fromtimestamp(tick.time)
+    return datetime.now()
+
+
+def history_end(mt5) -> datetime:
+    """Upper bound for a history query, padded past both clocks.
+
+    Padding forward cannot pull in deals that do not exist yet, so it is the
+    safe direction to be wrong in.
+    """
+    return max(datetime.now(), server_now(mt5)) + timedelta(days=1)
+
+
 def realised_today(mt5) -> float:
-    """P&L booked by this tool today, used for the daily loss limit."""
-    start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    deals = mt5.history_deals_get(start, datetime.now()) or []
+    """P&L booked by this tool today, used for the daily loss limit.
+
+    "Today" is the server's day, not the local one, and the window runs past
+    the server clock. Getting this wrong returns 0.0 rather than an error, so
+    --max-daily-loss silently stops being a limit at all.
+    """
+    start = server_now(mt5).replace(hour=0, minute=0, second=0, microsecond=0)
+    deals = mt5.history_deals_get(start, history_end(mt5)) or []
     return sum(d.profit + d.commission + d.swap for d in deals if d.magic == MAGIC)
 
 
