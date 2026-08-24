@@ -84,6 +84,34 @@ works at this exit, and the mean-reversion families the exit suits still lost" -
 not that breakouts do not work. Sweeping brackets across all candidates would be
 1,476 configurations, which correction would swallow.
 
+The same 41 candidates were then run at H4 and D1, and 25 entries were crossed
+with 8 exit structures - fixed brackets, ATR trailing, time-based and
+move-to-breakeven - so the trend families got exits that do not cap a winner
+(`reports/rule_search_h4.json`, `reports/rule_search_d1.json`,
+`reports/exit_search.json`). Nothing survived. At H4 and D1 the permutation null
+outscored the best real candidate (2.89 vs 1.42, and 2.77 vs 2.23). The exit
+search produced the only candidate ever to beat its null in-sample, at t=3.10,
+and it went to -1.83 out of sample; three combinations cleared 1.96 out of
+sample against 4.9 expected by chance.
+
+One out-of-sample split is not enough. The `time_120` exit showed +26 median
+out-of-sample expectancy across 24 unrelated entries and survived a permutation
+check (+23.0 real against -0.9 shuffled), which looked like a finding. Split
+into four sequential blocks it fell apart: real was worse than shuffled in the
+first block, identical in the second (+13.1 against +13.5, so that quarter was
+market drift), better in the last two. A 120-bar hold has enough variance that
+the shuffled series alone ranges from -35 to +13.5 - which is why large
+points-per-trade numbers sit next to t-stats near zero. Check stability across
+several blocks before believing any exit that holds positions a long time.
+
+Cost is the lever that does move (`reports/cost_profile.json`). Measured over a
+common window, H4 costs 0.41x and D1 0.27x of the H1 spread hurdle, because ATR
+grows with bar length far faster than spread does. Hour of day barely matters on
+this broker: only the rollover hour stands out, at 8 points against 3. Lower
+cost does not create an edge, and it trades against verification - D1 accrues
+trades roughly 24x slower, so a smaller hurdle comes with a much longer wait for
+evidence.
+
 Use `rule_search.py`'s permutation null rather than a plain coin flip when
 judging a new rule: shuffling a candidate's own signals preserves its trade
 count and buy/sell mix, so the null pays the same spread and the comparison
