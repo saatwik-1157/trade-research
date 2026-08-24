@@ -45,3 +45,6 @@ jobs:
 
       - name: SEC period alignment
         run: python tests/test_edgar.py
+
+      - name: Rule backtest and order fill mode
+        run: python tests/test_rule_backtest.py
