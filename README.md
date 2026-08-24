@@ -116,19 +116,25 @@ tools/
   backtest.py     point-in-time forward-return test of the score
   verify.py       checks every number in a written note against the snapshot
   universe.txt    default backtest universe
+  patterns.py     candlestick and price patterns, tested for forward edge
   trade_stats.py  execution statistics, shared by both trade sources
   mt5_account.py  read-only MetaTrader 5 account analysis
+  mt5_paper.py    the only module that sends orders — DEMO accounts only, fenced in code
+  rule_backtest.py  replays the mt5_paper rules against MT5 history
+  bracket_sweep.py  SL/TP grid with an out-of-sample holdout and a random-search null
   tv_import.py    TradingView CSV trade-export importer
   tv_webhook.py   TradingView alert receiver (records signals, never trades)
 .claude/
   skills/         trade-analyze, trade-quick, trade-verify, trade-backtest,
-                  mt5-account, tradingview-import, tradingview-webhook
+                  pattern-study, mt5-account, mt5-paper-trade,
+                  tradingview-import, tradingview-webhook
   agents/         technical, fundamental, sentiment, risk, thesis
 tests/
   test_indicators.py   indicator maths checked against independent calculations
   test_verify.py       the sourcing gate, against a fixture snapshot
   test_cache.py        cache pruning removes only what is past its age
   test_edgar.py        fiscal period alignment, against faked SEC responses
+  test_rule_backtest.py  backtest indicators match the live rules; order fill mode
 ```
 
 ## Design rules

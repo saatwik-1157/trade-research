@@ -33,6 +33,7 @@ try:
 except (AttributeError, OSError):
     pass
 
+import mt5_paper
 import trade_stats
 
 DEFAULT_TERMINAL = r"C:\Program Files\MetaTrader 5\terminal64.exe"
@@ -190,8 +191,9 @@ def closed_trades(mt5, since: datetime, until: datetime) -> tuple[list[dict], li
 def analyse(days: int = 730, path: str | None = None) -> dict:
     mt5 = connect(path)
     try:
-        until = datetime.now()
-        since = until - timedelta(days=days)
+        # Server clock, padded: a local upper bound hides today's trades.
+        until = mt5_paper.history_end(mt5)
+        since = mt5_paper.server_now(mt5) - timedelta(days=days)
         trades, cash = closed_trades(mt5, since, until)
         return {
             "generated_at": datetime.now().isoformat(timespec="seconds"),

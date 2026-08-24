@@ -28,6 +28,7 @@ from __future__ import annotations
 import os
 import sys
 import types
+from datetime import datetime, timedelta
 
 import numpy as np
 
@@ -255,6 +256,76 @@ def test_stats_reports_absence():
     check("significance is not claimed without dispersion", s2["significant_at_95"], False)
 
 
+# ------------------------------------------------------------- server clock
+class Clock:
+    """A terminal whose clock runs ahead of the local one, as brokers do.
+
+    history_deals_get filters by the bounds it is given, which is what makes
+    the bug silent: a too-early upper bound returns fewer deals and no error.
+    """
+
+    def __init__(self, skew_hours=3.0, deals=()):
+        self.skew = skew_hours
+        self._deals = deals
+        self.bounds = None
+
+    def symbol_info_tick(self, symbol):
+        if symbol != "EURUSD":
+            return None
+        t = datetime.now() + timedelta(hours=self.skew)
+        return types.SimpleNamespace(time=t.timestamp())
+
+    def history_deals_get(self, start, end):
+        self.bounds = (start, end)
+        return tuple(d for d in self._deals if start <= d.when <= end)
+
+
+def deal(hours_ahead, profit, magic):
+    when = datetime.now() + timedelta(hours=hours_ahead)
+    return types.SimpleNamespace(when=when, profit=profit, commission=0.0,
+                                 swap=0.0, magic=magic)
+
+
+def test_server_clock_window():
+    print("\nServer clock - a local upper bound hides trades closed today")
+
+    c = Clock(skew_hours=3.0)
+    skew = (mt5_paper.server_now(c) - datetime.now()).total_seconds() / 3600
+    close_to("server_now follows the terminal, not the local clock", skew, 3.0, 0.05)
+    check("history_end is padded past the server clock",
+          mt5_paper.history_end(c) > mt5_paper.server_now(c), True)
+    check("history_end is padded past the local clock",
+          mt5_paper.history_end(c) > datetime.now(), True)
+
+    # No tick to read: fall back to local rather than inventing an offset.
+    class Dark(Clock):
+        def symbol_info_tick(self, symbol):
+            return None
+
+    fallback = (mt5_paper.server_now(Dark()) - datetime.now()).total_seconds()
+    check("server_now falls back to the local clock when no tick is quoted",
+          abs(fallback) < 5, True)
+
+
+def test_realised_today_sees_a_server_ahead_deal():
+    print("\nDaily loss limit - it must actually see today's booked P&L")
+
+    # Stamped ahead of the local clock, exactly like a real closed trade.
+    ours = deal(hours_ahead=3.0, profit=-0.58, magic=mt5_paper.MAGIC)
+    theirs = deal(hours_ahead=3.0, profit=-500.0, magic=999)
+    c = Clock(skew_hours=3.0, deals=(ours, theirs))
+
+    got = mt5_paper.realised_today(c)
+    close_to("a deal stamped ahead of local time is counted", got, -0.58, 1e-9)
+    check("another EA's deals are not counted against this tool's limit",
+          got > -100, True)
+
+    # The regression itself: bounding at local now returns 0.0 and no error,
+    # so --max-daily-loss stops being a limit without anything failing.
+    naive = [d for d in (ours, theirs) if d.when <= datetime.now()]
+    check("the old local-clock bound would have found nothing", len(naive), 0)
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -265,6 +336,8 @@ def main():
     test_no_overlapping_positions()
     test_fetch_rates_steps_down()
     test_stats_reports_absence()
+    test_server_clock_window()
+    test_realised_today_sees_a_server_ahead_deal()
 
     print()
     if FAILURES:
