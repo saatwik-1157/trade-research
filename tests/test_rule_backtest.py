@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import mt5_paper  # noqa: E402
 import rule_backtest as rb  # noqa: E402
+import rule_search  # noqa: E402
 
 FAILURES: list[str] = []
 
@@ -359,6 +360,62 @@ def test_spread_source():
           got2 == 0.0 and "understated" in note2, True)
 
 
+def test_permutation_null_is_matched():
+    print("\nPermutation null - shuffling must remove timing and nothing else")
+
+    rng = np.random.default_rng(3)
+    sig = np.zeros(5000, dtype=int)
+    sig[rng.choice(5000, 700, replace=False)] = 1
+    sig[rng.choice(np.flatnonzero(sig == 0), 400, replace=False)] = -1
+
+    out = rule_search.permute(sig, seed=11)
+
+    # If the null traded less often it would pay less spread, and would beat
+    # the real candidate on cost alone rather than on timing.
+    check("signal count is preserved", int((out != 0).sum()), int((sig != 0).sum()))
+    check("buy count is preserved", int((out == 1).sum()), int((sig == 1).sum()))
+    check("sell count is preserved", int((out == -1).sum()), int((sig == -1).sum()))
+    check("length is preserved", len(out), len(sig))
+    check("timing actually changed", bool((out != sig).any()), True)
+    check("the original array is not mutated", int((sig == 1).sum()), 700)
+
+    # Same seed must reproduce, or a reported null cannot be re-derived.
+    check("permutation is deterministic in the seed",
+          bool((rule_search.permute(sig, 11) == out).all()), True)
+    check("a different seed gives a different draw",
+          bool((rule_search.permute(sig, 12) != out).any()), True)
+
+
+def test_significance_threshold():
+    print("\nMultiple-testing threshold - it must rise with the number of tests")
+
+    naive = rule_search.z_for(0.05)
+    close_to("an uncorrected 5% two-sided test is 1.96", naive, 1.96, 0.01)
+    check("correcting for 41 tests demands more than 1.96",
+          rule_search.z_for(0.05 / 41) > 3.0, True)
+    check("more tests means a higher bar",
+          rule_search.z_for(0.05 / 100) > rule_search.z_for(0.05 / 41), True)
+
+
+def test_candidates_are_distinct():
+    print("\nCandidate set - names must be unique or results cannot be attributed")
+
+    cands = rule_search.build_candidates()
+    names = [n for n, _, _ in cands]
+    check("every candidate has a distinct name", len(set(names)), len(names))
+    check("more than one family is represented",
+          len({f for _, f, _ in cands}) > 5, True)
+
+    # A signal that reads its own bar would be lookahead. Every candidate must
+    # leave the opening bars flat, since no indicator is formed yet.
+    rng = np.random.default_rng(5)
+    c = 100 + np.cumsum(rng.normal(0, 0.3, 2000))
+    h, l = c + 0.2, c - 0.2
+    o = np.concatenate([[c[0]], c[:-1]])
+    leaky = [n for n, _, fn in cands if fn(o, h, l, c)[0] != 0]
+    check("no candidate signals on the very first bar", leaky, [])
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -372,6 +429,9 @@ def main():
     test_server_clock_window()
     test_realised_today_sees_a_server_ahead_deal()
     test_spread_source()
+    test_permutation_null_is_matched()
+    test_significance_threshold()
+    test_candidates_are_distinct()
 
     print()
     if FAILURES:

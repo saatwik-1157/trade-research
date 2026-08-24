@@ -71,6 +71,24 @@ identical grid scored higher in-sample at 1.76. Over 30 of the 36 cells are
 negative in-sample for each rule (`reports/bracket_sweep.json`,
 `reports/bracket_sweep_sma.json`).
 
+A 41-candidate search across 10 rule families (RSI, MA crosses, Donchian,
+Bollinger, momentum, and the inverse of each) found nothing either
+(`reports/rule_search.json`). Best in-sample t was 1.37, negative out of sample,
+below what a permutation null reached over the same 41 candidates. Zero cleared
+1.96 out of sample against ~1 expected by chance, and every family's median
+out-of-sample expectancy is negative.
+
+That search fixes the exit at SL=TP=1.5xATR, which caps winners and so handicaps
+the trend-following families by construction. The supportable claim is "nothing
+works at this exit, and the mean-reversion families the exit suits still lost" -
+not that breakouts do not work. Sweeping brackets across all candidates would be
+1,476 configurations, which correction would swallow.
+
+Use `rule_search.py`'s permutation null rather than a plain coin flip when
+judging a new rule: shuffling a candidate's own signals preserves its trade
+count and buy/sell mix, so the null pays the same spread and the comparison
+isolates timing rather than exposure.
+
 The only effect that replicates out of sample is negative: tight brackets trade
 often and pay the spread every time. Frequency is the one lever with a proven
 sign, and it points down - which is the reason not to wire these rules to an
