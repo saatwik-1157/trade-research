@@ -326,6 +326,39 @@ def test_realised_today_sees_a_server_ahead_deal():
     check("the old local-clock bound would have found nothing", len(naive), 0)
 
 
+def test_spread_source():
+    print("\nSpread source - a quiet live quote is not what the rule pays")
+
+    info = types.SimpleNamespace(point=0.00001, spread=1)
+    tick = types.SimpleNamespace(ask=1.10001, bid=1.10000)   # 1 point, quiet
+    # Half the bars record nothing; the rest average 4 points.
+    spreads = np.array([0, 0, 0, 0, 3, 4, 4, 5, 40, 4], dtype=float)
+    rates = np.rec.fromarrays([spreads], names="spread")
+
+    med, note = rb.choose_spread(rates, info, tick, "median")
+    close_to("median ignores the unrecorded zero bars", med / info.point, 4.0, 1e-9)
+    check("the note says how many bars backed it", "6 bars" in note, True)
+
+    p90, _ = rb.choose_spread(rates, info, tick, "p90")
+    check("p90 is at least the median", p90 >= med, True)
+
+    live, note_live = rb.choose_spread(rates, info, tick, "live")
+    close_to("live reads the quote it was handed", live / info.point, 1.0, 1e-9)
+    check("live says it is a single quote", "single live quote" in note_live, True)
+    check("the recorded spread is the larger cost here", med > live, True)
+
+    # No usable history: fall back rather than reporting a free trade.
+    empty = np.rec.fromarrays([np.zeros(5)], names="spread")
+    got, _ = rb.choose_spread(empty, info, tick, "median")
+    close_to("all-zero history falls back to the live quote", got / info.point, 1.0, 1e-9)
+
+    dead = types.SimpleNamespace(ask=0.0, bid=0.0)
+    zero_info = types.SimpleNamespace(point=0.00001, spread=0)
+    got2, note2 = rb.choose_spread(empty, zero_info, dead, "median")
+    check("no spread anywhere is reported, not assumed to be zero cost",
+          got2 == 0.0 and "understated" in note2, True)
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -338,6 +371,7 @@ def main():
     test_stats_reports_absence()
     test_server_clock_window()
     test_realised_today_sees_a_server_ahead_deal()
+    test_spread_source()
 
     print()
     if FAILURES:
