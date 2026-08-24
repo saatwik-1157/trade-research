@@ -47,10 +47,29 @@ Present it as a description of current state, never as a prediction.
 
 `rsi_reversion` and `sma_cross` have been measured on 20,000 H1 bars across 7
 FX majors and neither separates from a coin flip (`reports/rule_backtest.json`).
+At this broker's real spreads both are net negative: −1.50 and −6.54 points per
+trade. The only result in the whole exercise that reaches significance is that
+the `random` rule loses, at t = −3.60 — cost drag is the one effect here large
+enough to measure.
+
+Cost the rule before believing it. Breakeven at SL=TP=1.5×ATR needs a
+50.5–52.7% win rate depending on the pair (`reports/cost_hurdle.json`);
+`rsi_reversion` averages about a point of win rate *below* that. An edge the
+size of the scatter between these rules would take roughly 6,600 trades — some
+four years at the observed rate — to demonstrate at 80% power, so "no edge" and
+"an edge too small to see here" are not separable with the data available. Say
+that, rather than picking whichever reading suits.
+
+Spread comes from `--spread-source median`, the recorded per-bar spread across
+the history. A single live quote can understate this broker by 3–8×, and bars
+recording 0 are unrecorded rather than free — averaging them in halves the
+apparent cost of trading.
 A 36-cell sweep of SL/TP bracket ratios found no configuration reaching even an
-uncorrected t of 1.96, while the `random` rule searching the identical grid
-scored higher in-sample and then collapsed out of sample
-(`reports/bracket_sweep.json`).
+uncorrected t of 1.96 — best in-sample 0.83 for `rsi_reversion` and 1.18 for
+`sma_cross`, both negative out of sample — while the `random` rule searching the
+identical grid scored higher in-sample at 1.76. Over 30 of the 36 cells are
+negative in-sample for each rule (`reports/bracket_sweep.json`,
+`reports/bracket_sweep_sma.json`).
 
 The only effect that replicates out of sample is negative: tight brackets trade
 often and pay the spread every time. Frequency is the one lever with a proven

@@ -27,8 +27,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from rule_backtest import (SIGNALS, SYMBOLS, atr_series, connect, fetch_rates,
-                           simulate, stats)
+from rule_backtest import (SIGNALS, SYMBOLS, atr_series, choose_spread, connect,
+                           fetch_rates, simulate, stats)
 
 SL_GRID = [0.5, 0.75, 1.0, 1.5, 2.0, 3.0]
 TP_GRID = [0.5, 0.75, 1.0, 1.5, 2.0, 3.0]
@@ -56,6 +56,8 @@ def main():
     ap.add_argument("--bars", type=int, default=20000)
     ap.add_argument("--split", type=float, default=0.70,
                     help="fraction of history used in-sample")
+    ap.add_argument("--spread-source", default="median",
+                    choices=["median", "p90", "live"])
     ap.add_argument("--out")
     ap.add_argument("--path")
     args = ap.parse_args()
@@ -65,6 +67,7 @@ def main():
 
     result = {
         "timeframe": "H1", "rule": args.rule, "split": args.split,
+        "spread_source": args.spread_source,
         "sl_grid": SL_GRID, "tp_grid": TP_GRID,
         "cells_tested": len(SL_GRID) * len(TP_GRID),
         "data_gaps": [], "grid": {}, "verdict": {},
@@ -80,12 +83,9 @@ def main():
         if rates is None or info is None:
             result["data_gaps"].append(f"{sym}: insufficient history")
             continue
-        spread = (tick.ask - tick.bid) if tick and tick.ask > tick.bid else info.spread * info.point
+        spread, spread_note = choose_spread(rates, info, tick, args.spread_source)
         if spread <= 0:
-            spread = info.spread * info.point
-        if spread <= 0:
-            result["data_gaps"].append(
-                f"{sym}: live spread quoted as 0 - costs understated for this symbol")
+            result["data_gaps"].append(f"{sym}: {spread_note}")
         o, h, l, c = (rates["open"].astype(float), rates["high"].astype(float),
                       rates["low"].astype(float), rates["close"].astype(float))
         market[sym] = {"o": o, "h": h, "l": l, "c": c, "atr": atr_series(h, l, c),

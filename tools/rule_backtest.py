@@ -30,6 +30,35 @@ def connect(path=None):
     return mt5
 
 
+def choose_spread(rates, info, tick, source="median"):
+    """Spread in price units, and a note on where it came from.
+
+    `live` reads one quote from the moment the tool happens to run, which on a
+    quiet morning understates this broker by 3-8x and silently flatters every
+    result. The recorded per-bar spread over the whole history is the honest
+    default; bars carrying 0 are unrecorded rather than free, so they are
+    dropped instead of averaged in.
+    """
+    recorded = None
+    if rates is not None and "spread" in (rates.dtype.names or ()):
+        sp = rates["spread"].astype(float)
+        sp = sp[sp > 0]
+        if len(sp):
+            recorded = sp
+
+    if source in ("median", "p90") and recorded is not None:
+        pts = float(np.median(recorded)) if source == "median" else float(
+            np.percentile(recorded, 90))
+        return pts * info.point, f"{source} of {len(recorded)} bars recording a spread"
+
+    live = (tick.ask - tick.bid) if tick and tick.ask > tick.bid else 0.0
+    if live <= 0:
+        live = info.spread * info.point
+    if live <= 0:
+        return 0.0, "no spread available - costs understated, treat as an upper bound"
+    return live, "single live quote at run time"
+
+
 def fetch_rates(mt5, symbol, want):
     """Ask for `want` H1 bars, stepping down until the terminal agrees.
 
@@ -203,6 +232,10 @@ def main():
     ap.add_argument("--bars", type=int, default=100000, help="H1 bars per symbol")
     ap.add_argument("--sl-atr", type=float, default=1.5)
     ap.add_argument("--tp-atr", type=float, default=1.5)
+    ap.add_argument("--spread-source", default="median",
+                    choices=["median", "p90", "live"],
+                    help="median of recorded bar spreads (default), the 90th "
+                         "percentile, or a single live quote")
     ap.add_argument("--out")
     ap.add_argument("--path")
     args = ap.parse_args()
@@ -212,7 +245,8 @@ def main():
     rules = ["rsi_reversion", "sma_cross", "random"] if args.rule == "all" else [args.rule]
 
     result = {"sl_atr": args.sl_atr, "tp_atr": args.tp_atr,
-              "timeframe": "H1", "rules": {}, "data_gaps": []}
+              "timeframe": "H1", "spread_source": args.spread_source,
+              "rules": {}, "data_gaps": []}
 
     market = {}
     for sym in symbols:
@@ -225,20 +259,14 @@ def main():
         if rates is None or len(rates) < 500 or info is None:
             result["data_gaps"].append(f"{sym}: insufficient history")
             continue
-        spread = (tick.ask - tick.bid) if tick and tick.ask > tick.bid else info.spread * info.point
+        spread, spread_note = choose_spread(rates, info, tick, args.spread_source)
         if spread <= 0:
-            spread = info.spread * info.point
-        if spread <= 0:
-            # A single quiet-moment quote is not the cost this rule actually
-            # pays. Leaving it at zero would flatter every result on this
-            # symbol, so say so rather than substituting a number.
-            result["data_gaps"].append(
-                f"{sym}: live spread quoted as 0 - costs are understated, "
-                "treat this symbol's expectancy as an upper bound")
+            result["data_gaps"].append(f"{sym}: {spread_note}")
         market[sym] = {
             "o": rates["open"].astype(float), "h": rates["high"].astype(float),
             "l": rates["low"].astype(float), "c": rates["close"].astype(float),
             "point": info.point, "spread": spread, "bars": len(rates),
+            "spread_note": spread_note,
             "from": str(np.datetime64(int(rates["time"][0]), "s")),
             "to": str(np.datetime64(int(rates["time"][-1]), "s")),
         }
@@ -252,6 +280,7 @@ def main():
                           args.sl_atr, args.tp_atr)
             per_symbol[sym] = {**stats(tr, m["point"]),
                                "spread_points": round(m["spread"] / m["point"], 1),
+                               "spread_source": m["spread_note"],
                                "bars": m["bars"], "from": m["from"], "to": m["to"]}
             pooled += [{"net": t["net"] / m["point"], "gross": t["gross"] / m["point"],
                         "bars": t["bars"], "reason": t["reason"]} for t in tr]
