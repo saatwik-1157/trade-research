@@ -48,3 +48,6 @@ jobs:
 
       - name: Rule backtest and order fill mode
         run: python tests/test_rule_backtest.py
+
+      - name: Swap units, night count and plausibility fence
+        run: python tests/test_swap.py

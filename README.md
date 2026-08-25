@@ -127,6 +127,7 @@ tools/
                     walked forward across disjoint eras, clustered by entry date
   exit_search.py    entry x exit combinations, including exits that let winners run
   cost_profile.py   where the spread hurdle is smallest: by symbol, hour and timeframe
+  swap.py           overnight financing in points, refusing units it cannot convert
   tv_import.py    TradingView CSV trade-export importer
   tv_webhook.py   TradingView alert receiver (records signals, never trades)
 .claude/
