@@ -73,10 +73,13 @@ negative in-sample for each rule (`reports/bracket_sweep.json`,
 
 A 41-candidate search across 10 rule families (RSI, MA crosses, Donchian,
 Bollinger, momentum, and the inverse of each) found nothing either
-(`reports/rule_search.json`). Best in-sample t was 1.37, negative out of sample,
-below what a permutation null reached over the same 41 candidates. Zero cleared
-1.96 out of sample against ~1 expected by chance, and every family's median
-out-of-sample expectancy is negative.
+(`reports/rule_search.json`). Best in-sample t was 1.29 and went negative out of
+sample. It does clear the permutation null in sample (0.74 was the null's best
+over the same 41 candidates), which is a reminder that beating the null is the
+weakest of the three gates - it says the ranking is not pure exposure, not that
+the rule works. Zero cleared 1.96 out of sample against ~1 expected by chance,
+and every family's median out-of-sample expectancy is negative - all ten of
+them.
 
 That search fixes the exit at SL=TP=1.5xATR, which caps winners and so handicaps
 the trend-following families by construction. The supportable claim is "nothing
@@ -162,7 +165,7 @@ out-of-sample win rate of 50.4%.
 The reason is units. "Points" is price movement over the symbol's own point
 size, and median H1 ATR runs 160 points in silver against 9,386 in
 palladium — a 59x difference, so pooling adds numbers that are not the same
-quantity. The seven majors span 2.15x and pool acceptably; anything wider does
+quantity. The seven majors span 2.16x and pool acceptably; anything wider does
 not. `rule_search.py` now measures this and writes a `data_gaps` entry plus
 `median_atr_points_by_symbol` when the spread exceeds 5x. When that warning is
 present, quote `per_symbol` and never the pooled figure.
