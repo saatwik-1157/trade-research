@@ -221,11 +221,26 @@ AUS200 -6.83 and -0.42, HK50 -5.37 and -4.63 - and the best candidate holds 6.1
 bars, so roughly six nights per trade with one weekday billed triple. The two
 symbols carrying the result, DE40 and US500, are both negative carry either
 way, so correcting for it moves the result down and never up. Worse, the swap
-is quoted in three different unit systems across these symbols (POINTS,
-DEPOSIT_CURRENCY, MARGIN_CURRENCY) and JPN225 runs +294.231 long against
--304.231 short, which is structurally the same defect the points warning
-exists to catch. Do not quote a D1 index result as costed until swap is
-modelled; the spread is not the whole hurdle once a position sleeps.
+is quoted in three different unit systems across these symbols, which is
+structurally the same defect the points warning exists to catch.
+
+`swap.py` converts it (`reports/swap_profile.json`), and what it refuses to
+convert is the useful part. Per night, in points: EURUSD -0.82/-1.17,
+GBPUSD -0.27/-3.00, US500 -31/-26, DE40 -60/-96, and every FX major bills
+triple on Wednesday against Friday for the indices. Two symbols return no
+figure at all. XAUUSD converts to 584,000 points a night, 26,603% of its
+daily range, because reading a metal's swap as ounces of gold and converting
+at the gold price inflates it by roughly the price of gold; JPN225 comes out
+at 57% of its daily range. Both are unit errors rather than expensive
+instruments, so the tool reports a gap instead of a number - a fence set at
+10% of median daily range, on the reasoning that financing which rivals the
+daily range would dominate every other term in a trade.
+
+Note what that costs the earlier text: the +294.231 figure quoted for JPN225
+above is the raw broker field, not a points-per-night charge, and it should
+not be read as one. Do not quote a D1 result as costed until swap is in the
+simulator - `swap.py` measures the bill, it does not yet charge it. The
+spread is not the whole hurdle once a position sleeps.
 
 The hour filter was the one idea with a measured mechanism behind it, and it
 also fails. `cost_profile.py` puts the rollover hour at 4x the normal spread, so
@@ -255,8 +270,9 @@ Run `python tests/test_indicators.py` after touching `tools/indicators.py`,
 alignment in `tools/edgar.py`, and `python tests/test_rule_backtest.py` after
 touching `tools/rule_backtest.py`, `tools/bracket_sweep.py`, or the order
 construction or history windows in `tools/mt5_paper.py` and
-`tools/mt5_account.py`. All five run in CI on every push, against Python
-3.10, 3.12 and 3.14.
+`tools/mt5_account.py`, and `python tests/test_swap.py` after touching the
+unit conversion, the night count or the plausibility fence in `tools/swap.py`.
+All six run in CI on every push, against Python 3.10, 3.12 and 3.14.
 
 The MT5 server clock is not the local clock. Bound a history query with
 `mt5_paper.history_end()` and `server_now()`, never `datetime.now()` — a local
