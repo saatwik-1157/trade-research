@@ -38,7 +38,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from rule_backtest import (SYMBOLS, atr_series, choose_spread, connect,
                            fetch_rates, stats)
-from rule_search import build_candidates, permute, z_for
+from rule_search import (block_edges, block_summary, block_views,
+                         build_candidates, clustered_by_date, permute, z_for)
 
 
 def simulate_exit(o, h, l, c, sig, atr, spread, exit_kind, params, max_hold=480):
@@ -115,14 +116,29 @@ EXITS = [
 ]
 
 
-def run(market, sigs, split_idx, kind, params):
-    ins, oos = [], []
+def collect(market, sigs, kind, params):
+    """Every trade, tagged with symbol and entry time.
+
+    exit_search used to pool straight into two buckets, which is why it could
+    not answer the question that killed `time_120`: an exit holding positions a
+    long time has enough variance that one split says little. Tagging lets the
+    same trades be read by split AND by era without simulating twice.
+    """
+    rows = []
     for sym, m in market.items():
         for t in simulate_exit(m["o"], m["h"], m["l"], m["c"], sigs[sym], m["atr"],
                                m["spread"], kind, params):
-            row = {"net": t["net"] / m["point"], "gross": t["gross"] / m["point"],
-                   "bars": t["bars"], "reason": t["reason"]}
-            (ins if t["entry_idx"] < split_idx else oos).append(row)
+            rows.append({"symbol": sym, "entry_idx": t["entry_idx"],
+                         "entry_time": int(m["time"][t["entry_idx"]]),
+                         "net": t["net"] / m["point"], "gross": t["gross"] / m["point"],
+                         "bars": t["bars"], "reason": t["reason"]})
+    return rows
+
+
+def run(market, sigs, split_idx, kind, params):
+    rows = collect(market, sigs, kind, params)
+    ins = [r for r in rows if r["entry_idx"] < split_idx]
+    oos = [r for r in rows if r["entry_idx"] >= split_idx]
     return stats(ins, 1.0), stats(oos, 1.0)
 
 
@@ -142,6 +158,11 @@ def main():
     ap.add_argument("--spread-source", default="median", choices=["median", "p90", "live"])
     ap.add_argument("--min-trades", type=int, default=100)
     ap.add_argument("--null-rounds", type=int, default=2)
+    ap.add_argument("--blocks", type=int, default=4,
+                    help="cut history into this many equal-duration eras. One "
+                         "split cannot settle a long-holding exit: `time_120` "
+                         "showed +26 median out of sample and fell apart into "
+                         "four blocks. 0 or 1 disables")
     ap.add_argument("--out")
     ap.add_argument("--path")
     args = ap.parse_args()
@@ -168,6 +189,7 @@ def main():
         o, h, l, c = (rates["open"].astype(float), rates["high"].astype(float),
                       rates["low"].astype(float), rates["close"].astype(float))
         market[sym] = {"o": o, "h": h, "l": l, "c": c, "atr": atr_series(h, l, c),
+                       "time": rates["time"].astype("int64"),
                        "point": info.point, "spread": spread, "n": len(c)}
     mt5.shutdown()
     if not market:
@@ -178,15 +200,34 @@ def main():
     result["entries_tested"] = len(candidates)
     result["combinations_tested"] = len(candidates) * len(EXITS)
 
+    edges = block_edges(market, args.blocks) if args.blocks > 1 else None
+    if edges:
+        result["eras"] = {
+            "count": args.blocks,
+            "from": str(np.datetime64(int(edges[0]), "s")),
+            "to": str(np.datetime64(int(edges[-1]), "s")),
+            "note": ("An exit that holds a long time has enough variance that a "
+                     "single split says little - `time_120` showed +26 median "
+                     "out of sample and did not survive being cut into four."),
+        }
+
     rows, null_rounds = [], [[] for _ in range(args.null_rounds)]
     for idx, (name, family, fn) in enumerate(candidates):
         sigs = {s: fn(m["o"], m["h"], m["l"], m["c"]) for s, m in market.items()}
         perms = [{s: permute(sig, seed=idx * 977 + r * 13 + 1) for s, sig in sigs.items()}
                  for r in range(args.null_rounds)]
         for ename, kind, params in EXITS:
-            ins, oos = run(market, sigs, split_idx, kind, params)
-            rows.append({"entry": name, "family": family, "exit": ename,
-                         "in_sample": ins, "out_of_sample": oos})
+            tr = collect(market, sigs, kind, params)
+            ins_rows = [r for r in tr if r["entry_idx"] < split_idx]
+            oos_rows = [r for r in tr if r["entry_idx"] >= split_idx]
+            ins, oos = stats(ins_rows, 1.0), stats(oos_rows, 1.0)
+            oos.update(clustered_by_date(oos_rows))
+            row = {"entry": name, "family": family, "exit": ename,
+                   "in_sample": ins, "out_of_sample": oos}
+            if edges:
+                row["blocks"] = block_views(tr, edges)
+                row["block_summary"] = block_summary(row["blocks"])
+            rows.append(row)
             # Null shares the exit, so the exit's own shape is not credited
             # to the entry rule.
             for r in range(args.null_rounds):
