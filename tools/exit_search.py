@@ -130,6 +130,12 @@ def main():
     ap = argparse.ArgumentParser(description="Search exit structures with a matched null.")
     ap.add_argument("--symbols", default=SYMBOLS)
     ap.add_argument("--bars", type=int, default=20000)
+    ap.add_argument("--timeframe", default="H1", choices=["H1", "H4", "D1"],
+                    help="the untested cell is a trend exit at a slow timeframe: "
+                         "the fixed-bracket search covered H4 and D1, and the "
+                         "exit search covered only H1, so no run has yet let a "
+                         "winner run where cost_profile.py puts the spread "
+                         "hurdle lowest (D1 at 0.27x of H1)")
     ap.add_argument("--split", type=float, default=0.70)
     ap.add_argument("--families", default="breakout,ma_cross,momentum,rsi_reversion",
                     help="candidate families to test (trend families are the point)")
@@ -143,7 +149,7 @@ def main():
     mt5 = connect(args.path)
     symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
     families = {f.strip() for f in args.families.split(",") if f.strip()}
-    result = {"timeframe": "H1", "spread_source": args.spread_source,
+    result = {"timeframe": args.timeframe, "spread_source": args.spread_source,
               "split": args.split, "exits": [e[0] for e in EXITS], "data_gaps": []}
 
     market = {}
@@ -151,7 +157,7 @@ def main():
         if not mt5.symbol_select(sym, True):
             result["data_gaps"].append(f"{sym}: could not select")
             continue
-        rates = fetch_rates(mt5, sym, args.bars)
+        rates = fetch_rates(mt5, sym, args.bars, args.timeframe, min_bars=300)
         info, tick = mt5.symbol_info(sym), mt5.symbol_info_tick(sym)
         if rates is None or info is None:
             result["data_gaps"].append(f"{sym}: insufficient history")

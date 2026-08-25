@@ -97,6 +97,28 @@ search produced the only candidate ever to beat its null in-sample, at t=3.10,
 and it went to -1.83 out of sample; three combinations cleared 1.96 out of
 sample against 4.9 expected by chance.
 
+Those two searches left one cell empty, and it was the cell the argument
+pointed at: the exit search ran at H1 only, so no run had ever let a winner
+run at the timeframe where `cost_profile.py` puts the spread hurdle lowest.
+`exit_search.py` now takes `--timeframe`, and 16 trend entries crossed with the
+8 exits at D1 close it (`reports/exit_search_d1.json`). It is the sharpest null
+in the project. `donchian_brk_100` with a move-to-breakeven trail scores an
+in-sample t of 6.59 - the highest figure this repository has produced, clearing
+both the 3.546 Bonferroni threshold and a permutation null that reached 5.5 -
+and then posts -1.82 out of sample at -204 points. Zero of 128 combinations
+cleared 1.96 out of sample against 3.2 expected by chance, so the search came in
+*below* chance, and median out-of-sample expectancy is -117.
+
+Read the exits rather than the winner, because they refute the mechanism that
+motivated the run. If fixed brackets were handicapping the trend families by
+capping winners, the winner-letting exits should improve on them at D1. They do
+the opposite: median out-of-sample expectancy is -58 for the 1.5x1.5 bracket
+against -123 for the breakeven trail, -217 for the 3.0 ATR trail and -231 for
+the 120-bar hold. All eight are negative. The capping bracket is the least bad
+of them, which is the reverse of the prediction, and it retires "the exit was
+holding the breakouts back" as an explanation - a wider exit at D1 mostly buys
+more adverse excursion per trade.
+
 One out-of-sample split is not enough. The `time_120` exit showed +26 median
 out-of-sample expectancy across 24 unrelated entries and survived a permutation
 check (+23.0 real against -0.9 shuffled), which looked like a finding. Split
