@@ -242,6 +242,34 @@ not be read as one. Do not quote a D1 result as costed until swap is in the
 simulator - `swap.py` measures the bill, it does not yet charge it. The
 spread is not the whole hurdle once a position sleeps.
 
+The H4 exit search is worth reading as a worked example of why the era check is
+on by default (`reports/exit_search_h4.json`). At H4 the 25x8 grid does not
+look like the others: median out-of-sample expectancy is +3.25 rather than
+negative, 108 of 200 combinations are positive, and `bracket_2.0_4.0` is
+positive in 20 of 25 entries at a +23.5 median. Five combinations cleared 1.96
+out of sample - against 4.9 expected by chance - and none of them was pickable,
+every one having a negative or flat in-sample t (`rsi_rev_14_20_80` runs -0.23
+in sample and +2.59 out).
+
+Cut into four eras it is not an exit effect at all. Every one of the eight
+exits is positive in era 2 and most are negative in eras 1 and 3 - the era
+medians for `trail_3.0`, the worst exit in the whole grid at -27.6 overall, run
++12.3, +45.8, -38.6, -0.1, so the exit that loses most also scores the HIGHEST
+of any exit in era 2. An effect that appears in every exit structure at once,
+including the ones that do not work, is the market moving, not a rule. Only 5
+of 25 entries are positive in all four eras under `bracket_2.0_4.0`, and 11 are
+positive in two or fewer.
+
+That is the `time_120` diagnosis replicating on a different exit at a different
+timeframe: a positive median across many unrelated entries is what a directional
+era looks like from inside a grid search, and the exits that let a winner run
+capture it best, which is why they lead the table exactly when drift is
+present. Date clustering does not rescue it - three of the top five stay
+significant, but they were selected from 200 combinations against 4.9 expected
+by chance, so the clustered t is being read on a pre-selected winner and
+confirms nothing. `exit_search.py` now takes `--blocks` and threads entry times
+through, so this cut is available rather than reconstructible.
+
 The hour filter was the one idea with a measured mechanism behind it, and it
 also fails. `cost_profile.py` puts the rollover hour at 4x the normal spread, so
 `--skip-hours 0` should have helped; across the 41 candidates it moved median
