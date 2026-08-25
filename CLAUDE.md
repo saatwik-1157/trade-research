@@ -112,10 +112,68 @@ cost does not create an edge, and it trades against verification - D1 accrues
 trades roughly 24x slower, so a smaller hurdle comes with a much longer wait for
 evidence.
 
+The nearest thing to a survivor was `donchian_fade_55` at D1 — fade a 55-day
+breakout — and it is worth knowing why it is not one, because it will surface
+again. Over ten years it shows +227 points per trade out of sample on a pooled
+t of 2.79, and it is the only candidate a sequential split has ever marked
+`holds_out_of_sample`. Three checks dissolve it. Cut into five two-year eras it
+runs −107.8, −0.8, +180.7, +93.4, +283.4: positive in three, and the two losing
+eras are the two oldest. Clustering by entry date — one shared dollar move
+opens trades in all seven pairs at once — takes the out-of-sample t from 2.79
+to 1.96 against a 2.042 threshold, and takes the in-sample t from +0.53 to
+−0.60. And the search that found it does not survive being walked forward
+across those eras either: re-ranked on only the eras before each test era it
+picks `mom_24`, then `mom_168`, then `sma_5_20` twice, and is profitable in 1
+fold of 4 — +331.8 in era 4 against −42.4, −29.8 and −53.0, so the +51.6 mean
+is one era wearing a mean's clothing.
+
+Sequential splits cannot settle this on their own, because every one of them
+puts the same recent era in the holdout. Splits at 0.5, 0.7 and 0.85 all
+called `donchian_fade_55` positive out of sample; that is one observation
+counted three times, not three confirmations. Use `--blocks N` and read the
+walk-forward before believing any candidate the split likes.
+
+Report the date-clustered t, not the pooled one. The by-symbol figure in the
+same output is a consistency check and moves the other way — when all seven
+pairs agree it comes out *higher* than pooled (5.6 against 2.79 here), which is
+what one shared move looks like rather than evidence against one. Check
+`signs_disagree` before quoting either: the two means can point opposite ways
+when the losses land on a few crowded dates, and at H1 the best candidate does
+exactly that — pooled expectancy negative, per-date mean positive.
+
 Use `rule_search.py`'s permutation null rather than a plain coin flip when
 judging a new rule: shuffling a candidate's own signals preserves its trade
 count and buy/sell mix, so the null pays the same spread and the comparison
-isolates timing rather than exposure.
+isolates timing rather than exposure. The era blocks, the walk-forward and the
+date clustering are on by default; `--blocks 0` turns the era work off, which
+is worth doing only when a timeframe has too little history to cut.
+
+Two universes outside the seven majors have now been searched, and neither
+helps. Eight non-USD crosses (`reports/rule_search_crosses.json`) matter because
+they cannot be carried by a shared dollar leg, which is the correlation that
+inflated the D1 result — best in-sample t was 0.20, and the walk-forward went 0
+for 3 with a −42.4 mean. Four metals (`reports/rule_search_metals.json`) produced
+the largest headline in the whole project and it is an arithmetic error, not a
+finding: pooled out-of-sample expectancy +4236 points, date-clustered t 3.16,
+`holds_out_of_sample` true. Per symbol it is XPTUSD +6129 and XPDUSD +1595
+against XAGUSD −223 (t = −2.28, significantly negative) and XAUUSD −5, on an
+out-of-sample win rate of 50.4%.
+
+The reason is units. "Points" is price movement over the symbol's own point
+size, and median H1 ATR runs 160 points in silver against 9,386 in
+palladium — a 59x difference, so pooling adds numbers that are not the same
+quantity. The seven majors span 2.15x and pool acceptably; anything wider does
+not. `rule_search.py` now measures this and writes a `data_gaps` entry plus
+`median_atr_points_by_symbol` when the spread exceeds 5x. When that warning is
+present, quote `per_symbol` and never the pooled figure.
+
+The hour filter was the one idea with a measured mechanism behind it, and it
+also fails. `cost_profile.py` puts the rollover hour at 4x the normal spread, so
+`--skip-hours 0` should have helped; across the 41 candidates it moved median
+out-of-sample expectancy from −6.64 to −7.40 and improved 18 of 41, which is a
+coin flip. The reason is arithmetic: the rollover hour carries 1.0% of entries,
+so avoiding a 4x spread on one trade in a hundred cannot pay for itself. A cost
+lever has to move a large share of trades to matter, and hour-of-day does not.
 
 The only effect that replicates out of sample is negative: tight brackets trade
 often and pay the spread every time. Frequency is the one lever with a proven

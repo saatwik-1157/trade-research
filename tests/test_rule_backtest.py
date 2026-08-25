@@ -25,6 +25,7 @@ package inside connect() rather than at module scope.
 """
 from __future__ import annotations
 
+import math
 import os
 import sys
 import types
@@ -418,6 +419,190 @@ def test_candidates_are_distinct():
     check("no candidate signals on the very first bar", leaky, [])
 
 
+def _row(sym, t, net, idx=0):
+    return {"symbol": sym, "entry_idx": idx, "entry_time": t, "net": float(net),
+            "gross": float(net), "bars": 3, "reason": "tp"}
+
+
+def test_clustering_removes_the_sqrt_n_inflation():
+    """Seven correlated pairs are not seven hundred independent trades.
+
+    Every trade within a symbol is set to that symbol's own mean here, so the
+    pooled spread and the between-symbol spread are the same number and the
+    only thing separating the two t-statistics is the count they divide by.
+    That isolates the inflation exactly: 100 trades per symbol should buy a
+    factor of sqrt(100).
+    """
+    print()
+    print("Symbol clustering - correlated pairs must not count as independent")
+    means = [8, 12, 9, 11, 10, 7, 13]
+    rows = [_row(f"SYM{i}", 0, m) for i, m in enumerate(means) for _ in range(100)]
+
+    pooled = rb.stats(rows, 1.0)["t_stat"]
+    clustered = rule_search.clustered_t(rows)["t_stat_clustered_by_symbol"]
+
+    check("pooling 700 correlated trades looks significant", pooled > 20, True)
+    check("clustering by symbol deflates it", clustered < pooled / 5, True)
+    # sqrt(100) for the count, times sqrt(7/6) because the clustered spread is
+    # estimated from seven numbers rather than seven hundred.
+    check("the deflation is the sqrt of trades per symbol",
+          abs(pooled / clustered - 10 * math.sqrt(7 / 6)) < 0.2, True)
+    check("all seven symbols are counted",
+          rule_search.clustered_t(rows)["symbols_positive"], 7)
+
+
+def test_clustered_threshold_is_not_1_96():
+    """Six degrees of freedom, so the bar moves - reading it against 1.96 is
+    how a clustered statistic gets called significant when it is not."""
+    print()
+    print("Clustered threshold - seven symbols is six degrees of freedom")
+    check("seven symbols demands 2.447, not 1.96", rule_search.t_crit_95(6), 2.447)
+    check("fewer symbols demands more", rule_search.t_crit_95(3) > 2.447, True)
+    check("two symbols is not enough to cluster on",
+          rule_search.t_crit_95(1), None)
+
+    # A statistic that clears 1.96 but not the real threshold must be reported
+    # as not significant, or the correction has been applied and then ignored.
+    means = [1.0, 1.2, 0.4, 1.5, 0.3, 1.1, 0.6]
+    rows = [_row(f"SYM{i}", 0, m) for i, m in enumerate(means) for _ in range(50)]
+    out = rule_search.clustered_t(rows)
+    t = out["t_stat_clustered_by_symbol"]
+    check("this sample clears the naive bar", t > 1.96, True)
+    check("but is judged against the clustered one",
+          out["symbol_cluster_significant"], t > 2.447)
+
+
+def test_eras_are_disjoint_and_complete():
+    print()
+    print("Era blocks - every trade lands in exactly one era")
+    market = {"A": {"time": np.arange(1000, 5001, 10, dtype="int64")},
+              "B": {"time": np.arange(1200, 4801, 10, dtype="int64")}}
+    edges = rule_search.block_edges(market, 4)
+
+    check("edges bound the window every symbol covers",
+          (int(edges[0]), int(edges[-1])), (1200, 4800))
+    check("four eras means five edges", len(edges), 5)
+
+    rows = [_row("A", t, 1.0) for t in range(1200, 4801, 25)]
+    blocks = rule_search.block_views(rows, edges)
+    check("every trade is counted once",
+          sum(b["trades"] for b in blocks), len(rows))
+    check("no era is empty", all(b["trades"] > 0 for b in blocks), True)
+
+    # A rule that only works recently must not read as broadly positive.
+    late = ([_row("A", t, -1.0) for t in range(1200, 3900, 25)]
+            + [_row("A", t, 50.0) for t in range(3900, 4801, 25)])
+    summary = rule_search.block_summary(rule_search.block_views(late, edges))
+    check("a last-era rule is positive in one era of four",
+          summary["blocks_positive"], 1)
+
+
+def test_walk_forward_cannot_see_its_test_era():
+    """The selection at each fold must be blind to the era it is graded on.
+
+    The candidate here loses through era 1 and then makes a fortune in era 4.
+    If the fold that trades era 4 ranks it on anything but eras 1-3, its
+    training t-statistic comes out positive and the walk-forward has been
+    handed the answer.
+    """
+    print()
+    print("Walk-forward - the training window must stop at the test era")
+    market = {"A": {"time": np.arange(0, 4001, 1, dtype="int64")}}
+    edges = rule_search.block_edges(market, 4)
+    rows = ([_row("A", t, -1.0 - (t // 10) % 3) for t in range(0, 1000, 10)]
+            + [_row("A", t, 100.0) for t in range(3000, 4000, 10)])
+
+    wf = rule_search.walk_forward({"late_only": rows}, edges, min_trades=10)
+    by_block = {f["test_block"]: f for f in wf["folds"]}
+
+    check("one fold per era after the first", len(wf["folds"]), 3)
+    check("eras with no trades are not graded", wf["folds_graded"], 1)
+    check("training on eras 1-3 sees only the losing era",
+          by_block[4]["train_t"] < 0, True)
+    check("the test era is scored on its own trades",
+          by_block[4]["test_expectancy_points_net"], 100.0)
+    check("a fortune in one era of four is not called consistent",
+          wf["folds_profitable"], 1)
+
+
+def test_date_clustering_removes_the_shared_move():
+    """One dollar move opens seven trades; that is one observation, not seven.
+
+    Every date here fires all seven pairs with an identical result, which is
+    the worst case the correction exists for. Pooling counts 1400 trades and
+    divides by sqrt(1400); clustering counts 200 dates and divides by
+    sqrt(200), so the pooled figure is inflated by sqrt(7).
+    """
+    print()
+    print("Date clustering - simultaneous trades are one observation")
+    rng = np.random.default_rng(3)
+    rows = []
+    for day in range(200):
+        move = float(rng.normal(4.0, 30.0))
+        for s in range(7):
+            rows.append(_row(f"SYM{s}", day * 86400, move))
+
+    pooled = rb.stats(rows, 1.0)["t_stat"]
+    out = rule_search.clustered_by_date(rows)
+    clustered = out["t_stat_clustered_by_date"]
+
+    check("one observation per date is recovered", out["entry_dates"], 200)
+    check("seven pairs fire per date", out["obs_per_date"], 7.0)
+    check("clustering by date deflates the pooled t", clustered < pooled, True)
+    check("the inflation is sqrt(pairs firing together)",
+          abs(pooled / clustered - math.sqrt(7)) < 0.05, True)
+
+    # Clustering by symbol cannot see this: every pair has the same mean, so
+    # the between-pair spread is ~0 and the statistic explodes. That is why the
+    # verdict is gated on the date figure and not this one.
+    sym = rule_search.clustered_t(rows)["t_stat_clustered_by_symbol"]
+    check("by-symbol clustering misses a shared move entirely",
+          sym > pooled, True)
+
+
+def test_crowded_dates_are_flagged_not_resolved():
+    """Per-date and per-trade means can disagree, and that is the finding.
+
+    Here the losses arrive on a few dates that fire many pairs at once and the
+    wins arrive on many quiet dates. Weighting trades equally the rule loses;
+    weighting dates equally it wins. Reporting only the second turns a losing
+    rule into a survivor, which is exactly the misreading the flag exists to
+    stop.
+    """
+    print()
+    print("Crowded dates - a sign flip between the two means must be visible")
+    rows = []
+    for day in range(200):                      # quiet dates, one small win
+        rows.append(_row("EURUSD", day * 86400, 2.0 + (day % 5)))
+    for day in range(200, 210):                 # crowded dates, heavy losses
+        for s in range(7):
+            rows.append(_row(f"SYM{s}", day * 86400, -60.0 - (s % 3)))
+
+    pooled = rb.stats(rows, 1.0)["expectancy_points_net"]
+    out = rule_search.clustered_by_date(rows)
+
+    check("the rule loses money per trade", pooled < 0, True)
+    check("but wins when every date counts once", out["mean_per_date"] > 0, True)
+    check("the disagreement is reported", out["signs_disagree"], True)
+
+
+def test_hour_filter_blocks_the_entry_bar_not_the_signal_bar():
+    """A signal on bar j is actionable on bar j+1, so it is j+1's hour that
+    decides whether the entry pays the rollover spread. Masking the signal
+    bar's own hour would block the wrong trades and quietly leave every
+    rollover entry in place."""
+    print()
+    print("Hour filter - the blocked hour is the one the order fills in")
+    times = np.arange(0, 48 * 3600, 3600, dtype="int64")   # two days, hourly
+    blocked = np.zeros(len(times), dtype=bool)
+    bad = np.isin((times // 3600) % 24, [0])
+    blocked[:-1] = bad[1:]
+
+    check("the bar before midnight is what gets masked",
+          [int(i) for i in np.flatnonzero(blocked)], [23])
+    check("midnight's own signal bar is left alone", bool(blocked[24]), False)
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -434,6 +619,13 @@ def main():
     test_permutation_null_is_matched()
     test_significance_threshold()
     test_candidates_are_distinct()
+    test_clustering_removes_the_sqrt_n_inflation()
+    test_clustered_threshold_is_not_1_96()
+    test_date_clustering_removes_the_shared_move()
+    test_crowded_dates_are_flagged_not_resolved()
+    test_hour_filter_blocks_the_entry_bar_not_the_signal_bar()
+    test_eras_are_disjoint_and_complete()
+    test_walk_forward_cannot_see_its_test_era()
 
     print()
     if FAILURES:
