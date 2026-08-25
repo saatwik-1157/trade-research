@@ -46,6 +46,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from swap import swap_points_per_night
 from rule_backtest import (SYMBOLS, atr_series, choose_spread, connect,
                            fetch_rates, simulate, sma, stats, trim_to_years,
                            wilder_rsi)
@@ -198,7 +199,8 @@ def collect_trades(market, sig_by_symbol, sl_atr, tp_atr):
     rows = []
     for sym, m in market.items():
         tr = simulate(m["o"], m["h"], m["l"], m["c"], sig_by_symbol[sym], m["atr"],
-                      m["spread"], sl_atr, tp_atr)
+                      m["spread"], sl_atr, tp_atr, times=m.get("time"),
+                      swap=m.get("swap"), triple_dow=m.get("triple_dow"))
         for t in tr:
             rows.append({"symbol": sym, "entry_idx": t["entry_idx"],
                          "entry_time": int(m["time"][t["entry_idx"]]),
@@ -416,6 +418,13 @@ def main():
                          "cost_profile.py measures the rollover hour at ~4x the "
                          "normal spread, and cost is the one lever with a "
                          "measured sign")
+    ap.add_argument("--cost-swap", action="store_true",
+                    help="charge overnight financing as well as the spread. Off "
+                         "by default so existing results are not silently "
+                         "restated; every D1 figure in this repo was measured "
+                         "without it and moves DOWN when it is on. Symbols whose "
+                         "swap unit swap.py cannot convert are dropped with a "
+                         "data_gaps entry rather than charged zero")
     ap.add_argument("--blocks", type=int, default=4,
                     help="split history into this many equal-duration eras and "
                          "walk the search forward across them; 0 or 1 disables")
@@ -428,6 +437,7 @@ def main():
 
     mt5 = connect(args.path)
     symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+    deposit_currency = getattr(mt5.account_info(), "currency", "USD")
     skip_hours = [int(h) for h in args.skip_hours.split(",") if h.strip()]
     result = {"timeframe": args.timeframe, "years": args.years,
               "sl_atr": args.sl_atr, "tp_atr": args.tp_atr,
@@ -456,8 +466,20 @@ def main():
         if skip_hours:
             bad = np.isin((times // 3600) % 24, skip_hours)
             blocked[:-1] = bad[1:]
+        swap_px, triple = None, None
+        if args.cost_swap:
+            lng, sht, note = swap_points_per_night(info, getattr(tick, "bid", 0.0) or 0.0,
+                                                   deposit_currency)
+            if lng is None:
+                result["data_gaps"].append(
+                    f"{note} - {sym} is excluded from this run rather than "
+                    "charged zero financing")
+                continue
+            swap_px, triple = (lng * info.point, sht * info.point), info.swap_rollover3days
+
         market[sym] = {"o": o, "h": h, "l": l, "c": c, "atr": atr_series(h, l, c),
                        "time": times, "entry_blocked": blocked,
+                       "swap": swap_px, "triple_dow": triple,
                        "point": info.point, "spread": spread, "n": len(c),
                        "from": str(np.datetime64(int(rates["time"][0]), "s")),
                        "to": str(np.datetime64(int(rates["time"][-1]), "s"))}

@@ -19,6 +19,10 @@ import random
 
 import numpy as np
 
+# nights_between lives in swap.py with the unit conversion it belongs to;
+# simulate() only needs the count.
+from swap import nights_between
+
 DEFAULT_TERMINAL = r"C:\Program Files\MetaTrader 5\terminal64.exe"
 SYMBOLS = "EURUSD,GBPUSD,USDJPY,USDCAD,AUDUSD,USDCHF,NZDUSD"
 
@@ -172,13 +176,25 @@ SIGNALS = {
 
 
 # ----------------------------------------------------------------- simulation
-def simulate(o, h, l, c, sig, atr, spread, sl_atr=1.5, tp_atr=1.5, max_hold=240):
+def simulate(o, h, l, c, sig, atr, spread, sl_atr=1.5, tp_atr=1.5, max_hold=240,
+             times=None, swap=None, triple_dow=None):
     """Walk bars, open on a signal from CLOSED bars, exit at SL or TP.
 
     Entry is the next bar's open: the signal reads bars up to i-1, so it is
     only actionable from bar i. When one bar's range covers both SL and TP the
     loss is booked - intrabar order is unknown, and assuming the win is the
     classic way a backtest flatters itself.
+
+    `swap` is (long_per_night, short_per_night) in PRICE units, signed, so a
+    charge is negative and a carry credit is positive - AUDUSD pays to be long
+    on this broker and charges to be short, and flattening that to a cost would
+    be as wrong as ignoring it. Passing None keeps the spread-only behaviour
+    every existing result was measured under, so the default cannot silently
+    restate history; callers opt in.
+
+    Nights are counted between the entry bar's open and the exit bar's open,
+    which for D1 is exactly the number of daily boundaries the position slept
+    through. A position that never sleeps is charged nothing.
     """
     trades = []
     i = 60
@@ -212,8 +228,13 @@ def simulate(o, h, l, c, sig, atr, spread, sl_atr=1.5, tp_atr=1.5, max_hold=240)
             exit_px, exit_reason = c[j], "timeout"
 
         gross = (exit_px - entry) if s > 0 else (entry - exit_px)
+        nights, financing = 0, 0.0
+        if swap is not None and times is not None:
+            nights = nights_between(times[i], times[j], triple_dow)
+            financing = nights * (swap[0] if s > 0 else swap[1])
         trades.append({"dir": int(s), "gross": float(gross),
-                       "net": float(gross - spread), "bars": held,
+                       "net": float(gross - spread + financing), "bars": held,
+                       "nights": nights, "financing": float(financing),
                        "reason": exit_reason, "entry_idx": i})
         i = j + 1                            # flat before the next entry
     return trades
