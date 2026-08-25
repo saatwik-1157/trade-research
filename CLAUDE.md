@@ -173,7 +173,7 @@ isolates timing rather than exposure. The era blocks, the walk-forward and the
 date clustering are on by default; `--blocks 0` turns the era work off, which
 is worth doing only when a timeframe has too little history to cut.
 
-Two universes outside the seven majors have now been searched, and neither
+Three universes outside the seven majors have now been searched, and none
 helps. Eight non-USD crosses (`reports/rule_search_crosses.json`) matter because
 they cannot be carried by a shared dollar leg, which is the correlation that
 inflated the D1 result — best in-sample t was 0.20, and the walk-forward went 0
@@ -191,6 +191,41 @@ quantity. The seven majors span 2.16x and pool acceptably; anything wider does
 not. `rule_search.py` now measures this and writes a `data_gaps` entry plus
 `median_atr_points_by_symbol` when the spread exceeds 5x. When that warning is
 present, quote `per_symbol` and never the pooled figure.
+
+Seven equity indices at D1 are the third universe, and they were worth trying
+for a measured reason rather than a hunch: the spread hurdle there is the
+lowest on this broker. At SL=TP=1.5xATR, US500 breaks even at a 50.27% win rate
+and USTEC at 50.11%, against 50.84% for EURUSD H1 and 52.02% for EURUSD D1 - a
+3x to 8x smaller edge requirement, on the one lever this project has shown has
+a sign. It bought nothing (`reports/rule_search_indices.json`). The best
+candidate, `ema_5_20`, scored an in-sample t of 2.14 against a permutation null
+that reached 2.45, so the shuffled rule beat the real one; out of sample it is
+1.15 pooled and 1.19 date-clustered, one candidate cleared 1.96 against 0.9
+expected by chance, and the walk-forward went 2 of 4 with a -933 mean. Take
+this as the confirmation of "lower cost does not create an edge" rather than as
+one more null - the hypothesis was specific and it was refuted on its own terms.
+
+The unit warning fires here too, at 38x (JPN225=535 points against DE40=20213),
+so the +3239 pooled out-of-sample expectancy is the metals error repeated and
+must not be quoted. Per symbol it is DE40 +7345 and US500 +2250 against UK100
+-439 and US2000 -447, three of seven positive. One thing is new: the trend
+families led a universe for the first time, `ema_5_20`, `mom_72` and `sma_5_20`
+taking the top places where every previous search was led by mean reversion.
+That is consistent with indices trending more than FX, and it is a curiosity
+rather than a finding, because it does not clear the null.
+
+Index figures are optimistic by an unmodeled amount, and the gap is overnight
+financing. `rule_search.py` costs the spread and nothing else, but six of the
+seven indices charge swap on BOTH sides - DE40 -0.70 long and -1.12 short,
+AUS200 -6.83 and -0.42, HK50 -5.37 and -4.63 - and the best candidate holds 6.1
+bars, so roughly six nights per trade with one weekday billed triple. The two
+symbols carrying the result, DE40 and US500, are both negative carry either
+way, so correcting for it moves the result down and never up. Worse, the swap
+is quoted in three different unit systems across these symbols (POINTS,
+DEPOSIT_CURRENCY, MARGIN_CURRENCY) and JPN225 runs +294.231 long against
+-304.231 short, which is structurally the same defect the points warning
+exists to catch. Do not quote a D1 index result as costed until swap is
+modelled; the spread is not the whole hurdle once a position sleeps.
 
 The hour filter was the one idea with a measured mechanism behind it, and it
 also fails. `cost_profile.py` puts the rollover hour at 4x the normal spread, so
