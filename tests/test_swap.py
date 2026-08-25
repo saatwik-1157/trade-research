@@ -148,6 +148,67 @@ check("a None figure is not flagged", implausible(None, 500.0), False)
 check("exactly at the threshold passes", implausible(-50.0, 500.0), False)
 check("just past the threshold is refused", implausible(-50.01, 500.0), True)
 
+print("")
+print("simulate() charging financing - opting in must never flatter a result")
+import numpy as np
+from rule_backtest import simulate
+
+# One long trade that runs to take-profit five days later. D1 bars at midnight,
+# so bar index differences are exactly nights slept.
+n = 100
+day = 86400
+times = np.array([ts(2026, 3, 2) + i * day for i in range(n)], dtype="int64")
+c = np.full(n, 100.0)
+o = np.full(n, 100.0)
+h = np.full(n, 100.0)
+l = np.full(n, 100.0)
+h[70:] = 103.0           # take profit is hit from bar 70 on
+atr = np.full(n, 1.0)
+sig = np.zeros(n, dtype=int)
+sig[64] = 1              # actionable at bar 65
+
+base = simulate(o, h, l, c, sig, atr, spread=0.0, sl_atr=1.5, tp_atr=1.5)
+check("the trade is found", len(base), 1)
+check("it entered at bar 65 and exited at bar 70",
+      (base[0]["entry_idx"], base[0]["bars"]), (65, 6))
+check("no financing is charged by default", base[0]["financing"], 0.0)
+check("and no nights are counted", base[0]["nights"], 0)
+
+# -0.5 price units a night, long side, no triple day in this window.
+charged = simulate(o, h, l, c, sig, atr, spread=0.0, sl_atr=1.5, tp_atr=1.5,
+                   times=times, swap=(-0.5, -0.2), triple_dow=-1)
+check("five nights are slept between bar 65 and bar 70", charged[0]["nights"], 5)
+check("the long rate is applied, not the short one", charged[0]["financing"], -2.5)
+check("net is worse once financing is charged",
+      charged[0]["net"] < base[0]["net"], True)
+check("gross is untouched by financing", charged[0]["gross"], base[0]["gross"])
+
+# A carry CREDIT must survive with its sign - AUDUSD pays to be long here.
+credit = simulate(o, h, l, c, sig, atr, spread=0.0, sl_atr=1.5, tp_atr=1.5,
+                  times=times, swap=(+0.5, -0.2), triple_dow=-1)
+check("a positive carry improves the trade", credit[0]["financing"], 2.5)
+
+# The short side must draw the short rate.
+sig_s = np.zeros(n, dtype=int)
+sig_s[64] = -1
+ls = np.full(n, 100.0)
+ls[70:] = 97.0
+short = simulate(o, h, ls, c, sig_s, atr, spread=0.0, sl_atr=1.5, tp_atr=1.5,
+                 times=times, swap=(-0.5, -0.2), triple_dow=-1)
+check("a short trade is charged the short rate", round(short[0]["financing"], 4), -1.0)
+
+# The triple day multiplies. 2026-03-02 is a Monday, so bar 5 is Saturday the
+# 7th and the window bars 5..10 covers one Wednesday.
+tri = simulate(o, h, l, c, sig, atr, spread=0.0, sl_atr=1.5, tp_atr=1.5,
+               times=times, swap=(-0.5, -0.2), triple_dow=5)
+check("a triple day inside the hold costs more", tri[0]["financing"] < -2.5, True)
+# The entry-instant boundary must NOT be billed, or every trade entered on
+# the triple day would be overcharged two nights it never slept.
+edge = simulate(o, h, l, c, sig, atr, spread=0.0, sl_atr=1.5, tp_atr=1.5,
+                times=times, swap=(-0.5, -0.2), triple_dow=3)
+check("entering ON the triple day is not billed for it", edge[0]["financing"], -2.5)
+check("and it costs exactly two extra nights", round(tri[0]["financing"], 4), -3.5)
+
 if FAILED:
     print(f"\n{len(FAILED)} check(s) failed")
     raise SystemExit(1)

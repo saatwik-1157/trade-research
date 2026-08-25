@@ -238,9 +238,30 @@ daily range would dominate every other term in a trade.
 
 Note what that costs the earlier text: the +294.231 figure quoted for JPN225
 above is the raw broker field, not a points-per-night charge, and it should
-not be read as one. Do not quote a D1 result as costed until swap is in the
-simulator - `swap.py` measures the bill, it does not yet charge it. The
-spread is not the whole hurdle once a position sleeps.
+not be read as one.
+
+`simulate()` now charges financing when asked, and `rule_search.py --cost-swap`
+turns it on. It is OFF by default deliberately: every figure in this file was
+measured without it, and a default that silently restated them would make the
+history unreadable. A symbol whose swap unit `swap.py` cannot convert is
+DROPPED from a financed run with a data gap, never charged zero - zero is a
+claim that sleeping is free, and it is the claim this whole section exists to
+refute.
+
+Measured at D1 over ten years on the majors (`reports/rule_search_d1_swap.json`
+against `reports/rule_search_d1_walk.json`), financing costs a median 11.02
+points per trade and it moves all 41 candidates the same way - 41 worse, 0
+better, which is what a cost that is negative on both sides has to look like.
+The best candidate `sma_5_20` goes from +14.34 to +6.14 out of sample, its t
+from 0.20 to 0.09, and its walk-forward mean from +51.6 to +40.5.
+
+It does not change a single verdict, and saying so matters more than the
+correction. `donchian_fade_55` goes from +227.5 to +207.3 and stays positive,
+so financing is NOT the reason that result is not a survivor - the era split,
+the date clustering and the walk-forward are, and they were already enough.
+An 11-point haircut on a D1 trade is real and worth charging, but it is an
+order of magnitude too small to be the thing standing between this repository
+and an edge. Nothing here was ever one cost adjustment away from working.
 
 The H4 exit search is worth reading as a worked example of why the era check is
 on by default (`reports/exit_search_h4.json`). At H4 the 25x8 grid does not
