@@ -173,7 +173,7 @@ isolates timing rather than exposure. The era blocks, the walk-forward and the
 date clustering are on by default; `--blocks 0` turns the era work off, which
 is worth doing only when a timeframe has too little history to cut.
 
-Three universes outside the seven majors have now been searched, and none
+Four universes outside the seven majors have now been searched, and none
 helps. Eight non-USD crosses (`reports/rule_search_crosses.json`) matter because
 they cannot be carried by a shared dollar leg, which is the correlation that
 inflated the D1 result — best in-sample t was 0.20, and the walk-forward went 0
@@ -262,6 +262,39 @@ the date clustering and the walk-forward are, and they were already enough.
 An 11-point haircut on a D1 trade is real and worth charging, but it is an
 order of magnitude too small to be the thing standing between this repository
 and an edge. Nothing here was ever one cost adjustment away from working.
+
+Crypto is the fifth universe and the first that is not this broker's data at
+all (`reports/rule_search_crypto.json`, seven Binance spot pairs, 3,000 daily
+bars from 2018, taker fee 10bps charged both ends via `tools/crypto_market.py`).
+It was chosen because no shared dollar leg can carry it and the venues never
+close, so there is no session structure to fit by accident.
+
+The unit choice is the part worth keeping. Measured in quote units these
+symbols differ by 232,485x - BTC near six figures beside DOGE near 0.09 - which
+is the metals error several orders of magnitude worse. Measured in PERCENT of
+each symbol's median price they differ by 1.6x, tighter than the majors' 2.16x,
+and the 5x fence correctly stops firing. So the pooled figures here are
+quotable, unlike the metals and indices runs, because the unit was fixed before
+the search rather than explained after it.
+
+The verdict is the same as everywhere else. `ema_20_50` scores 2.93 in sample
+against a 3.22 Bonferroni threshold and a permutation null that reached 2.56,
+then goes to -0.69 out of sample at -1.31%, and -0.83 date-clustered. One
+candidate cleared 1.96 out of sample against 1.0 expected by chance. Median
+out-of-sample expectancy across candidates is -0.15%.
+
+What is new is the shape of the failure. The five era blocks run +8.36, +2.62,
++1.18, +0.80, -0.28 percent - a monotonic decay to negative, not the ragged
+in-and-out of the FX results. Trend following in crypto worked in 2018-2020 and
+has decayed era by era to nothing since. That is what either an arbitraged-away
+effect or a fitted early regime looks like, and the two are not separable here;
+what matters either way is that the most recent era is the negative one. The
+walk-forward agrees and declines the same way: +4.47, +0.64, -2.21, -0.28.
+
+Note also which families led. As at the indices, the trend families took the
+top places - `ema_20_50`, `sma_20_50`, `ema_10_50` - where the FX searches were
+led by mean reversion. Two universes now agree that trend is the right family
+for markets that actually trend, and both still fail to clear their nulls.
 
 The H4 exit search is worth reading as a worked example of why the era check is
 on by default (`reports/exit_search_h4.json`). At H4 the 25x8 grid does not

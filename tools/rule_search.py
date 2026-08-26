@@ -412,12 +412,22 @@ def main():
                     help="permutation draws of the whole candidate set")
     ap.add_argument("--spread-source", default="median", choices=["median", "p90", "live"])
     ap.add_argument("--min-trades", type=int, default=100)
-    ap.add_argument("--timeframe", default="H1", choices=["H1", "H4", "D1"])
+    ap.add_argument("--timeframe", default="H1",
+                    help="H1, H4 or D1 for the MT5 source; a ccxt timeframe such "
+                         "as 1h, 4h or 1d when --source crypto")
     ap.add_argument("--skip-hours", default="",
                     help="server hours to refuse entries in, comma separated. "
                          "cost_profile.py measures the rollover hour at ~4x the "
                          "normal spread, and cost is the one lever with a "
                          "measured sign")
+    ap.add_argument("--source", default="mt5", choices=["mt5", "crypto"],
+                    help="where bars come from. crypto pulls a public exchange "
+                         "through ccxt and measures in percent of price rather "
+                         "than broker points, which is the only unit that makes "
+                         "BTC and DOGE comparable")
+    ap.add_argument("--exchange", default="binance")
+    ap.add_argument("--fee-bps", type=float, default=10.0,
+                    help="crypto taker fee, charged at both ends in place of a spread")
     ap.add_argument("--cost-swap", action="store_true",
                     help="charge overnight financing as well as the spread. Off "
                          "by default so existing results are not silently "
@@ -435,8 +445,15 @@ def main():
     ap.add_argument("--path")
     args = ap.parse_args()
 
-    mt5 = connect(args.path)
     symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+    if args.source == "crypto":
+        return run_crypto(args, symbols)
+
+    if args.timeframe not in ("H1", "H4", "D1"):
+        raise SystemExit(f"--timeframe {args.timeframe} is not an MT5 timeframe; "
+                         "use H1, H4 or D1, or pass --source crypto")
+
+    mt5 = connect(args.path)
     deposit_currency = getattr(mt5.account_info(), "currency", "USD")
     skip_hours = [int(h) for h in args.skip_hours.split(",") if h.strip()]
     result = {"timeframe": args.timeframe, "years": args.years,
@@ -486,6 +503,54 @@ def main():
     mt5.shutdown()
     if not market:
         raise SystemExit("no usable symbols: " + "; ".join(result["data_gaps"]))
+    return search_market(market, result, args)
+
+
+def run_crypto(args, symbols):
+    """Same search, bars from a public exchange, measured in percent of price.
+
+    Everything downstream - the permutation null, the Bonferroni threshold, the
+    era blocks, the walk-forward, the date clustering - is untouched. That is
+    the whole point: the engine was never what was missing, so the new universe
+    is judged by exactly the machinery that has rejected the other four.
+    """
+    from crypto_market import fetch_ohlcv, to_market
+
+    import ccxt
+    exchange = getattr(ccxt, args.exchange)({"enableRateLimit": True})
+    result = {"timeframe": args.timeframe, "years": None, "source": "crypto",
+              "exchange": args.exchange, "fee_bps": args.fee_bps,
+              "sl_atr": args.sl_atr, "tp_atr": args.tp_atr,
+              "spread_source": f"taker {args.fee_bps}bps round trip",
+              "split": args.split, "null_rounds": args.null_rounds,
+              "blocks": args.blocks, "skip_hours": [], "data_gaps": []}
+
+    market = {}
+    for sym in symbols:
+        try:
+            rows = fetch_ohlcv(exchange, sym, args.timeframe, args.bars)
+        except Exception as exc:                      # noqa: BLE001 - venue errors vary
+            result["data_gaps"].append(f"{sym}: {type(exc).__name__}: {exc}")
+            continue
+        if len(rows) < 300:
+            result["data_gaps"].append(f"{sym}: only {len(rows)} bars, too few to cut into eras")
+            continue
+        m = to_market(rows, args.fee_bps)
+        m["atr"] = atr_series(m["h"], m["l"], m["c"])
+        m["entry_blocked"] = np.zeros(m["n"], dtype=bool)
+        # A perpetual venue funds positions eight-hourly rather than at a
+        # rollover, so the MT5 swap model does not apply and is left off rather
+        # than approximated. Spot pays no funding at all, which is what these
+        # symbols are.
+        m["swap"], m["triple_dow"] = None, None
+        market[sym] = m
+
+    if not market:
+        raise SystemExit("no usable symbols: " + "; ".join(result["data_gaps"]))
+    return search_market(market, result, args)
+
+
+def search_market(market, result, args):
 
     any_sym = next(iter(market.values()))
     split_idx = int(any_sym["n"] * args.split)
