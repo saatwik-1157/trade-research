@@ -8,3 +8,7 @@ requests>=2.28
 # tools/mt5_paper.py; every other tool runs without it, so it is left out of
 # the install above rather than breaking Linux and macOS setups.
 #   pip install MetaTrader5
+
+# Optional. Needed only by tools/crypto_market.py and
+# `rule_search.py --source crypto`; every other tool runs without it.
+#   pip install ccxt
