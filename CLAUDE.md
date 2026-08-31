@@ -338,6 +338,129 @@ sign, and it points down - which is the reason not to wire these rules to an
 interval and leave them running. Describe a rule's behaviour; never present one
 as an entry signal, and never tune the grid until a cell looks profitable.
 
+## Before quoting the live paper-trading record
+
+`track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
+position_id, so the sample accumulates instead of expiring with the broker's
+history window (`reports/track_record.json`). Re-running it is idempotent.
+
+The record is 27 trades and +3.44 USD on a 100,000 demo deposit, and it must be
+quoted by regime, because two incompatible bracket geometries are in it:
+
+| reward:risk | trades | net | win rate | pooled t |
+|---|---|---|---|---|
+| 0.2 (sl 3.0xATR, tp 0.5xATR) | 14 | +5.50 | 93% | **9.33** |
+| 1.0 (sl 1.5xATR, tp 1.5xATR) | 13 | -2.06 | 23% | -0.79 |
+
+That t of 9.33 is the most instructive number this project has produced,
+because it is meaningless and looks decisive. `data/highwin_session*.log`
+record the rule that generated it: `rule=random`. A random entry with a
+6:1 adverse bracket wins about six times in seven by construction, so the
+93% win rate, the profit factor of 5.3 and the 13-win streak are all
+arithmetic rather than evidence - the losses had not landed yet. Thirteen of
+those fourteen wins opened between 11:05 and 13:32 on one day across six
+pairs, every one on the same side of the dollar, which is the shared-move
+clustering the FX searches already document.
+
+Net currency cannot be pooled across those two rows. A trade's size is set by
+its stop distance, and 5x separates them - structurally the metals-points
+error, and `track_record.py` raises the same class of data gap at a 2x fence.
+The R-multiple pools, because dividing by the money at risk removes the
+regime: **+0.023R over 27 trades, pooled t 0.26, date-clustered -0.80,
+symbol-clustered -0.19.** At that effect size the pooled t reaches 1.96 after
+about 1,500 more trades.
+
+The sequence matters more than any single reading. On 20 trades this account
+scored +4.60 at a pooled t of 3.27; seven trades later it was +3.44 at 1.15,
+and -0.10 clustered by entry hour. Nothing changed except that the sample
+grew. Do not quote a live t-stat without saying how many trades it rests on.
+
+## Read the fill, never the quote
+
+One live trade was a loss fixed at order time, and the order log hid it for
+three days by recording the requested price as the entry. `place()` computed
+sl/tp from the quote it read before `order_send` and transmitted them as
+ABSOLUTE levels; position 10200315596 was an NZDUSD sell quoted at 0.59752
+with tp 0.59638, and it filled at 0.59473 - 279 points away, against a worst
+case of 3 points across the other 26 trades. That put both exits above a
+short's entry, so every branch was a loss; it closed on its own take-profit
+for -165 points, -1.65 USD, -1.45R, and the retcode still said DONE.
+
+`bracket_is_sane()` now checks that the stop and target straddle the actual
+fill, and `place()` re-anchors the bracket on the fill when they do not,
+flagging the trade as `bracket_repaired` so analysis can drop it. Repair
+rather than close: closing would only ever fire on adverse slippage and would
+bias the record the tool exists to measure. A modify that fails closes the
+position instead, because holding it has no profitable branch.
+`place()` now records `fill_price` and `slippage_points` on every order, and
+`track_record.py` re-derives the same check retroactively, so trades opened
+before the fix are still flagged (`bracket_inverted_at_fill`).
+
+The general form is the one this repository keeps rediscovering: a figure the
+tool chose is not a figure the server confirmed, and logging the first as
+though it were the second makes the discrepancy invisible rather than absent.
+
+The cause is neither slippage nor a stale quote, and it took the bar data to
+settle. The deal stamp renders to server 00:04:15 and the broker is UTC+3, so
+the fill landed at 21:04:15 UTC against an order logged at 21:04:14 UTC - one
+second, no delay to go stale in. Both prices were live: the M1 bar covering
+that minute runs high 0.59752, low 0.59470, a 282-point range. The tool read
+the top of that band and the fill came from the bottom of it.
+
+Server 00:00 is rollover, and the rollover window is where quote bands stop
+fitting inside a bracket. Measured over 20,000 M1 bars per major, the share of
+bars whose range exceeds the 1.5xATR bracket is 0.9% in server hour 00 against
+roughly 0.0% in every other hour, and inside that hour it is 14.3% at minute
+00, 6.1% at 01, 8.2% at 05, decaying to 0.0% by minute 11 and 0.2% across
+00:12-00:59. The feed is otherwise unremarkable - median M1 range is 8 points
+and only 0.1% of bars exceed 114 - so this is a narrow window, not a bad feed.
+
+That sharpens the hour-filter result rather than overturning it. The earlier
+finding stands on its own terms: skipping the rollover hour cannot pay for
+itself, because it carries 1.0% of entries and the effect there is a 4x
+spread. But a bracket inverted at the fill is not an expensive trade, it is a
+broken observation - the trade's outcome carries no information about the rule
+that opened it. Cost arguments average out and validity arguments do not, so
+the two do not trade off against each other. n is 1 in 27 live trades here;
+the mechanism is established from the bar data, the frequency is not.
+
+## Before changing the lot size
+
+`lot_for_risk()` sizes a position so its stop costs a fixed sum, and
+`--risk-usd` on `mt5_paper.py` and `take_profit.py` turns it on. It is OFF by
+default: every figure in the live record above was taken at a flat 0.01 lot,
+and a default that silently restated them would make the history unreadable.
+
+The reason to size is that a flat lot is seven different bets. A 1.5xATR stop
+is 131 points on EURUSD and 98 on NZDUSD, and a point is not worth the same
+money in either, so 0.01 lots everywhere risked 1.67 on USDCHF against 0.98 on
+NZDUSD - a 1.7x spread, structurally the metals-points error wearing a lot
+size. It is what makes the R-multiple a measured quantity rather than a
+derived one.
+
+It does not improve expectancy and cannot, which is the part worth saying out
+loud because it is the thing most often asked of it. Volume is a positive
+multiplier on the per-trade result: it scales +0.021R and -1.00R by the same
+factor, and every t-statistic in `track_record.py` is scale-invariant, so no
+lot schedule moves a result from "not significant" to "significant". Bigger
+lots make the currency figure bigger in whichever direction it was already
+going.
+
+A symbol whose tick value or tick size is missing is REFUSED rather than sized
+from a default, on swap.py's reasoning - a lot guessed from an absent tick
+value is a real order for the wrong amount. The volume step rounds down, never
+up, so rounding cannot risk more than the budget; when the broker's minimum lot
+exceeds the budget the tool reports a gap instead of pretending the sizing
+held.
+
+The float floor is the defect this found, and it is the repository's recurring
+shape again. `math.floor(raw / step)` on a step count built from a float ATR
+turns a budget worth exactly five steps into 4.999999999 and then into four -
+so a 5-step order and a 4-step order send identical volume, with nothing in the
+record to say which was intended. Round the ratio before flooring. The
+arithmetic was right at every step and the number that reached the server was
+still wrong, which is the same class as reading the quote instead of the fill.
+
 ## Environment
 
 `SEC_USER_AGENT` should carry a contact string. Requests still succeed
@@ -354,12 +477,25 @@ touching `tools/rule_backtest.py`, `tools/bracket_sweep.py`, or the order
 construction or history windows in `tools/mt5_paper.py` and
 `tools/mt5_account.py`, and `python tests/test_swap.py` after touching the
 unit conversion, the night count or the plausibility fence in `tools/swap.py`.
+The bracket-sanity and fill-recording checks are in `test_rule_backtest.py`
+too, since they are order construction.
 All six run in CI on every push, against Python 3.10, 3.12 and 3.14.
 
 The MT5 server clock is not the local clock. Bound a history query with
 `mt5_paper.history_end()` and `server_now()`, never `datetime.now()` — a local
 upper bound drops every deal the server stamped later, returns no error, and
 reads as "no trades" instead of a fault.
+
+`server_now()` is right for bounding and wrong for day boundaries, and the
+distinction is not obvious. MT5 encodes a stamp as the server's wall clock
+rendered as a UTC epoch, and the Python package reads a naive query bound
+through the LOCAL zone - so `datetime.fromtimestamp(tick.time)` cancels the
+offset on both sides and the query is correct. Calling `.replace(hour=0)` on
+it does not cancel: it lands on midnight of the local-rendered clock, so on
+this UTC+5:30 machine `--max-daily-loss` counted from server 18:30 the
+previous day, and the same code on a UTC machine counted from midnight. Use
+`server_day_start()` for the day; a risk limit whose day moves with the
+operator's timezone only fails on someone else's laptop.
 
 The disk cache sweeps entries older than 7 days on first write of each
 process. `python tools/market.py --prune` runs it on demand.

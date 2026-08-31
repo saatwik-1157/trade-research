@@ -39,7 +39,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import calendar
 import json
+import math
 import os
 import random
 import sys
@@ -207,6 +209,31 @@ def history_end(mt5) -> datetime:
     return max(datetime.now(), server_now(mt5)) + timedelta(days=1)
 
 
+def server_day_start(mt5) -> datetime:
+    """Midnight on the SERVER's clock, in the frame history queries use.
+
+    server_now() renders the broker's stamp through the local timezone, and
+    that is correct for BOUNDING a query: the MT5 package reads a naive bound
+    the same way, so the offset cancels on both sides. It is not correct for
+    finding a day boundary. Calling .replace(hour=0) on it lands on midnight of
+    the local-rendered clock, which is the server's midnight shifted by this
+    machine's UTC offset - so on a UTC+5:30 machine --max-daily-loss counted
+    from server 18:30 the previous day, while the same code on a UTC machine
+    counted from midnight. A risk limit whose day moves with the operator's
+    timezone is the kind of defect that only shows up on someone else's laptop.
+
+    So: read the stamp as the server's wall clock, take midnight there, then
+    render that instant back into the query frame.
+    """
+    for sym in ("EURUSD", "GBPUSD", "USDJPY", "XAUUSD"):
+        tick = mt5.symbol_info_tick(sym)
+        if tick and getattr(tick, "time", 0):
+            wall = datetime.fromtimestamp(tick.time, tz=timezone.utc).replace(tzinfo=None)
+            midnight = wall.replace(hour=0, minute=0, second=0, microsecond=0)
+            return datetime.fromtimestamp(calendar.timegm(midnight.timetuple()))
+    return datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def realised_today(mt5) -> float:
     """P&L booked by this tool today, used for the daily loss limit.
 
@@ -214,12 +241,98 @@ def realised_today(mt5) -> float:
     the server clock. Getting this wrong returns 0.0 rather than an error, so
     --max-daily-loss silently stops being a limit at all.
     """
-    start = server_now(mt5).replace(hour=0, minute=0, second=0, microsecond=0)
+    start = server_day_start(mt5)
     deals = mt5.history_deals_get(start, history_end(mt5)) or []
     return sum(d.profit + d.commission + d.swap for d in deals if d.magic == MAGIC)
 
 
-def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float, live: bool) -> dict:
+def bracket_is_sane(is_buy: bool, fill: float, sl: float, tp: float) -> bool:
+    """A stop must sit against the position and a target with it.
+
+    For a long that means sl < fill < tp, and for a short tp < fill < sl. The
+    check is needed because sl and tp are computed from the quote read just
+    BEFORE order_send and are transmitted as absolute levels, while the fill
+    comes back from the server. A fill far enough from that quote lands outside
+    its own bracket, which puts both exits on the same side of entry and makes
+    every outcome a loss - the position is closed at a loss the moment it opens
+    and the retcode still reads DONE, so nothing in the log looks wrong.
+
+    Position 10200315596 is the worked example: NZDUSD sell quoted at 0.59752
+    with tp 0.59638, filled at 0.59473, closed on that tp for -165 points.
+    """
+    if is_buy:
+        return sl < fill < tp
+    return tp < fill < sl
+
+
+def lot_for_risk(mt5, symbol: str, sl_distance: float, risk_amount: float) -> dict:
+    """Size a position so its stop costs `risk_amount`, or refuse to size it.
+
+    A fixed lot makes every trade a different bet. A 1.5xATR stop is not the
+    same number of points on EURUSD as on USDJPY and a point is not worth the
+    same money in either, so 0.01 lots everywhere risks a different sum on
+    every symbol - structurally the metals-points error wearing a lot size.
+    Sizing off the stop distance is what makes the R-multiple in
+    track_record.py a measured quantity rather than a derived one.
+
+    It does not improve expectancy and cannot. Volume is a positive multiplier
+    on the per-trade result: it scales +0.021R and -1.00R by the same factor
+    and leaves the sign alone. The reason to do it is that the record becomes
+    comparable across symbols, not that it earns anything.
+
+    Returns {"lot": float, ...} or {"lot": None, "gap": reason}. It refuses
+    rather than falling back to a default, on swap.py's reasoning - a lot size
+    guessed from a missing tick value is a real order for the wrong amount.
+    """
+    info = mt5.symbol_info(symbol)
+    if info is None:
+        return {"lot": None, "gap": "no symbol_info"}
+
+    tick_value = float(getattr(info, "trade_tick_value", 0.0) or 0.0)
+    tick_size = float(getattr(info, "trade_tick_size", 0.0) or 0.0)
+    if tick_value <= 0 or tick_size <= 0:
+        return {"lot": None,
+                "gap": f"no tick value/size for {symbol} "
+                       f"(value={tick_value}, size={tick_size})"}
+    if sl_distance <= 0:
+        return {"lot": None, "gap": "stop distance is not positive"}
+
+    # Loss in account currency if a 1.0-lot position runs to its stop.
+    per_lot = (sl_distance / tick_size) * tick_value
+    if per_lot <= 0:
+        return {"lot": None, "gap": "computed risk per lot is not positive"}
+
+    step = float(getattr(info, "volume_step", 0.0) or 0.01)
+    vmin = float(getattr(info, "volume_min", 0.0) or step)
+    vmax = float(getattr(info, "volume_max", 0.0) or 0.0)
+
+    raw = risk_amount / per_lot
+    # Round the step count before flooring. per_lot is built from a float ATR,
+    # so a budget worth exactly 5 steps arrives as 4.999999999 and a bare
+    # floor() drops a whole step - the same size for a 5-step order and a
+    # 4-step one, with nothing in the record to show which happened.
+    lot = math.floor(round(raw / step, 6)) * step
+    lot = max(lot, vmin)
+    if vmax > 0:
+        lot = min(lot, vmax)
+    lot = round(lot, 8)
+
+    out = {"lot": lot, "risk_requested": round(risk_amount, 4),
+           "risk_actual": round(lot * per_lot, 4),
+           "risk_per_lot": round(per_lot, 4)}
+
+    # The min-lot floor is the case that actually bites: at 0.01 minimum a
+    # small risk budget cannot be expressed, and the order silently risks more
+    # than asked. Report it rather than pretend the sizing held.
+    if out["risk_actual"] > risk_amount * 1.5:
+        out["gap"] = (f"min lot {vmin} risks {out['risk_actual']:.2f} against a "
+                      f"{risk_amount:.2f} budget - volume step is the binding "
+                      f"constraint, not the risk setting")
+    return out
+
+
+def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
+          live: bool, risk_usd: float | None = None) -> dict:
     info = mt5.symbol_info(symbol)
     if info is None and not mt5.symbol_select(symbol, True):
         return {"symbol": symbol, "status": "symbol_unavailable"}
@@ -237,6 +350,14 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
     price = tick.ask if is_buy else tick.bid
     sl = price - sl_atr * atr if is_buy else price + sl_atr * atr
     tp = price + tp_atr * atr if is_buy else price - tp_atr * atr
+
+    sizing = None
+    if risk_usd:
+        sizing = lot_for_risk(mt5, symbol, sl_atr * atr, risk_usd)
+        if sizing["lot"] is None:
+            return {"symbol": symbol, "side": side, "status": "unsized",
+                    "gap": sizing["gap"]}
+        lot = sizing["lot"]
 
     filling = filling_for(mt5, info)
 
@@ -257,17 +378,67 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
 
     if not live:
         return {"symbol": symbol, "side": side, "status": "DRY_RUN",
-                "price": price, "sl": request["sl"], "tp": request["tp"], "lot": lot}
+                "price": price, "sl": request["sl"], "tp": request["tp"], "lot": lot,
+                **({"sizing": sizing} if sizing else {})}
 
     res = mt5.order_send(request)
+    done = getattr(res, "retcode", None) == mt5.TRADE_RETCODE_DONE
+    ticket = getattr(res, "order", None)
+
+    # The fill, not the quote. Recording `price` as the entry is what hid the
+    # bracket inversion for three days: the log said 0.59752 and the server
+    # said 0.59473, and only the account report disagreed.
+    fill = float(getattr(res, "price", 0.0) or 0.0) if done else 0.0
+    point = getattr(info, "point", 0.0) or 0.0
+
     out = {
         "symbol": symbol, "side": side, "lot": lot, "price": price,
+        "fill_price": fill or None,
+        "slippage_points": round((fill - price) / point, 1) if (fill and point) else None,
         "sl": request["sl"], "tp": request["tp"],
         "retcode": getattr(res, "retcode", None),
         "comment": getattr(res, "comment", None),
-        "order": getattr(res, "order", None),
-        "status": "SENT" if getattr(res, "retcode", None) == mt5.TRADE_RETCODE_DONE else "REJECTED",
+        "order": ticket,
+        "status": "SENT" if done else "REJECTED",
+        **({"sizing": sizing} if sizing else {}),
     }
+
+    # Repair rather than close. Closing only ever fires on adverse slippage, so
+    # it would bias the record the tool exists to measure; re-anchoring keeps
+    # the ATR geometry the rule actually specifies. The flag is the point - a
+    # repaired trade entered at a price its signal never saw, and analysis
+    # needs to be able to drop it.
+    if done and fill and not bracket_is_sane(is_buy, fill, request["sl"], request["tp"]):
+        new_sl = fill - sl_atr * atr if is_buy else fill + sl_atr * atr
+        new_tp = fill + tp_atr * atr if is_buy else fill - tp_atr * atr
+        fix = mt5.order_send({
+            "action": mt5.TRADE_ACTION_SLTP,
+            "symbol": symbol,
+            "position": ticket,
+            "sl": round(new_sl, info.digits),
+            "tp": round(new_tp, info.digits),
+        })
+        out["bracket_repaired"] = True
+        out["bracket_repair_retcode"] = getattr(fix, "retcode", None)
+        if getattr(fix, "retcode", None) == mt5.TRADE_RETCODE_DONE:
+            out["sl"], out["tp"] = round(new_sl, info.digits), round(new_tp, info.digits)
+        else:
+            # Could not fix it and cannot leave it: both exits are against the
+            # position, so holding is a guaranteed loss with no upside branch.
+            mt5.order_send({
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": float(lot),
+                "type": mt5.ORDER_TYPE_SELL if is_buy else mt5.ORDER_TYPE_BUY,
+                "position": ticket,
+                "price": tick.bid if is_buy else tick.ask,
+                "deviation": 20,
+                "magic": MAGIC,
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": filling,
+            })
+            out["bracket_repair_failed_closed"] = True
+
     _log({"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), "event": "order", **out})
     return out
 
@@ -290,9 +461,18 @@ def filling_for(mt5, info):
     return mt5.ORDER_FILLING_RETURN
 
 
-def close_own(mt5, live: bool) -> list[dict]:
+def close_own(mt5, live: bool, where=None) -> list[dict]:
+    """Close positions this tool opened, optionally only those matching `where`.
+
+    The predicate takes an MT5 position and returns a bool. It exists so a
+    caller can harvest on floating P&L without duplicating the order
+    construction, which is the part that has already cost this project a live
+    bug (see filling_for and bracket_is_sane).
+    """
     out = []
     for p in own_positions(mt5):
+        if where is not None and not where(p):
+            continue
         tick = mt5.symbol_info_tick(p.symbol)
         if not tick:
             out.append({"ticket": p.ticket, "status": "no_quote"})
@@ -347,7 +527,9 @@ def cycle(mt5, args) -> dict:
         if side is None:
             actions.append({"symbol": symbol, "status": "no_signal"})
             continue
-        actions.append(place(mt5, symbol, side, args.lot, args.sl_atr, args.tp_atr, args.live))
+        actions.append(place(mt5, symbol, side, args.lot, args.sl_atr,
+                            args.tp_atr, args.live,
+                            getattr(args, "risk_usd", None)))
 
     return {"halted": False, "realised_today": round(pnl_today, 2),
             "open_positions": len(open_now), "actions": actions}
@@ -358,6 +540,9 @@ def main() -> int:
     ap.add_argument("--rule", choices=sorted(RULES), default="sma_cross")
     ap.add_argument("--symbols", default="EURUSD,GBPUSD,USDJPY")
     ap.add_argument("--lot", type=float, default=0.01)
+    ap.add_argument("--risk-usd", type=float, default=None,
+                    help="size each trade so its stop costs this much; "
+                         "overrides --lot. Does not change expectancy.")
     ap.add_argument("--sl-atr", type=float, default=1.5, help="stop loss in ATR multiples")
     ap.add_argument("--tp-atr", type=float, default=1.5, help="take profit in ATR multiples")
     ap.add_argument("--max-positions", type=int, default=3)
