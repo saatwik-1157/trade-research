@@ -25,9 +25,11 @@ package inside connect() rather than at module scope.
 """
 from __future__ import annotations
 
+import calendar
 import math
 import os
 import sys
+import time
 import types
 from datetime import datetime, timedelta
 
@@ -38,6 +40,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import mt5_paper  # noqa: E402
 import rule_backtest as rb  # noqa: E402
+import take_profit  # noqa: E402
 import rule_search  # noqa: E402
 
 FAILURES: list[str] = []
@@ -603,6 +606,315 @@ def test_hour_filter_blocks_the_entry_bar_not_the_signal_bar():
     check("midnight's own signal bar is left alone", bool(blocked[24]), False)
 
 
+class FakeMT5:
+    """Enough of the MT5 surface for place(), with a controllable fill price.
+
+    The point of the fake is that order_send returns a `price` the caller did
+    not choose. A real server does that under slippage or a stale quote, and it
+    is the one input that cannot be produced by driving the real API.
+    """
+
+    TRADE_ACTION_DEAL, TRADE_ACTION_SLTP = 1, 6
+    ORDER_TYPE_BUY, ORDER_TYPE_SELL = 0, 1
+    ORDER_TIME_GTC = 0
+    ORDER_FILLING_FOK, ORDER_FILLING_IOC, ORDER_FILLING_RETURN = 0, 1, 2
+    TRADE_RETCODE_DONE = 10009
+    TIMEFRAME_H1 = 16385
+
+    def __init__(self, fill, bid=0.59752, sltp_ok=True, info_over=None):
+        self.fill, self.bid, self.sltp_ok = fill, bid, sltp_ok
+        self.sent = []
+        self.info_over = info_over or {}
+
+    def symbol_info(self, symbol):
+        base = dict(digits=5, point=0.00001, filling_mode=1,
+                    trade_tick_value=1.0, trade_tick_size=0.00001,
+                    volume_step=0.01, volume_min=0.01, volume_max=100.0)
+        base.update(self.info_over)
+        return types.SimpleNamespace(**base)
+
+    def symbol_select(self, symbol, enable):
+        return True
+
+    def symbol_info_tick(self, symbol):
+        return types.SimpleNamespace(ask=self.bid + 0.00002, bid=self.bid, time=0)
+
+    def copy_rates_from_pos(self, symbol, timeframe, start, count):
+        n = 300
+        # A flat 76-point true range, so 1.5xATR lands on 114 points - the
+        # bracket the live NZDUSD orders actually carried.
+        return np.rec.fromarrays(
+            [np.full(n, self.bid + 0.00038),
+             np.full(n, self.bid - 0.00038),
+             np.full(n, self.bid)],
+            names="high,low,close")
+
+    def order_send(self, request):
+        self.sent.append(request)
+        if request["action"] == self.TRADE_ACTION_SLTP:
+            return types.SimpleNamespace(
+                retcode=self.TRADE_RETCODE_DONE if self.sltp_ok else 10016)
+        return types.SimpleNamespace(
+            retcode=self.TRADE_RETCODE_DONE, order=10200315596, price=self.fill)
+
+
+def _place(fake, side="sell", risk_usd=None):
+    """Run place() against the fake with the trade log stubbed out."""
+    logged = []
+    real_log = mt5_paper._log
+    mt5_paper._log = logged.append
+    try:
+        out = mt5_paper.place(fake, "NZDUSD", side, 0.01, 1.5, 1.5, live=True,
+                              risk_usd=risk_usd)
+    finally:
+        mt5_paper._log = real_log
+    return out, logged
+
+
+def test_bracket_must_straddle_the_fill():
+    print("\nBracket sanity - both exits on one side of entry is a fixed loss")
+
+    check("a normal long is sane", mt5_paper.bracket_is_sane(True, 1.0, 0.9, 1.1), True)
+    check("a normal short is sane", mt5_paper.bracket_is_sane(False, 1.0, 1.1, 0.9), True)
+
+    # Position 10200315596: sell quoted 0.59752 with tp 0.59638, filled 0.59473.
+    check("the live NZDUSD fill is caught",
+          mt5_paper.bracket_is_sane(False, 0.59473, 0.59866, 0.59638), False)
+    check("a long filled above its own target is caught",
+          mt5_paper.bracket_is_sane(True, 1.2, 0.9, 1.1), False)
+    # A fill exactly on a level is not straddled either - it is already out.
+    check("a fill sitting on the stop is not sane",
+          mt5_paper.bracket_is_sane(True, 0.9, 0.9, 1.1), False)
+
+
+def test_place_records_the_fill_not_the_quote():
+    print("\nOrder log - the entry recorded must be the one the server gave")
+
+    fake = FakeMT5(fill=0.59750)          # 2 points of ordinary slippage
+    out, logged = _place(fake)
+
+    close_to("the fill is recorded", out["fill_price"], 0.59750, 1e-9)
+    close_to("slippage is measured against the quote", out["slippage_points"], -2.0, 0.01)
+    check("a sane bracket is left alone", out.get("bracket_repaired"), None)
+    check("only the entry order was sent", len(fake.sent), 1)
+    close_to("the log carries the fill", logged[0]["fill_price"], 0.59750, 1e-9)
+
+
+def test_inverted_bracket_is_repaired_from_the_fill():
+    print("\nBracket repair - re-anchor on the fill rather than hold a lost trade")
+
+    fake = FakeMT5(fill=0.59473)          # the live 279-point case
+    out, _ = _place(fake)
+
+    check("the inversion is flagged", out["bracket_repaired"], True)
+    check("an SLTP modify followed the entry", len(fake.sent), 2)
+    check("the second call is a modify",
+          fake.sent[1]["action"], FakeMT5.TRADE_ACTION_SLTP)
+    check("it modifies the position just opened", fake.sent[1]["position"], 10200315596)
+
+    # Re-anchored on the fill, the short's stop is above it and its target below.
+    check("the repaired bracket straddles the fill",
+          mt5_paper.bracket_is_sane(False, 0.59473, fake.sent[1]["sl"], fake.sent[1]["tp"]),
+          True)
+    check("the reported levels are the repaired ones", out["sl"], fake.sent[1]["sl"])
+    close_to("the stop keeps its 1.5xATR distance",
+             abs(fake.sent[1]["sl"] - 0.59473) / 0.00001, 114.0, 1.0)
+
+
+def test_unrepairable_bracket_is_closed_not_held():
+    print("\nBracket repair - a modify that fails must not leave the position open")
+
+    fake = FakeMT5(fill=0.59473, sltp_ok=False)
+    out, _ = _place(fake)
+
+    check("the failed repair is reported", out["bracket_repair_failed_closed"], True)
+    check("entry, modify, then close", len(fake.sent), 3)
+    check("the third call closes the position", fake.sent[2]["position"], 10200315596)
+    check("closing a short is a buy", fake.sent[2]["type"], FakeMT5.ORDER_TYPE_BUY)
+
+
+class StampedClock:
+    """A terminal reporting one fixed server stamp.
+
+    MT5 encodes a tick or deal time as the server's WALL CLOCK rendered as if
+    it were a UTC epoch, so the fake builds its stamp the same way. Nothing
+    here depends on the machine's own timezone, which is the point.
+    """
+
+    def __init__(self, wall):
+        self.wall = wall
+        self.stamp = calendar.timegm(wall.timetuple())
+
+    def symbol_info_tick(self, symbol):
+        if symbol != "EURUSD":
+            return None
+        return types.SimpleNamespace(time=self.stamp)
+
+
+
+# The fake's flat 76-point true range makes 1.5xATR a 114-point stop, and at
+# tick_value 1.0 per 0.00001 that is exactly 114.00 of risk per 1.0 lot - so
+# every figure below is checkable by hand rather than by rerunning the tool.
+
+def test_lot_is_sized_off_the_stop_distance():
+    print()
+    print("Risk sizing - the lot follows the stop, not a constant")
+    fake = FakeMT5(fill=0.59752)
+    got = mt5_paper.lot_for_risk(fake, "NZDUSD", 1.5 * 0.00076, 5.70)
+    check("a 114-point stop at 5.70 of risk is 0.05 lots", got["lot"], 0.05)
+    close_to("and the stop then costs what was asked", got["risk_actual"], 5.70, 0.01)
+    check("no gap when the budget divides cleanly", "gap" in got, False)
+
+
+def test_rounding_never_risks_more_than_the_budget():
+    print()
+    print("Risk sizing - the volume step rounds down, never up")
+    fake = FakeMT5(fill=0.59752)
+    got = mt5_paper.lot_for_risk(fake, "NZDUSD", 1.5 * 0.00076, 5.69)
+    check("0.0499 lots rounds down to the step", got["lot"], 0.04)
+    check("so the actual risk is under the budget", got["risk_actual"] <= 5.69, True)
+
+
+def test_min_lot_floor_is_reported_not_hidden():
+    print()
+    print("Risk sizing - a budget smaller than one minimum lot is a gap")
+    fake = FakeMT5(fill=0.59752)
+    got = mt5_paper.lot_for_risk(fake, "NZDUSD", 1.5 * 0.00076, 0.50)
+    check("it still sends the broker's minimum", got["lot"], 0.01)
+    close_to("which risks more than asked", got["risk_actual"], 1.14, 0.01)
+    check("and says so rather than reporting the budget", "gap" in got, True)
+
+
+def test_missing_tick_value_refuses_to_size():
+    print()
+    print("Risk sizing - refuse rather than guess, and send nothing")
+    fake = FakeMT5(fill=0.59752, info_over={"trade_tick_value": 0.0})
+    got = mt5_paper.lot_for_risk(fake, "NZDUSD", 1.5 * 0.00076, 5.70)
+    check("no lot is returned", got["lot"], None)
+    check("a reason is", bool(got.get("gap")), True)
+
+    out, _ = _place(fake, risk_usd=5.70)
+    check("place() reports it unsized", out["status"], "unsized")
+    check("and no order reached the server", len(fake.sent), 0)
+
+
+def test_place_sends_the_derived_volume():
+    print()
+    print("Risk sizing - the order carries the sized volume, not --lot")
+    fake = FakeMT5(fill=0.59752)
+    out, _ = _place(fake, risk_usd=5.70)
+    check("the request volume is the derived one", fake.sent[0]["volume"], 0.05)
+    check("and the record agrees", out["lot"], 0.05)
+    close_to("the sizing detail rides along", out["sizing"]["risk_actual"], 5.70, 0.01)
+
+
+def test_sizing_is_off_by_default():
+    print()
+    print("Risk sizing - unset means the old fixed lot, unchanged")
+    fake = FakeMT5(fill=0.59752)
+    out, _ = _place(fake)
+    check("volume is --lot", fake.sent[0]["volume"], 0.01)
+    check("and no sizing block is recorded", "sizing" in out, False)
+
+
+def test_daily_limit_starts_at_the_servers_midnight():
+    print("\nDaily loss limit - the day must be the server's, not the operator's")
+
+    wall = datetime(2026, 8, 26, 0, 4, 15)       # four minutes past server rollover
+    c = StampedClock(wall)
+
+    # The MT5 package reads a naive bound through the LOCAL timezone, so that
+    # is the frame the returned value has to be measured in.
+    got = time.mktime(mt5_paper.server_day_start(c).timetuple())
+    want = calendar.timegm(wall.replace(hour=0, minute=0, second=0).timetuple())
+    check("the window opens exactly at server midnight", int(got), int(want))
+
+    # The regression: .replace(hour=0) on server_now() lands on midnight of the
+    # LOCAL-rendered clock, so the limit's day slides with the operator's zone.
+    naive = mt5_paper.server_now(c).replace(hour=0, minute=0, second=0, microsecond=0)
+    local_off = calendar.timegm(datetime.fromtimestamp(c.stamp).timetuple()) - c.stamp
+    # Negative: on a machine ahead of UTC the window opened EARLY, at server
+    # 18:30 the previous day, which is what the live account showed.
+    check("the old form opened early by exactly the local UTC offset",
+          int(round(time.mktime(naive.timetuple()) - want)), -int(round(local_off)))
+
+    # server_now() itself is NOT wrong - it is the frame history queries use,
+    # and the offset cancels because the package reads bounds the same way.
+    check("server_now still round-trips to the stamp it was given",
+          int(time.mktime(mt5_paper.server_now(c).timetuple())), int(c.stamp))
+
+
+class HarvestMT5(FakeMT5):
+    """A terminal holding open positions, for the profit-harvest selection."""
+
+    def __init__(self, positions):
+        super().__init__(fill=0.59752)
+        self._positions = positions
+
+    def positions_get(self):
+        return tuple(self._positions)
+
+
+def pos(ticket, profit, swap=0.0, magic=None, symbol="EURUSD"):
+    return types.SimpleNamespace(
+        ticket=ticket, symbol=symbol, type=1, volume=0.01,
+        profit=profit, swap=swap,
+        magic=mt5_paper.MAGIC if magic is None else magic)
+
+
+def test_harvest_closes_only_the_winners():
+    print("\nProfit harvest - selection must be by NET float, and only ours")
+
+    positions = [
+        pos(1, profit=+0.05),                       # a winner
+        pos(2, profit=-0.30),                       # a loser, must be left alone
+        pos(3, profit=+0.04, swap=-0.06),           # gross positive, net negative
+        pos(4, profit=+0.10, swap=-0.02),           # net +0.08, still a winner
+        pos(5, profit=+9.99, magic=4242),           # another EA's, never touched
+    ]
+    c = HarvestMT5(positions)
+
+    close_to("swap is counted against the float",
+             take_profit.net_floating(positions[2]), -0.02, 1e-9)
+
+    logged = []
+    real_log = mt5_paper._log
+    mt5_paper._log = logged.append
+    try:
+        out = take_profit.harvest(c, min_profit=0.01, live=True)
+    finally:
+        mt5_paper._log = real_log
+
+    closed = sorted(r["ticket"] for r in out if r["status"] == "CLOSED")
+    check("only the net winners are harvested", closed, [1, 4])
+    check("the loser is left open", 2 in closed, False)
+    check("a position positive only before swap is left open", 3 in closed, False)
+    check("another EA's winner is never touched", 5 in closed, False)
+    check("every close was logged", len(logged), 2)
+
+    # The predicate is what makes this safe; without one close_own takes all.
+    c2 = HarvestMT5(positions)
+    mt5_paper._log = lambda r: None
+    try:
+        everything = mt5_paper.close_own(c2, live=True)
+    finally:
+        mt5_paper._log = real_log
+    check("no predicate still means close all of ours", len(everything), 4)
+
+
+def test_harvest_threshold_is_inclusive():
+    print("\nProfit harvest - a position exactly at the threshold is taken")
+
+    c = HarvestMT5([pos(1, profit=0.01), pos(2, profit=0.009)])
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        out = take_profit.harvest(c, min_profit=0.01, live=True)
+    finally:
+        mt5_paper._log = real_log
+    check("exactly at the threshold closes", [r["ticket"] for r in out], [1])
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -626,6 +938,19 @@ def main():
     test_hour_filter_blocks_the_entry_bar_not_the_signal_bar()
     test_eras_are_disjoint_and_complete()
     test_walk_forward_cannot_see_its_test_era()
+    test_bracket_must_straddle_the_fill()
+    test_place_records_the_fill_not_the_quote()
+    test_inverted_bracket_is_repaired_from_the_fill()
+    test_unrepairable_bracket_is_closed_not_held()
+    test_lot_is_sized_off_the_stop_distance()
+    test_rounding_never_risks_more_than_the_budget()
+    test_min_lot_floor_is_reported_not_hidden()
+    test_missing_tick_value_refuses_to_size()
+    test_place_sends_the_derived_volume()
+    test_sizing_is_off_by_default()
+    test_daily_limit_starts_at_the_servers_midnight()
+    test_harvest_closes_only_the_winners()
+    test_harvest_threshold_is_inclusive()
 
     print()
     if FAILURES:
