@@ -145,10 +145,81 @@ def enrich(trade: dict, geo: dict) -> dict:
     return out
 
 
-def merge(days: int, path: str | None = None) -> dict:
-    """Pull closed trades from MT5 and add the ones not already on file."""
+def census(trades: list[dict]) -> dict[int, int]:
+    """How many closed trades each magic opened. The account, not this tool."""
+    counts: dict[int, int] = {}
+    for t in trades:
+        key = int(t.get("magic", 0) or 0)
+        counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def select_by_magic(trades: list[dict], magic: int | None) -> list[dict]:
+    """The trades one magic opened, or all of them when `magic` is None.
+
+    Split out of `merge` so it can be tested without a terminal, because the
+    question it answers -- whose trades is this ledger -- is the one that
+    decides what every statistic downstream describes.
+
+    A trade with no magic (0) belongs to nobody in particular: opened by hand in
+    the terminal, or by something that does not tag. It is never silently folded
+    into this tool's sample.
+    """
+    if magic is None:
+        return list(trades)
+    return [t for t in trades if int(t.get("magic", 0) or 0) == magic]
+
+
+def drop_positions(trades: list[dict], exclude: set[str]) -> list[dict]:
+    """Trades minus a list of position ids.
+
+    The magic filter cannot reach a trade opened before the tags were split.
+    Nine of the ten trades the platform made at this venue on 2026-09-07 carry
+    the harness's own 770315, because the adapter shared it until that evening;
+    only 58334342528 is separable by tag. They are separable by IDENTITY -- the
+    platform's `positions` table lists exactly which tickets were its -- so this
+    takes the ids rather than guessing from a time window.
+    """
+    if not exclude:
+        return list(trades)
+    return [t for t in trades if str(t["position_id"]) not in exclude]
+
+
+def merge(
+    days: int,
+    path: str | None = None,
+    magic: int | None = mt5_paper.MAGIC,
+    exclude: set[str] | None = None,
+    ) -> dict:
+    """Pull closed trades from MT5 and add the ones not already on file.
+
+    **`magic` decides whose trades this ledger is.** `closed_trades` pairs every
+    deal on the ACCOUNT, so a trade opened by hand, by the platform's broker
+    adapter, or by any other EA arrives here beside this tool's -- and until the
+    entry deal's magic was recorded, on 2026-09-07, nothing could tell them
+    apart. The sample behind every "no edge" finding in CLAUDE.md was therefore
+    "every closed trade on this account", not "every trade this tool made".
+
+    The default is this tool's own tag, which is what the ledger has always
+    claimed to be. `None` restores the old behaviour and takes everything.
+    Either way the result reports what was left out and under whose tag, so the
+    choice is visible rather than assumed.
+
+    Rows already on file are untouched. This changes what is ADDED, not what
+    the ledger already contains.
+    """
     mt5 = mt5_account.connect(path)
     try:
+        # WHICH account these trades came from. A ledger is keyed by position
+        # id, and position ids are unique per account rather than globally --
+        # so trades from a second demo account merge in cleanly, with nothing
+        # to say they are not the same record. Measured 2026-09-07: the ledger
+        # held 252 trades from account tickets 101-103 million at net -22.37
+        # and 252 from 583 million at +31.87, and reported the sum, +9.50, as
+        # one number. Same class as the metals points error, wearing an
+        # account number.
+        info = mt5.account_info()
+        login = int(getattr(info, "login", 0) or 0) or None
         # Server clock at both ends. A local upper bound silently drops every
         # deal the server stamped later and reads as "no trades" - and a local
         # lower bound shortens the window by the same offset.
@@ -157,6 +228,12 @@ def merge(days: int, path: str | None = None) -> dict:
         trades, _cash = mt5_account.closed_trades(mt5, since, until)
     finally:
         mt5.shutdown()
+
+    seen = census(trades)
+    trades = select_by_magic(trades, magic)
+    before = len(trades)
+    trades = drop_positions(trades, set(exclude or ()))
+    dropped = before - len(trades)
 
     geo = order_geometry()
     ledger = load_ledger()
@@ -167,11 +244,24 @@ def merge(days: int, path: str | None = None) -> dict:
             if t["position_id"] in ledger:
                 continue
             rec = enrich(t, geo)
+            # On the row, so a ledger written before the filter existed can
+            # still be separated after the fact.
+            rec["magic"] = t.get("magic", 0)
+            rec["account"] = login
             rec["merged_at"] = datetime.now().isoformat(timespec="seconds")
             fh.write(json.dumps(rec) + "\n")
             ledger[t["position_id"]] = rec
             added += 1
-    return {"pulled": len(trades), "added": added, "ledger_size": len(ledger)}
+    return {
+        "pulled": len(trades),
+        "added": added,
+        "ledger_size": len(ledger),
+        "magic": magic,
+        "account": login,
+        "by_magic": dict(sorted(seen.items())),
+        "excluded": sum(n for m, n in seen.items() if magic is not None and m != magic),
+        "dropped_by_id": dropped,
+    }
 
 
 def _rows(trades: list[dict], field: str) -> list[dict]:
@@ -246,6 +336,34 @@ def report() -> dict:
             f"{len(regimes['unknown'])} trades have no order-log entry, so their "
             f"bracket and R-multiple are null (opened before logging, or by hand)")
 
+    # WHICH ACCOUNT. A ledger is keyed by position id and position ids are
+    # unique per account, not globally, so a second demo account's trades merge
+    # in cleanly with nothing to say they are not the same record. Measured
+    # 2026-09-07: 252 trades from tickets 101-103 million at net -22.37 sat
+    # beside 252 from 583 million at +31.87, and the report printed the sum,
+    # +9.50, as one number. Same class as the metals points error.
+    accounts = {}
+    for t in trades:
+        accounts[t.get("account")] = accounts.get(t.get("account"), 0) + 1
+    if len(accounts) > 1:
+        shown = ", ".join(f"{k if k is not None else 'unrecorded'}: {v}"
+                          for k, v in sorted(accounts.items(), key=lambda kv: str(kv[0])))
+        gaps.append(
+            f"trades come from {len(accounts)} sources ({shown}); a position id is "
+            f"unique per account, so these merged without colliding and the pooled "
+            f"net adds accounts that are not one sample - quote by_account")
+
+    by_account = {}
+    for key in sorted(accounts, key=lambda k: str(k)):
+        rows = [t for t in trades if t.get("account") == key]
+        by_account[str(key) if key is not None else "unrecorded"] = {
+            "trades": len(rows),
+            "net": round(sum(x["net_profit"] for x in rows), 2),
+            "first_close": min(x["close_time"] for x in rows)[:10],
+            "last_close": max(x["close_time"] for x in rows)[:10],
+            **significance(_rows(rows, "net_profit")),
+        }
+
     r_rows = _rows(trades, "r_multiple")
     if len(r_rows) < len(trades):
         gaps.append(f"R-multiple available for {len(r_rows)} of {len(trades)} trades")
@@ -270,6 +388,8 @@ def report() -> dict:
         "first_close": trades[0]["close_time"],
         "last_close": trades[-1]["close_time"],
         "net_currency_total": round(sum(t["net_profit"] for t in trades), 2),
+        "accounts": len(accounts),
+        "by_account": by_account,
         "by_regime": by_regime,
         "pooled_r_multiple": significance(r_rows),
         "repaired_brackets": sum(
@@ -304,6 +424,12 @@ def render(rep: dict) -> str:
                  + (f"{'-':>7}" if wr is None else f"{wr * 100:>6.0f}%")
                  + _f(v.get("t_stat_pooled"), 10)
                  + _f(v.get("t_stat_clustered_by_date"), 11))
+
+    if rep.get("accounts", 1) > 1:
+        L += ["", f"  {'account':<14}{'trades':>7}{'net':>9}   window"]
+        for k, v in rep["by_account"].items():
+            L.append(f"  {k:<14}{v['trades']:>7}{v['net']:>9.2f}   "
+                     f"{v['first_close']} to {v['last_close']}")
 
     r = rep["pooled_r_multiple"]
     L += ["", "  R-multiple (the unit that pools across regimes):"]
@@ -345,12 +471,35 @@ def main() -> int:
     ap.add_argument("--days", type=int, default=30, help="history window for --merge")
     ap.add_argument("--terminal", default=None, help="path to terminal64.exe")
     ap.add_argument("--out", default="reports/track_record.json")
+    ap.add_argument("--all-magics", action="store_true",
+                    help="merge every closed trade on the account, whoever opened it. "
+                         "The default takes only this tool's own, which is what the "
+                         "ledger has always claimed to be")
+    ap.add_argument("--exclude", nargs="*", default=[], metavar="POSITION_ID",
+                    help="position ids to keep out of the ledger regardless of tag. "
+                         "For trades opened before the two systems' magics were "
+                         "split, which no filter can separate by tag")
     args = ap.parse_args()
 
     if args.merge:
-        m = merge(args.days, args.terminal)
+        m = merge(args.days, args.terminal,
+                  None if args.all_magics else mt5_paper.MAGIC,
+                  {str(x) for x in args.exclude})
         print(f"\n  merged: {m['added']} new of {m['pulled']} pulled, "
               f"ledger now {m['ledger_size']} trades")
+        # What the account held and what was taken from it. A ledger that
+        # quietly absorbed somebody else's trades is a sample nobody can
+        # interpret afterwards, so the choice is printed at the moment it is
+        # made rather than left to be inferred from the file.
+        who = ", ".join(f"{mg}: {n}" for mg, n in m["by_magic"].items()) or "nothing"
+        print(f"  closed on the account, by magic -- {who}")
+        if m["magic"] is None:
+            print("  --all-magics: EVERY trade was taken, whoever opened it")
+        elif m["excluded"]:
+            print(f"  excluded {m['excluded']} trade(s) this tool did not open "
+                  f"(magic != {m['magic']})")
+        if m["dropped_by_id"]:
+            print(f"  dropped {m['dropped_by_id']} trade(s) named on --exclude")
 
     rep = report()
     print(render(rep))

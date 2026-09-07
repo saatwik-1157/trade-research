@@ -42,6 +42,7 @@ import mt5_paper  # noqa: E402
 import rule_backtest as rb  # noqa: E402
 import take_profit  # noqa: E402
 import rule_search  # noqa: E402
+import track_record  # noqa: E402
 
 FAILURES: list[str] = []
 
@@ -621,10 +622,11 @@ class FakeMT5:
     TRADE_RETCODE_DONE = 10009
     TIMEFRAME_H1 = 16385
 
-    def __init__(self, fill, bid=0.59752, sltp_ok=True, info_over=None):
+    def __init__(self, fill, bid=0.59752, sltp_ok=True, info_over=None, deal=88800011):
         self.fill, self.bid, self.sltp_ok = fill, bid, sltp_ok
         self.sent = []
         self.info_over = info_over or {}
+        self.deal = deal
 
     def symbol_info(self, symbol):
         base = dict(digits=5, point=0.00001, filling_mode=1,
@@ -655,7 +657,10 @@ class FakeMT5:
             return types.SimpleNamespace(
                 retcode=self.TRADE_RETCODE_DONE if self.sltp_ok else 10016)
         return types.SimpleNamespace(
-            retcode=self.TRADE_RETCODE_DONE, order=10200315596, price=self.fill)
+            retcode=self.TRADE_RETCODE_DONE, order=10200315596,
+            # An order is the instruction, a deal is the execution. A real
+            # server returns both and they are never the same number.
+            deal=self.deal, price=self.fill)
 
 
 def _place(fake, side="sell", risk_usd=None):
@@ -854,6 +859,17 @@ class HarvestMT5(FakeMT5):
     def positions_get(self):
         return tuple(self._positions)
 
+    def account_info(self):
+        return types.SimpleNamespace(balance=100_000.0, equity=99_990.0,
+                                     login=5055473926, currency="USD")
+
+    def history_deals_get(self, *args, **kwargs):
+        ticket = kwargs.get("ticket", args[0] if args else None)
+        if ticket != self.deal:
+            return ()
+        return (types.SimpleNamespace(
+            ticket=self.deal, profit=0.05, swap=0.0, commission=0.0),)
+
 
 def pos(ticket, profit, swap=0.0, magic=None, symbol="EURUSD"):
     return types.SimpleNamespace(
@@ -915,6 +931,238 @@ def test_harvest_threshold_is_inclusive():
     check("exactly at the threshold closes", [r["ticket"] for r in out], [1])
 
 
+def test_the_ledger_knows_whose_trades_it_holds():
+    """`closed_trades` pairs deals for the ACCOUNT, not for this tool.
+
+    Until the entry deal's magic was recorded, on 2026-09-07, a trade opened by
+    hand in the terminal or by the platform's broker adapter arrived in the
+    ledger indistinguishable from one this harness made -- so the sample behind
+    every "no edge" finding was "every closed trade on this account". Measured
+    on the demo account that day: 258 closed trades over 30 days, 256 tagged
+    770315, one tagged 770316 and one tagged nothing at all.
+    """
+    print()
+    print("Ledger provenance - a ledger must know whose trades it holds")
+
+    trades = [
+        {"position_id": 1, "magic": mt5_paper.MAGIC},
+        {"position_id": 2, "magic": mt5_paper.MAGIC},
+        {"position_id": 3, "magic": 770316},   # the platform's broker adapter
+        {"position_id": 4, "magic": 0},        # opened by hand, tagged by nobody
+        {"position_id": 5},                    # a read from before magic was kept
+    ]
+
+    check("the census counts by tag, not by tool",
+          track_record.census(trades), {0: 2, 770316: 1, mt5_paper.MAGIC: 2})
+
+    ours = track_record.select_by_magic(trades, mt5_paper.MAGIC)
+    check("the default takes only this harness's trades",
+          [t["position_id"] for t in ours], [1, 2])
+
+    check("an untagged trade is never folded in silently",
+          [t["position_id"] for t in ours if t.get("magic", 0) == 0], [])
+
+    everything = track_record.select_by_magic(trades, None)
+    check("None restores the old behaviour exactly", len(everything), 5)
+
+    check("the two systems no longer share a tag",
+          mt5_paper.MAGIC == 770316, False)
+
+    # The tag split is not retroactive. Nine of the ten trades the platform
+    # made at this venue carry 770315 because the adapter shared it until that
+    # evening, so the only thing that separates them is their identity.
+    kept = track_record.drop_positions(trades, {"1", "4"})
+    check("named position ids are dropped whatever their tag",
+          [t["position_id"] for t in kept], [2, 3, 5])
+    check("an empty exclusion changes nothing",
+          len(track_record.drop_positions(trades, set())), 5)
+
+
+def test_the_order_log_names_both_venue_tickets():
+    """An order and a deal are different things, and a close had neither.
+
+    `close_own` reported a retcode and a fill and never the ticket of the close
+    order it had just sent, so `orders.broker_order_id` was empty on every
+    close the platform ever made -- the one handle an UNKNOWN close can be
+    settled by. The deal is the second: it identifies one execution, which is
+    what a fill has to be deduplicated by.
+    """
+    print()
+    print("Venue identity - an order ticket and a deal ticket are not the same")
+
+    out, logged = _place(FakeMT5(fill=0.59750))
+    check("the entry names its order", out["order"], 10200315596)
+    check("the entry names its deal", out["deal"], 88800011)
+    check("and they are not the same number", out["order"] == out["deal"], False)
+
+    c = HarvestMT5([pos(1, profit=+0.05)])
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        closed = take_profit.harvest(c, min_profit=0.01, live=True)
+    finally:
+        mt5_paper._log = real_log
+    rec = closed[0]
+    check("a close names the close ORDER's ticket", rec["order"], 10200315596)
+    check("a close names the deal that executed it", rec["deal"], 88800011)
+    check("the money still comes from the server", rec["profit"], 0.05)
+
+
+def test_a_venue_reporting_no_ticket_records_a_gap_not_a_zero():
+    """0 is MetaTrader for "no ticket", and it is not an identifier.
+
+    Stored as `str(0)` downstream it would read as something that names a real
+    order, which is the same class of error as booking a missing P&L as zero.
+    """
+    print()
+    print("Venue identity - a missing ticket must be absent, never 0")
+
+    out, _ = _place(FakeMT5(fill=0.59750, deal=0))
+    check("a zero deal is recorded as absent", out["deal"], None)
+
+
+def test_the_profit_floor_decays_into_the_deadline():
+    """`--relax-over` is what makes "slowly close everything" different from
+    "dump everything at 06:00".
+
+    A position 40 cents up at 05:59 is closed for 40 cents rather than flushed
+    at whatever it is worth a minute later. The floor decays to ZERO and never
+    below: zero is break-even, and going negative would be the slope deciding
+    how much loss is acceptable -- which is the deadline's decision to make
+    once, not the ramp's to make continuously.
+    """
+    print()
+    print("Wind-down - the harvest floor must decay, not drop")
+
+    a = types.SimpleNamespace(min_profit=0.50, relax_over=45.0)
+    check("outside the window the floor is unchanged",
+          take_profit.threshold_at(a, 60 * 60), 0.50)
+    check("at the window's edge it is still unchanged",
+          take_profit.threshold_at(a, 45 * 60), 0.50)
+    close_to("halfway through it is halved",
+             take_profit.threshold_at(a, 22.5 * 60), 0.25, 1e-9)
+    close_to("at the deadline it is zero",
+             take_profit.threshold_at(a, 0), 0.0, 1e-9)
+    check("past the deadline it does not go negative",
+          take_profit.threshold_at(a, -600), 0.0)
+
+    off = types.SimpleNamespace(min_profit=0.50, relax_over=0.0)
+    check("no ramp means the floor never moves",
+          take_profit.threshold_at(off, 1), 0.50)
+
+
+def test_the_flush_closes_losers_and_the_harvest_never_does():
+    """The one call in this file that can realise a loss on purpose.
+
+    `harvest` has a floor and always has, so a session that only harvests
+    leaves the losing tail open -- which is exactly what 06:00 found on
+    2026-09-07: 7 positions, 6 of them underwater, float -9.25. `flatten` is
+    the deliberate opposite and is a separate function so that it cannot be
+    reached by accident.
+    """
+    print()
+    print("Wind-down - being flat by a time means booking what is left")
+
+    positions = [
+        pos(1, profit=+0.90),                    # a winner
+        pos(2, profit=-2.25),                    # the losing tail
+        pos(3, profit=-0.61),
+        pos(4, profit=+9.99, magic=4242),        # another EA's, never ours
+    ]
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        got = take_profit.harvest(HarvestMT5(positions), 0.50, live=True)
+        harvested = sorted(r["ticket"] for r in got if r["status"] == "CLOSED")
+
+        flat = take_profit.flatten(HarvestMT5(positions), live=True)
+        flushed = sorted(r["ticket"] for r in flat if r["status"] == "CLOSED")
+    finally:
+        mt5_paper._log = real_log
+
+    check("the harvest takes only the winner", harvested, [1])
+    check("the flush takes the losers too", flushed, [1, 2, 3])
+    check("and still never touches another EA's position", 4 in flushed, False)
+
+
+def test_a_deadline_is_the_wall_clock_and_rolls_to_tomorrow():
+    """06:00 asked for in the evening means tomorrow's 06:00.
+
+    Local, deliberately: the operator said 6am and meant the clock on the
+    wall. The broker's clock is right for bounding a history query and wrong
+    for a human deadline -- the `server_day_start` distinction.
+    """
+    print()
+    print("Wind-down - 6am means the next 6am, on the operator's clock")
+
+    secs = take_profit.seconds_until("06:00")
+    check("the deadline is in the future", secs > 0, True)
+    check("and within one day", secs <= 24 * 3600, True)
+    target = datetime.now() + timedelta(seconds=secs)
+    check("it lands on the hour asked for", (target.hour, target.minute), (6, 0))
+
+
+def test_the_flush_fires_when_flat_by_equals_the_stop_hour():
+    """The configuration everybody will actually use, and the one that broke.
+
+    `run_overnight` passes --flat-by for the same hour it stops at, so the loop
+    breaks one interval BEFORE the deadline and no pass ever starts after it.
+    The in-loop flush could not fire, and the session would have ended holding
+    everything while reporting a clean finish. It runs after the loop for that
+    reason.
+    """
+    print()
+    print("Wind-down - a deadline that coincides with the stop must still flush")
+
+    positions = [pos(1, profit=-2.25), pos(2, profit=-0.61)]
+    c = HarvestMT5(positions)
+    args = types.SimpleNamespace(
+        minutes=0.001, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by="06:00", harvest_only=True, live=True)
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        out = take_profit.run(c, args)
+    finally:
+        mt5_paper._log = real_log
+
+    check("the losers were flushed, not left open", out["flushed"], 2)
+    check("and they are not counted as harvests", out["harvested"], 0)
+
+
+def test_a_halt_does_not_flush_hours_early():
+    """`--max-daily-loss` firing at 22:00 stops trading; it does not mean close
+    everything six hours before the operator asked."""
+    print()
+    print("Wind-down - a risk halt is not the deadline")
+
+    class Halting(HarvestMT5):
+        def order_send(self, request):
+            raise AssertionError("a halted session must send nothing")
+
+    c = Halting([pos(1, profit=-2.25)])
+    args = types.SimpleNamespace(
+        minutes=0.001, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by="06:00", harvest_only=False, live=True,
+        rule="random", symbols="EURUSD", lot=0.01, risk_usd=None,
+        sl_atr=1.5, tp_atr=1.5, max_positions=7, max_daily_loss=0.01)
+
+    real_cycle = mt5_paper.cycle
+    mt5_paper.cycle = lambda mt5, a: {"halted": True, "reason": "daily loss",
+                                      "actions": []}
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        out = take_profit.run(c, args)
+    finally:
+        mt5_paper.cycle = real_cycle
+        mt5_paper._log = real_log
+
+    check("a halted session closes nothing", out["flushed"], 0)
+    check("and says it halted", out["halted"], True)
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -951,6 +1199,14 @@ def main():
     test_daily_limit_starts_at_the_servers_midnight()
     test_harvest_closes_only_the_winners()
     test_harvest_threshold_is_inclusive()
+    test_the_ledger_knows_whose_trades_it_holds()
+    test_the_order_log_names_both_venue_tickets()
+    test_a_venue_reporting_no_ticket_records_a_gap_not_a_zero()
+    test_the_profit_floor_decays_into_the_deadline()
+    test_the_flush_closes_losers_and_the_harvest_never_does()
+    test_a_deadline_is_the_wall_clock_and_rolls_to_tomorrow()
+    test_the_flush_fires_when_flat_by_equals_the_stop_hour()
+    test_a_halt_does_not_flush_hours_early()
 
     print()
     if FAILURES:

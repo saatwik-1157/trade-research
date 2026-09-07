@@ -59,6 +59,16 @@ import numpy as np  # noqa: E402
 
 DEFAULT_TERMINAL = r"C:\Program Files\MetaTrader 5\terminal64.exe"
 MAGIC = 770315  # tags orders from this tool so it never touches anything else
+
+# Callers that are NOT this tool pass their own tag. `app/brokers/mt5.py` does,
+# because sharing one number made each system able to close the other's
+# positions: on 2026-09-07 this harness harvested two positions the platform had
+# opened, at >= $0.50, and the platform's rows went stale as a result.
+#
+# The functions below take `magic` so ONE implementation of order construction
+# still serves both -- which is the whole reason the adapter calls them rather
+# than writing its own send. What separates the two systems is the tag, not the
+# code.
 TRADE_LOG = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "paper_trades.jsonl"
 )
@@ -178,8 +188,8 @@ def _log(record: dict) -> None:
         fh.write(json.dumps(record, default=str) + "\n")
 
 
-def own_positions(mt5):
-    return [p for p in (mt5.positions_get() or []) if p.magic == MAGIC]
+def own_positions(mt5, magic: int = MAGIC):
+    return [p for p in (mt5.positions_get() or []) if p.magic == magic]
 
 
 
@@ -332,7 +342,7 @@ def lot_for_risk(mt5, symbol: str, sl_distance: float, risk_amount: float) -> di
 
 
 def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
-          live: bool, risk_usd: float | None = None) -> dict:
+          live: bool, risk_usd: float | None = None, magic: int = MAGIC) -> dict:
     info = mt5.symbol_info(symbol)
     if info is None and not mt5.symbol_select(symbol, True):
         return {"symbol": symbol, "status": "symbol_unavailable"}
@@ -348,6 +358,20 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
 
     is_buy = side == "buy"
     price = tick.ask if is_buy else tick.bid
+    # A multiple of zero means NO bracket, not a bracket of zero width.
+    #
+    # `price - 0.0 * atr` is `price`, so computing it unconditionally sends
+    # sl == tp == entry, which the server refuses with 10016 INVALID_STOPS --
+    # and, if it had not, `bracket_is_sane` would have called it insane, the
+    # repair would have recomputed the same zero width, and the fallback would
+    # have closed the position the moment it opened.
+    #
+    # MT5 reads 0.0 as "not set", which is what a caller supplying its own
+    # absolute levels afterwards needs. `app.brokers.mt5.MT5Adapter.place_order`
+    # is that caller: it passes 0.0/0.0 and applies the platform's levels with
+    # a follow-up modify, so order construction stays in one place. Measured
+    # 2026-09-07, the first time the adapter was ever pointed at a terminal.
+    bracketed = sl_atr > 0 and tp_atr > 0
     sl = price - sl_atr * atr if is_buy else price + sl_atr * atr
     tp = price + tp_atr * atr if is_buy else price - tp_atr * atr
 
@@ -367,10 +391,10 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
         "volume": float(lot),
         "type": mt5.ORDER_TYPE_BUY if is_buy else mt5.ORDER_TYPE_SELL,
         "price": price,
-        "sl": round(sl, info.digits),
-        "tp": round(tp, info.digits),
+        "sl": round(sl, info.digits) if bracketed else 0.0,
+        "tp": round(tp, info.digits) if bracketed else 0.0,
         "deviation": 20,
-        "magic": MAGIC,
+        "magic": magic,
         "comment": "trade-research demo",
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": filling,
@@ -399,6 +423,12 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
         "retcode": getattr(res, "retcode", None),
         "comment": getattr(res, "comment", None),
         "order": ticket,
+        # The EXECUTION's ticket, distinct from the order's. An order is the
+        # instruction and a deal is what the venue did about it, and only the
+        # deal identifies one execution uniquely -- which is what a fill has to
+        # be deduplicated by, because two genuine partial fills of the same size
+        # at the same price are a real thing that happens.
+        "deal": int(getattr(res, "deal", 0) or 0) or None,
         "status": "SENT" if done else "REJECTED",
         **({"sizing": sizing} if sizing else {}),
     }
@@ -408,7 +438,12 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
     # the ATR geometry the rule actually specifies. The flag is the point - a
     # repaired trade entered at a price its signal never saw, and analysis
     # needs to be able to drop it.
-    if done and fill and not bracket_is_sane(is_buy, fill, request["sl"], request["tp"]):
+    if (
+        done
+        and fill
+        and bracketed
+        and not bracket_is_sane(is_buy, fill, request["sl"], request["tp"])
+    ):
         new_sl = fill - sl_atr * atr if is_buy else fill + sl_atr * atr
         new_tp = fill + tp_atr * atr if is_buy else fill - tp_atr * atr
         fix = mt5.order_send({
@@ -461,7 +496,42 @@ def filling_for(mt5, info):
     return mt5.ORDER_FILLING_RETURN
 
 
-def close_own(mt5, live: bool, where=None) -> list[dict]:
+def deal_money(mt5, deal_ticket) -> dict:
+    """The money a deal realised, read back from the server's own history.
+
+    MT5 books `profit`, `swap` and `commission` separately and the account
+    receives their sum. Returning them apart as well as together keeps the
+    composition visible -- a trade that looks flat on profit and negative on
+    swap is a financing cost, not a losing trade, and the distinction is one
+    this repository has already had to make elsewhere.
+
+    Every value is None when the deal cannot be read. The deal usually appears
+    in history immediately after `order_send`, but "usually" is not "always",
+    and inventing the figure would defeat the point of asking.
+    """
+    empty = {"profit": None, "swap": None, "commission": None, "deal": None}
+    if not deal_ticket:
+        return empty
+    try:
+        deals = mt5.history_deals_get(ticket=deal_ticket)
+    except Exception:  # noqa: BLE001 - an unreadable history is a gap, not a crash
+        return empty
+    if not deals:
+        return empty
+    d = deals[0]
+    profit = float(getattr(d, "profit", 0.0) or 0.0)
+    swap = float(getattr(d, "swap", 0.0) or 0.0)
+    commission = float(getattr(d, "commission", 0.0) or 0.0)
+    return {
+        "profit": profit,
+        "swap": swap,
+        "commission": commission,
+        "net": round(profit + swap + commission, 2),
+        "deal": int(deal_ticket),
+    }
+
+
+def close_own(mt5, live: bool, where=None, magic: int = MAGIC) -> list[dict]:
     """Close positions this tool opened, optionally only those matching `where`.
 
     The predicate takes an MT5 position and returns a bool. It exists so a
@@ -470,7 +540,7 @@ def close_own(mt5, live: bool, where=None) -> list[dict]:
     bug (see filling_for and bracket_is_sane).
     """
     out = []
-    for p in own_positions(mt5):
+    for p in own_positions(mt5, magic):
         if where is not None and not where(p):
             continue
         tick = mt5.symbol_info_tick(p.symbol)
@@ -486,7 +556,7 @@ def close_own(mt5, live: bool, where=None) -> list[dict]:
             "position": p.ticket,
             "price": tick.bid if is_long else tick.ask,
             "deviation": 20,
-            "magic": MAGIC,
+            "magic": magic,
             "comment": "trade-research close",
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": filling_for(mt5, mt5.symbol_info(p.symbol)),
@@ -495,9 +565,40 @@ def close_own(mt5, live: bool, where=None) -> list[dict]:
             out.append({"ticket": p.ticket, "symbol": p.symbol, "status": "DRY_RUN"})
             continue
         res = mt5.order_send(req)
+        done = getattr(res, "retcode", None) == mt5.TRADE_RETCODE_DONE
+        # The FILL, not the quote -- the same rule `place` learned the hard way.
+        # Recording only a retcode says the request was accepted and says
+        # nothing about what was actually taken off, so a caller cannot tell a
+        # completed close from an acknowledged one. `app.brokers.mt5` needs
+        # exactly this to confirm a close instead of parking it `unknown`, and
+        # without it every close through the platform needed reconciliation by
+        # hand. Measured 2026-09-07: position 58328592839 closed at 1.16350 for
+        # +0.33 while the platform recorded it as unresolved.
         rec = {"ticket": p.ticket, "symbol": p.symbol,
                "retcode": getattr(res, "retcode", None),
-               "status": "CLOSED" if getattr(res, "retcode", None) == mt5.TRADE_RETCODE_DONE else "FAILED"}
+               # The venue's ticket for the CLOSE order itself. Recorded even
+               # when the close failed, and that is the case it exists for: a
+               # close whose outcome is unknown can only be settled by asking
+               # the venue about it BY id, and without this the platform held
+               # no identifier to ask with. Distinct from `deal` below -- an
+               # order is the instruction, a deal is the execution.
+               "order": int(getattr(res, "order", 0) or 0) or None,
+               "fill_price": float(getattr(res, "price", 0.0) or 0.0) if done else None,
+               "closed_volume": float(getattr(res, "volume", 0.0) or 0.0) if done else None,
+               "requested_volume": float(p.volume),
+               "status": "CLOSED" if done else "FAILED"}
+        # What the ACCOUNT received, in account currency, as the server booked
+        # it -- not a price difference. A close of 0.01 EURUSD from 1.16319 to
+        # 1.16315 is -0.04 USD; the arithmetic `(exit - entry) * lots` gives
+        # -0.0000004, because it omits the contract size, and there is no single
+        # multiplier that fixes it for FX, metals and indices at once. The
+        # server already knows the answer, so it is read rather than derived.
+        #
+        # Absent when the deal is not yet in history. Reported as None rather
+        # than filled in from the arithmetic: an unknown figure is a gap, and a
+        # gap is safer than a plausible wrong number.
+        rec.update(deal_money(mt5, getattr(res, "deal", None)) if done else
+                   {"profit": None, "swap": None, "commission": None, "deal": None})
         _log({"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), "event": "close", **rec})
         out.append(rec)
     return out

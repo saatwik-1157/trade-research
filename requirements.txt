@@ -9,6 +9,13 @@ requests>=2.28
 # the install above rather than breaking Linux and macOS setups.
 #   pip install MetaTrader5
 
+# Strongly recommended alongside MetaTrader5, and easy to miss because nothing
+# fails without it. `run_overnight.py` refuses to start a second order-sending
+# session on one account, and that check is a psutil process scan -- absent, it
+# prints one line and PROCEEDS UNGUARDED. Two harvest loops on one account
+# compete for the same position slots and double the risk per pass.
+#   pip install psutil
+
 # Optional. Needed only by tools/crypto_market.py and
 # `rule_search.py --source crypto`; every other tool runs without it.
 #   pip install ccxt
