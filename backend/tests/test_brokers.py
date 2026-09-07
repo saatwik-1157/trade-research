@@ -45,6 +45,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from tests.routes import api_routes
+
 ALICE = {"email": "alice@tr-platform.io", "password": "correct horse battery"}
 T0 = datetime(2026, 9, 3, 4, 0, tzinfo=UTC)
 
@@ -648,14 +650,20 @@ async def test_the_broker_surface_carries_no_write_but_registration(
     RiskEngine still stands in front of it.
     """
     unexpected: list[str] = []
-    for route in app.routes:
+    seen = 0
+    for route in api_routes(app):
         path = getattr(route, "path", "")
         if not path.startswith("/v1/brokers"):
             continue
+        seen += 1
         for method in getattr(route, "methods", set()) - {"GET", "HEAD", "OPTIONS"}:
             if (path, method) not in _ALLOWED_BROKER_WRITES:
                 unexpected.append(f"{method} {path}")
 
+    # A surface nobody could see is not a surface nobody may write to. Without
+    # this the check passed on the FastAPI that stopped flattening `app.routes`,
+    # having examined nothing at all.
+    assert seen, "no broker routes were examined; the sweep is not working"
     assert unexpected == [], (
         "a write appeared on the broker surface that nobody added deliberately: "
         + ", ".join(sorted(unexpected))

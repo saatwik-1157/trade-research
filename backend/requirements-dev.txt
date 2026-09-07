@@ -11,4 +11,11 @@ aiosqlite>=0.20   # in-memory database for auth tests
 # it was available locally as a transitive dependency and would have failed
 # collection on a clean runner. Found by the L42 dependency audit.
 PyYAML>=6
+# L82. `tests/test_monitoring.py` locks the backend's Benjamini-Hochberg to the
+# original in `tools/patterns.py`, and importing that module pulls pandas.
+# Declared for the same reason as PyYAML above: CI installs ONLY this file, and
+# pandas was present locally because the research toolkit's own requirements
+# are installed on a development machine. The first CI run that ever reached
+# `pytest` failed on it.
+pandas>=2.0
 

@@ -71,7 +71,17 @@ async def app(settings: Settings, tmp_path: Path) -> AsyncIterator[FastAPI]:
         await conn.run_sync(Base.metadata.create_all)
     # In-process bus: the fan-out being tested is the hub's, and a test whose
     # outcome depends on a Redis container is testing the container.
-    application = create_app(settings, checks={}, engine=engine)
+    #
+    # Workers off for the same reason, and it is the file-backed database that
+    # makes it necessary. The notification-delivery and monitoring workers poll
+    # on a timer, SQLite takes one writer at a time, and a poll landing on a
+    # register inside a WebSocket test fails it with "database is locked" --
+    # about the worker's timing, not about the hub. They only ever ran here on
+    # a host with no Redis reachable, because until the lifespan learned to
+    # start without one the whole application refused to come up first.
+    application = create_app(
+        settings.model_copy(update={"workers_enabled": False}), checks={}, engine=engine
+    )
     application.state.event_bus = InMemoryEventBus()
     application.state.hub = Hub(application.state.event_bus)
     yield application
@@ -361,6 +371,33 @@ async def test_the_hub_refuses_an_uncatalogued_type() -> None:
     hub = Hub(InMemoryEventBus())
     with pytest.raises(EventError, match="not in the event catalogue"):
         await hub.publish(Event(type="MADE_UP", payload={}, channel="system"))
+
+
+class _RefusingBus:
+    """A bus whose SUBSCRIBE round trip fails, the way a dead Redis does."""
+
+    kind = "redis"
+
+    async def publish(self, event: Event) -> None:
+        raise AssertionError("nothing publishes through the refusing bus")
+
+    async def subscribe(self, *types: str) -> AsyncIterator[Event]:
+        raise ConnectionError("Error 111 connecting to 127.0.0.1:6390")
+
+    async def close(self) -> None:
+        return None
+
+
+async def test_a_bus_that_will_not_subscribe_leaves_the_hub_degraded_not_dead() -> None:
+    """The asymmetry this closes: a bus that died a second AFTER startup left
+    the process up with `status()` reporting it, while a bus that was already
+    down raised out of `start` and took the platform with it."""
+    hub = Hub(_RefusingBus())
+    await hub.start()
+    status = hub.status()
+    assert status["reader_running"] is False
+    assert status["bus_healthy"] is False
+    assert "ConnectionError" in str(status["bus_error"])
 
 
 async def test_the_hub_refuses_an_unrouted_event() -> None:

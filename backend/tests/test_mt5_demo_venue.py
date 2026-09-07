@@ -278,6 +278,13 @@ async def test_the_demo_fence_refusal_registers_nothing(
             )
         ),
     )
+    # Pinned, exactly as the two tests below pin it. The route tells a fence
+    # refusal from a missing package by asking whether MetaTrader5 imports, so
+    # a test that leaves that to the host is asking about the developer's
+    # laptop: this passed on Windows, where the package is present, and
+    # returned 503 on the Linux runner, where the fence refusal this test
+    # exists to check can never be reported as one.
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
     await _admin(demo_app, demo_client)
     await _step_up(demo_client, "acct-d")
 

@@ -54,6 +54,24 @@ def test_a_critical_dependency_down_is_unavailable_and_503(settings: Settings) -
     assert body["checks"]["database"]["ok"] is True
 
 
+def test_the_platform_starts_when_the_event_bus_will_not_answer() -> None:
+    """Port 1 on loopback is never a Redis, and the API must still come up.
+
+    Both `Hub.start` and the notification consumer subscribe inside the
+    lifespan, and neither guarded the round trip -- so a bus that was down at
+    startup raised out of it and the process never started. That is the one
+    failure `RedisEventBus`'s own breaker says cannot matter, since correctness
+    never depended on Redis, and a platform that will not boot without Redis
+    cannot serve the health endpoint that would say Redis is down.
+    """
+    settings = Settings(_env_file=None, redis_url="redis://127.0.0.1:1/0")
+    app = create_app(settings, checks={})
+    with TestClient(app) as client:
+        r = client.get("/health")
+    assert r.status_code == 200
+    assert app.state.hub.status()["bus_healthy"] is False
+
+
 def test_real_database_check_does_not_fake_success() -> None:
     # Port 1 on loopback is never a database. The check must say so.
     res = asyncio.run(check_database("postgresql+asyncpg://u:p@127.0.0.1:1/x", timeout=1.0))
