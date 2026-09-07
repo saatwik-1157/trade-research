@@ -98,8 +98,11 @@ def rates_from(candles: Candles):  # noqa: ANN201 - numpy recarray
     lows.append(lows[-1])
     times.append(times[-1])
     # numpy's stubs cannot resolve this overload without `formats=`, which the
-    # runtime does not need; the call is the documented `names=` form.
-    return np.rec.fromarrays(  # type: ignore[call-overload]
+    # runtime does not need; the call is the documented `names=` form. Whether
+    # the stubs flag it at all moves with the numpy version, so the suppression
+    # covers its own disuse -- otherwise `warn_unused_ignores` fails CI on the
+    # versions that happen to accept the call.
+    return np.rec.fromarrays(  # type: ignore[call-overload, unused-ignore]
         [np.array(times), np.array(opens), np.array(highs), np.array(lows), np.array(closes)],
         names="time,open,high,low,close",
     )
