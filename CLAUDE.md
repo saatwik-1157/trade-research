@@ -529,6 +529,44 @@ record to say which was intended. Round the ratio before flooring. The
 arithmetic was right at every step and the number that reached the server was
 still wrong, which is the same class as reading the quote instead of the fill.
 
+## Before running an overnight session
+
+`run_overnight.py` wraps `take_profit.py` and is the thing that actually
+trades. Three of its behaviours are defaults rather than options, and one of
+them books losses.
+
+**The session ends flat.** `--flat-by` is passed for the same hour the session
+stops at, so whatever is still open then is closed at what it is worth, losses
+included. Over the final `--relax-over` minutes (45 by default) the profit
+floor decays to zero so each position closes at the best moment offered rather
+than all at the deadline, and nothing new opens inside that window.
+
+This is the harvest loop's own doing and not tidiness. Closing at the first
+sign of profit books winners and holds losers, so the positions still open at
+the deadline ARE the losing tail - measured 2026-09-07, 7 positions with 6
+underwater at -9.25 floating. Leaving them carried that tail into the next
+session's `--max-positions` count and another night of swap.
+
+**A risk halt is not the deadline.** `--max-daily-loss` firing at 22:00 stops
+trading and does NOT flush; the deadline is the deadline. The flush also runs
+AFTER the loop rather than inside it, because with `--flat-by` set to the stop
+hour the loop breaks one interval early and no pass ever begins after the
+deadline - the in-loop branch alone would have closed nothing and reported a
+clean finish.
+
+**It holds the machine awake.** A session closes nothing while the laptop is
+asleep, and idle standby is far shorter than an overnight run: 300 minutes on
+AC here against a session needing 514. Without the hold the deadline arrives
+with the process suspended and the log simply stops mid-evening, every position
+open, no error to explain it. It holds the SYSTEM and not the display, releases
+in a `finally`, and does not defeat closing the lid - which is not an idle
+timeout, so a closed lid still suspends the session.
+
+**A second session is refused.** The guard is a `psutil` scan of local
+processes and cannot see another machine; `psutil` absent, it prints one line
+and proceeds unguarded. Two laptops on one account share the balance, the
+margin and the daily loss limit. See `SECOND_MACHINE.md`.
+
 ## Environment
 
 `SEC_USER_AGENT` should carry a contact string. Requests still succeed
@@ -543,8 +581,9 @@ Run `python tests/test_indicators.py` after touching `tools/indicators.py`,
 alignment in `tools/edgar.py`, and `python tests/test_rule_backtest.py` after
 touching `tools/rule_backtest.py`, `tools/bracket_sweep.py`, the order
 construction or history windows in `tools/mt5_paper.py` and
-`tools/mt5_account.py`, or the ledger's provenance filters in
-`tools/track_record.py`, and `python tests/test_swap.py` after touching the
+`tools/mt5_account.py`, the ledger's provenance filters in
+`tools/track_record.py`, or the wind-down and keep-awake logic in
+`tools/take_profit.py`, and `python tests/test_swap.py` after touching the
 unit conversion, the night count or the plausibility fence in `tools/swap.py`.
 The bracket-sanity and fill-recording checks are in `test_rule_backtest.py`
 too, since they are order construction.

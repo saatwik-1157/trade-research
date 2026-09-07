@@ -154,9 +154,31 @@ position ids: the platform's own `positions` table lists exactly which tickets
 were its, so the list above is a query result rather than a guess at a time
 window.
 
-**The merge has still not been run.** What the research sample should contain is
-a decision about evidence, and it is not one to take as a side effect of a
-cleanup. What has changed is that it can now be decided rather than inherited.
+**The merge was run**, after the decision was taken explicitly: the harness's own
+tag, plus `--exclude` for the nine platform trades that carry it. 252 trades
+added, 2 excluded by tag, 9 by id; the ledger stands at 504.
+
+### And it exposed a second defect, older than any of the above
+
+The 504 are **two different demo accounts.**
+
+```
+tickets 10167310954..10312501236   Aug 24 - Sep 02   252 trades   net -22.37
+tickets 58307384869..58336547279   Sep 04 - Sep 07   252 trades   net +31.87
+ids in common: 0
+```
+
+The report had printed the sum, **+9.50**, as one number. A position id is
+unique per account rather than globally, so a second account's trades merge in
+cleanly with nothing colliding and nothing to say they are not one record.
+Structurally the metals-points error again, wearing an account number.
+
+`merge()` now records the account on every row and the report raises a data gap
+and breaks the ledger down by account whenever it spans more than one. The
+existing rows were attributed by asking the venue which of them appear in **its
+own deal history** — a verification rather than an inference from the ticket
+range. The older 252 remain `unrecorded`: that login is not knowable from this
+terminal, and a plausible guess is the thing this repository exists to refuse.
 
 ## Status
 
