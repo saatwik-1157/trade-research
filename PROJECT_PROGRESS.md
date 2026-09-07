@@ -5431,11 +5431,93 @@ visible is what was fixed; deciding what to do about it is a person's call, and
 attaching it to an account would be inventing the attribution the reconciler
 exists to refuse.
 
+## L74-76 -- three levels audited, and what the audits found
+
+All three arrived in sequence and all three mandate an audit before any code.
+The audits are `LEVEL_74_RESEARCH_AUDIT.md`,
+`LEVEL_75_RESEARCH_VERIFICATION_AUDIT.md` and
+`LEVEL_76_DECISION_INTELLIGENCE_AUDIT.md`. **No code was written for L74 or
+L75.**
+
+They found the same thing from three directions: **the methodology these levels
+ask for is largely already built, and it has only ever been pointed at trading
+rules rather than at a company.** Selection-bias control
+(`app/research/selection.py`), behavioural leakage detection
+(`app/datasets/leakage.py`), point-in-time splits, clustered t and calibration
+(`app/validation/statistics.py`, `app/monitoring/stats.py`), one centralised
+metrics implementation (`app/analytics/metrics.py`), one simulator and a module
+that exists to forbid a second (`app/validation/economics.py`), a model
+registry, an evidence-kind taxonomy (`app/review/contract.py`) and a review
+layer whose assessors structurally cannot see the outcome.
+
+L76's own core turned out to exist too, as `app/portfolio/decision.py` from
+L60 -- including a `Layer` ordering from preference up to hard safety that L76
+does not specify and should adopt, and four of its section 50 safety tests
+already written by name.
+
+**The blocking finding, recorded rather than worked around.** L75 exists to
+verify L74's objects and L76 consumes both. Ten of L74's deliverables return
+zero files; 16 of the 28 fields in L76's `InvestmentDecisionContext` have no
+source in this system. Built now, twelve of L76's thirteen research engines
+would return `INSUFFICIENT_DATA` permanently -- the exact failure all three
+levels forbid, which is maximum apparent sophistication carrying zero
+information.
+
+### The one L76 change that was real, and was made
+
+`Freshness` gained the two states section 5 names and the module lacked.
+`CONFLICTED` could not previously be expressed at all: an input whose sources
+disagree is not missing, stale or invalid, and had to be mislabelled as one of
+those three. A stale figure can be refreshed by asking again; a contested one
+cannot. It is recorded on the input rather than resolved, because choosing a
+winner silently is what L75 section 6 forbids.
+
+`AGING` is opt-in with **no default threshold**. `DEFAULT_MAX_AGE` already
+records itself as an assumption rather than a measurement, and a second
+unmeasured boundary inside the first would compound that rather than inform
+anything.
+
+Safe by construction: every consumer tests `is not FRESH`, so a state nobody
+taught them about is degraded rather than ignored.
+
+**A duplication was found and deliberately not fixed.** There are two
+`Freshness` enums -- `decision.py` with six uppercase states and `state.py`
+with three lowercase ones, 29 call sites against 16. They are not
+interchangeable: `state.unknown` is `decision.INVALID`, and `MISSING`,
+`CONFLICTED` and `AGING` have no counterpart there. Merging them is a semantic
+refactor across 45 call sites, not a rename, so both now carry a comment
+pointing at the other rather than being merged carelessly at the end of a long
+session.
+
 ## Next
 
-**Decide what the research ledger contains**, now that it can be decided rather
-than merely inherited: the default, `--all-magics`, or the default plus
-`--exclude` for the nine platform trades the tag cannot reach.
+**Build the ablation harness.** All three audits reached it independently: it
+is absent (`ablation` matches zero files), unblocked (it needs only
+`app/validation/economics.py`, `app/datasets/splits.py` and
+`app/research/selection.py`, all present), and it answers a question this
+repository has never asked -- do the AI seat, the regime model and the anomaly
+detector improve out-of-sample results at all? Given six searches across six
+universes with nothing clearing its null, the prior is not favourable, which is
+the argument for measuring it. A null result there would apply to all twelve of
+L76's unbuilt engines.
 
-Then: slippage, partial fills and requotes remain unmeasured -- one order, one
-fill, every time so far, which is not a sample of anything.
+Then L74 phases 1-2: provenance and the eight-kind taxonomy, followed by
+prediction/outcome tracking -- the only component whose value grows with
+wall-clock time, so every quarter it does not exist is calibration data
+permanently lost.
+
+**The ledger decision was taken and the merge was run.** The operator chose the
+harness's own tag plus `--exclude` for the nine platform trades that carry it,
+so the sample now means exactly "every trade this harness opened". 252 trades
+were added, 2 excluded by tag and 9 by id, and the ledger stands at 504.
+
+That merge immediately exposed the account defect above: the 504 are **two
+different demo accounts** -- 252 at -22.37 from an earlier one and 252 at
++31.87 from the current one -- and the report had printed the sum, +9.50, as
+one number. The recent 252 were attributed by reading the venue's own deal
+history rather than by inferring from the ticket range; the older 252 stay
+`unrecorded`, because that login is not knowable from here and inventing one
+is the failure this repository exists to prevent.
+
+Still open: slippage, partial fills and requotes remain unmeasured -- one
+order, one fill, every time so far, which is not a sample of anything.

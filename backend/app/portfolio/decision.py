@@ -95,6 +95,14 @@ class Freshness(StrEnum):
 
     Every value except `FRESH` is treated as degraded by the consumers below,
     so adding states can only make a decision more conservative, never less.
+
+    **There is a second `Freshness` in `app/portfolio/state.py`** with lowercase
+    values and three states (`fresh`, `stale`, `unknown`), used by 16 call sites
+    against this one's 29. They are NOT interchangeable and merging them is not
+    a rename: `state.unknown` means "no timestamp was recorded", which is this
+    module's `INVALID`, while this module's `MISSING` -- "we asked and got
+    nothing" -- has no counterpart there at all. Left as two, deliberately and
+    visibly, rather than merged carelessly. See `app.portfolio.state.Freshness`.
     """
 
     FRESH = "FRESH"

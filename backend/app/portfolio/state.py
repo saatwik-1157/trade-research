@@ -30,7 +30,15 @@ from typing import Any
 
 
 class Freshness(StrEnum):
-    """How old the underlying reading is. Section 44."""
+    """How old the underlying reading is. Section 44.
+
+    **Not the same enum as `app.portfolio.decision.Freshness`**, which carries
+    six uppercase states to this one's three. The overlap is partial and the
+    difference is real: `unknown` here means "no timestamp was recorded", which
+    is `INVALID` there, and there is no counterpart here for that module's
+    `MISSING`, `CONFLICTED` or `AGING`. A caller holding one must not assume the
+    other's vocabulary.
+    """
 
     fresh = "FRESH"
     stale = "STALE"
