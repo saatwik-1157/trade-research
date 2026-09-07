@@ -1,0 +1,47 @@
+# DEVELOPMENT conveniences. Compose loads this file automatically, so
+# `docker compose up -d` behaves exactly as it did before L41.
+#
+# It exists because of a defect the L41 audit found: Compose merges `ports` by
+# APPENDING, so a production overlay cannot remove a publish the base file
+# declares. The production stack was still exposing PostgreSQL, Redis and the
+# API on the host, and `docker-compose.prod.yml` said it was not. Verified with
+# `docker compose config` rather than assumed.
+#
+# The fix is the idiomatic one: the base file is safe by default and publishes
+# nothing, this file adds what a developer needs, and the production command
+# names its files explicitly --
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# -- which does NOT pick this file up. Being private in production is therefore
+# a property of how the file is loaded rather than of anybody remembering to
+# override something.
+#
+# Every port here binds 127.0.0.1. None of them is reachable from the network
+# even in development.
+
+name: trade-research
+
+services:
+  postgres:
+    ports:
+      # `psql -h 127.0.0.1 -p 5440 -U trade trade`
+      - "127.0.0.1:5440:5432"
+
+  redis:
+    ports:
+      # `redis-cli -p 6390`
+      - "127.0.0.1:6390:6379"
+
+  api:
+    ports:
+      # Direct access to the API, bypassing nginx. Useful, and also the reason
+      # the missing WebSocket upgrade in nginx went unnoticed for so long: the
+      # socket a developer connects to is this one, not the proxied one.
+      - "127.0.0.1:8000:8000"
+
+  nginx:
+    ports:
+      # The whole stack through the proxy, which is the path production takes
+      # and therefore the one worth testing against.
+      - "127.0.0.1:8080:80"

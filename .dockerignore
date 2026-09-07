@@ -1,0 +1,26 @@
+# Build context hygiene. The backend image builds from the repository root
+# (it needs `tools/` as well as `backend/`), so without this the context is
+# ~580MB of node_modules, market data and reports that no image uses.
+**/node_modules
+**/.next
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+.git
+.github
+.venv
+venv
+
+# Measured data and research output. Large, and nothing in an image reads it:
+# the platform's system of record is PostgreSQL.
+data/
+reports/
+logs/
+
+# Never in an image.
+.env
+.env.*
+!.env.example
+**/*.log

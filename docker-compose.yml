@@ -1,0 +1,120 @@
+# Development stack. Host ports are deliberately unusual (5440, 6390, 8080)
+# because other projects on the development machine already hold 5432-5434,
+# 6379-6380 and 3000. Inside the network the services use their default ports.
+#
+# The MT5 adapter worker is NOT here and cannot be: it needs a Windows host
+# with a logged-in terminal. See DEPLOYMENT.md.
+name: trade-research
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tr-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trade
+      POSTGRES_PASSWORD: trade
+      POSTGRES_DB: trade
+    volumes:
+      - tr-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trade -d trade"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: tr-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    # Context is the repository root, not ./backend: the image needs `tools/`
+    # as well, because app/strategies/indicators.py imports rule_backtest and
+    # rule_search from it. See backend/Dockerfile and .dockerignore.
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      # L41. Release identity, defaulted to `unknown` so a plain
+      # `docker compose up --build` still works and honestly reports an
+      # unstamped build. To stamp one:
+      #   GIT_COMMIT=$(git rev-parse HEAD) BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)       #     docker compose up -d --build
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+        RELEASE_VERSION: ${RELEASE_VERSION:-unknown}
+    container_name: tr-api
+    # L38 step 25. `unless-stopped`, not `always`: a container that dies
+    # comes back, and one an operator deliberately stopped stays stopped.
+    # The startup recovery sequence runs on every boot, so a restart
+    # reconciles before it consumes anything.
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: development
+      TRADING_MODE: paper
+      LIVE_TRADING: "false"
+      LOG_LEVEL: INFO
+      DATABASE_URL: postgresql+asyncpg://trade:trade@postgres:5432/trade
+      REDIS_URL: redis://redis:6379/0
+      # L34/L35. Passed through from the host environment rather than written
+      # here: a secret in a committed compose file is a committed secret.
+      # Every one is optional -- unset means the channel reports
+      # NOT_CONFIGURED and the platform runs normally.
+      APP_BASE_URL: ${APP_BASE_URL:-}
+      # L09's shared secret. Unset means the receiver REFUSES every alert,
+      # which is the deliberate default and the correct development state.
+      # Passed through from the host so a deployment smoke test can set one
+      # without editing a committed file.
+      TV_WEBHOOK_SECRET: ${TV_WEBHOOK_SECRET:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-notifications@localhost}
+      DISCORD_ENABLED: ${DISCORD_ENABLED:-false}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      # L51. The execution worker: the one worker that ACTS on trading
+      # signals, and the only worker flag that defaults false. Committed as
+      # false and passed through from the host, so starting it is a decision
+      # somebody makes for one deployment rather than a property of the file.
+      #
+      # It does not and cannot enable live trading: TRADING_MODE stays paper,
+      # LIVE_TRADING stays false, the RiskEngine refuses any other mode, and an
+      # account with no registered order manager refuses with `no_venue`.
+      EXECUTION_WORKER_ENABLED: ${EXECUTION_WORKER_ENABLED:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build: ./frontend
+    container_name: tr-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: /api
+    depends_on:
+      - api
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: tr-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - frontend
+
+volumes:
+  tr-postgres-data:

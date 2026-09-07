@@ -1,0 +1,306 @@
+# PRODUCTION overlay. Used WITH the base file, never instead of it:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# An overlay rather than a second full stack, so there is one definition of what
+# the platform is made of and this file only says what production does
+# differently. A standalone production compose would be a second copy of the
+# service list, and the two would drift.
+#
+# What it changes, and why each one:
+#
+#   1. Nothing is published but nginx's 80 and 443. The development publishes
+#      live in `docker-compose.override.yml`, which Compose auto-loads for a
+#      bare `docker compose up` and does NOT load for the explicit -f command
+#      below -- so PostgreSQL, Redis and the API are unreachable from the
+#      host in production by construction rather than by an override.
+#   2. Every container gets CPU and memory limits. An unbounded container on a
+#      shared host is a container that takes the host down with it.
+#   3. Redis gets persistence, a memory ceiling and `noeviction`.
+#   4. The API stops running workers, and a separate worker container runs them.
+#   5. Health checks move to /health/ready, which touches dependencies.
+#   6. Secrets come from the environment with NO defaults, so a missing one
+#      fails the deploy instead of silently using a development value.
+#
+# It does NOT enable live trading. TRADING_MODE stays paper and LIVE_TRADING
+# stays false here, exactly as in the base file. Turning either on is a
+# deliberate, separately-reviewed change to an operator's own environment file;
+# see PRODUCTION_RUNBOOK.md.
+
+name: trade-research
+
+services:
+  postgres:
+    # No `ports` key at all, and none is needed: the base file publishes
+    # nothing and this command does not load `docker-compose.override.yml`.
+    #
+    # An earlier draft of this file wrote `ports: []` and claimed that closed
+    # them. It does not -- Compose merges port lists by APPENDING, so the base
+    # file's publish survived and the production stack was still exposing
+    # PostgreSQL on 5440. Caught by reading `docker compose config` instead of
+    # trusting the overlay, and fixed by moving the development publishes into
+    # the auto-loaded override file.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set in production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in production}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set in production}
+      # Trading history is not ephemeral. The named volume in the base file is
+      # what holds it; this is here so a reader of the production file sees it.
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command:
+      - postgres
+      # Bounded, and small enough to be safe on a modest host. `max_connections`
+      # must exceed (api replicas + worker replicas) x pool size + headroom for
+      # `psql` and for a migration running alongside the application.
+      - -c
+      - max_connections=100
+      - -c
+      - shared_buffers=256MB
+      # WAL kept long enough that a base backup plus WAL can restore to a point
+      # in time. `BACKUP_RESTORE.md` is honest that no automated backup exists;
+      # this at least means the WAL is there when somebody takes one.
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_size=1GB
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          memory: 512M
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  redis:
+    # Persistence ON, and the reasoning matters. Redis holds no authoritative
+    # trading state -- signals, orders, positions and journal rows are all in
+    # PostgreSQL, and L40 verified that a dead Redis costs latency and not
+    # correctness. So AOF is not protecting the trade record.
+    #
+    # What it protects is the rate limiter's counters and any queued event at
+    # the moment of a restart. Losing those is not a disaster; replaying them
+    # from an empty store means a burst that was being limited stops being
+    # limited, which is worth one fsync per second to avoid.
+    #
+    # `noeviction` is the load-bearing setting: the default `allkeys-lru`
+    # silently DROPS data under memory pressure, and a rate limiter that
+    # silently forgets is a rate limiter that stops limiting exactly when the
+    # traffic is heaviest. Refusing writes is loud, and loud is recoverable.
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 512mb
+      - --maxmemory-policy
+      - noeviction
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in production}
+    volumes:
+      - tr-redis-data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        # Stamped at build time so /health can say which build is answering.
+        # An image built without these reports "stamped": false, and
+        # PRODUCTION_READINESS.md treats an unstamped image as not deployable.
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+        RELEASE_VERSION: ${RELEASE_VERSION:-unknown}
+    environment:
+      ENVIRONMENT: production
+      # UNCHANGED, and deliberately restated here rather than inherited: a
+      # reader of the production file must be able to see that production does
+      # not trade with real money. Changing these is an operator's separate,
+      # reviewed act -- not a side effect of deploying.
+      TRADING_MODE: paper
+      LIVE_TRADING: "false"
+      # This process serves requests. It does NOT run the background workers;
+      # the `worker` service does. Two API replicas would otherwise be two
+      # notification consumers and two monitoring workers.
+      WORKERS_ENABLED: "false"
+      # The startup recovery sequence still runs here: it is what decides
+      # whether the platform may consume a signal at all, and it must run in
+      # the process that serves /v1/orders.
+      RECOVERY_STARTUP_CHECKS: "true"
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in production}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL must be set in production}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set in production}
+      # Shared limiter, because there is more than one process now. Left false
+      # it would be per-container, and two containers would each allow the full
+      # login rate.
+      RATE_LIMIT_SHARED: "true"
+      APP_BASE_URL: ${APP_BASE_URL:-}
+      TV_WEBHOOK_SECRET: ${TV_WEBHOOK_SECRET:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      DISCORD_ENABLED: ${DISCORD_ENABLED:-false}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+    healthcheck:
+      # /health/ready, not /health. The base file probes /health, which touches
+      # no dependency and therefore reports a container with a dead database as
+      # healthy -- so a rolling deploy would happily replace a working container
+      # with a broken one. /health/ready answers 503 when a critical dependency
+      # is unavailable.
+      #
+      # NOT /health/trading: that is 503 whenever the platform should not trade,
+      # which is a normal and expected state (safe mode, stale data, no adapter)
+      # and is not a reason to restart a container or pull it from a pool.
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.request,sys
+          sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5).status == 200 else 1)
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      # Generous: the startup recovery sequence runs before the first request
+      # is served, and a container killed mid-reconciliation is a container that
+      # reconciles again from the beginning.
+      start_period: 90s
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1536M
+        reservations:
+          memory: 512M
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "10" }
+
+  # The background workers, as their own container. Same image, same code,
+  # different responsibility -- it serves no HTTP traffic and holds no socket.
+  #
+  # **It must not be scaled past 1** without the leader election that does not
+  # exist yet. Two of these are two monitoring workers writing the same
+  # `system_events` and two notification consumers reading the same bus. The
+  # duplicate work is caught (`notifications` has a UNIQUE dedup key) rather
+  # than prevented, and "caught" is a property of today's workers, not a rule
+  # that a future worker will inherit. See DEPLOYMENT_ARCHITECTURE.md.
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+        RELEASE_VERSION: ${RELEASE_VERSION:-unknown}
+    container_name: tr-worker
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      TRADING_MODE: paper
+      LIVE_TRADING: "false"
+      WORKERS_ENABLED: "true"
+      # The recovery sequence belongs to the API process, which is the one that
+      # gates order submission. Running it here too would mean two processes
+      # reconciling the same account at boot and two safe-mode latches that do
+      # not know about each other.
+      RECOVERY_STARTUP_CHECKS: "false"
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in production}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL must be set in production}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set in production}
+      RATE_LIMIT_SHARED: "true"
+      APP_BASE_URL: ${APP_BASE_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      DISCORD_ENABLED: ${DISCORD_ENABLED:-false}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Bound to loopback INSIDE the container: the workers run under the same
+    # ASGI app so their health is readable, but nothing outside can reach it.
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 127.0.0.1
+      - --port
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.request,sys
+          sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=5).status == 200 else 1)
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "10" }
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      NEXT_PUBLIC_API_URL: /api
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  nginx:
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/templates/default.conf.template:ro
+      - ${TLS_CERT_DIR:?TLS_CERT_DIR must be set in production}:/etc/nginx/certs:ro
+      - tr-acme:/var/www/certbot
+    environment:
+      TR_SERVER_NAME: ${TR_SERVER_NAME:?TR_SERVER_NAME must be set in production}
+    ports:
+      # The only two ports the platform publishes. 80 redirects and answers the
+      # ACME challenge; it proxies nothing.
+      - "80:80"
+      - "443:443"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "10" }
+
+volumes:
+  tr-redis-data:
+  tr-acme:

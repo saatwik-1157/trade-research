@@ -1,0 +1,35 @@
+# Without this file, `COPY . .` in the Dockerfile copies the HOST node_modules
+# straight over the one the `deps` stage just installed inside Alpine.
+#
+# That is not only slow -- it sends a few hundred MB to the daemon on every
+# build and defeats the point of a separate deps layer -- it is wrong. This
+# repository is developed on Windows, so the host tree carries
+# `@next/swc-win32-x64-msvc` where the image needs `@next/swc-linux-x64-musl`.
+# A native binary for the wrong platform is the kind of thing that either
+# falls back silently to something slower or fails on a machine that is not
+# the one it was built on.
+node_modules
+.next
+out
+
+# Local state and secrets have no business in a build context.
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+
+.git
+.gitignore
+.vscode
+.idea
+*.tsbuildinfo
+
+# Tests and docs do not ship in the standalone output.
+**/*.test.ts
+**/*.test.tsx
+vitest.config.mts
+vitest.setup.ts
+README.md
+AGENTS.md
+CLAUDE.md
