@@ -51,3 +51,174 @@ jobs:
 
       - name: Swap units, night count and plausibility fence
         run: python tests/test_swap.py
+
+      # PROJECT_STATE.json drifted from the database on six counts while it was
+      # hand-written. This checks that it still says where its figures came
+      # from, and that the generator reports an unreachable database as absent
+      # rather than as zero.
+      - name: Project state is measured, not remembered
+        run: python tests/test_project_state.py
+
+  # Platform backend (L02+). Unit tests only: nothing here needs Postgres,
+  # Redis or an MT5 terminal, and readiness checks are proven honest against
+  # a closed port rather than a running service.
+  backend:
+    runs-on: ubuntu-latest
+    name: backend (lint, types, tests)
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
+      - run: pytest -q
+
+  # Platform frontend (L02+).
+  frontend:
+    runs-on: ubuntu-latest
+    name: frontend (lint, types, tests, build)
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  # ------------------------------------------------------------------ L41
+  # Images. This job BUILDS and VERIFIES; it does not push and it does not
+  # deploy, because this repository has no registry and no target, and a
+  # pipeline that pretends to deploy is worse than one that does not try.
+  #
+  # `needs:` is the gate the brief asks for -- the image is not built unless
+  # lint, types and tests have passed on both halves. "Do not deploy if
+  # critical tests fail" is enforced by the dependency graph rather than by a
+  # step somebody can reorder.
+  images:
+    runs-on: ubuntu-latest
+    name: images (build, stamp, verify)
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Stamp
+        id: stamp
+        run: |
+          echo "commit=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "built=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          # A tag build releases its tag; anything else releases a short SHA.
+          # Never `latest`: an image tagged only `latest` overwrites the thing
+          # you would roll back to, which is the gap the L41 audit found.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build backend image
+        run: |
+          docker build -f backend/Dockerfile \
+            --build-arg GIT_COMMIT='${{ steps.stamp.outputs.commit }}' \
+            --build-arg BUILD_TIME='${{ steps.stamp.outputs.built }}' \
+            --build-arg RELEASE_VERSION='${{ steps.stamp.outputs.version }}' \
+            -t "tr-api:${{ steps.stamp.outputs.version }}" .
+
+      - name: Build frontend image
+        run: docker build -t "tr-frontend:${{ steps.stamp.outputs.version }}" ./frontend
+
+      # The image must be able to say what it is. An unstamped image cannot be
+      # confirmed as deployed and cannot be rolled back to, so a build that
+      # loses its stamp fails here rather than on a production host.
+      - name: Verify the image is stamped and can identify itself
+        run: |
+          docker run --rm "tr-api:${{ steps.stamp.outputs.version }}" python -c "
+          import json, sys
+          from app.core.release import describe
+          from app.core.settings import Settings
+          info = describe(Settings())
+          print(json.dumps(info))
+          assert info['stamped'], 'image is not stamped'
+          assert info['schema_head'] != 'unknown', 'image cannot read its migration head'
+          "
+
+      # The reason the build context is the repository root rather than
+      # backend/: app/strategies/indicators.py loads tools/rule_backtest.py and
+      # tools/rule_search.py at call time. An image missing them passes every
+      # health check and fails on the first backtest, so it is checked here.
+      - name: Verify the research toolkit is present and importable
+        run: |
+          docker run --rm "tr-api:${{ steps.stamp.outputs.version }}" python -c "
+          from app.strategies import indicators
+          for name in ('rule_backtest', 'rule_search'):
+              indicators._toolkit(name)
+          print('toolkit ok')
+          "
+
+      # Every module, imported. Catches a dependency that is declared in the
+      # development requirements and absent from the image.
+      - name: Verify every application module imports inside the image
+        run: |
+          docker run --rm "tr-api:${{ steps.stamp.outputs.version }}" python -c "
+          import importlib, pkgutil, app, sys
+          bad = []
+          for m in pkgutil.walk_packages(app.__path__, 'app.'):
+              try: importlib.import_module(m.name)
+              except Exception as e: bad.append((m.name, repr(e)))
+          for b in bad: print(b, file=sys.stderr)
+          sys.exit(1 if bad else 0)
+          "
+
+      - name: Verify the image runs as a non-root user
+        run: |
+          uid=$(docker run --rm "tr-api:${{ steps.stamp.outputs.version }}" id -u)
+          test "$uid" != "0" || { echo "image runs as root"; exit 1; }
+          echo "uid=$uid"
+
+      # Compose must remain valid, and production must not publish a datastore.
+      - name: Verify compose configurations
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+          REDIS_PASSWORD: ci
+          DATABASE_URL: postgresql+asyncpg://ci:ci@postgres:5432/ci
+          REDIS_URL: redis://redis:6379/0
+          CORS_ORIGINS: https://example.invalid
+          TLS_CERT_DIR: ./nginx
+          TR_SERVER_NAME: example.invalid
+        run: |
+          docker compose config -q
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config -q
+          python - <<'PY'
+          import subprocess, yaml, sys
+          out = subprocess.run(
+              ["docker","compose","-f","docker-compose.yml","-f","docker-compose.prod.yml","config"],
+              capture_output=True, text=True, check=True).stdout
+          services = yaml.safe_load(out)["services"]
+          published = {
+              name: [p.get("published") for p in svc.get("ports", [])]
+              for name, svc in services.items()
+          }
+          # Only nginx may publish, and only 80 and 443. The datastores and the
+          # API must be unreachable from the host in production.
+          bad = {n: p for n, p in published.items() if p and n != "nginx"}
+          assert not bad, f"production publishes host ports for {bad}"
+          assert sorted(published["nginx"]) == ["443", "80"], published["nginx"]
+          print("production publishes only nginx 80/443")
+          PY

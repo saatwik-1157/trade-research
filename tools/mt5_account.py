@@ -182,6 +182,15 @@ def closed_trades(mt5, since: datetime, until: datetime) -> tuple[list[dict], li
             "net_profit": round(net, 2),
             "deal_count": len(ds),
             "close_reason": int(getattr(last, "reason", -1)),
+            # WHO opened it. Taken from the entry deal, because a close can
+            # legitimately carry a different tag -- a stop-out is the server's.
+            #
+            # This function pairs every deal on the account, so a trade opened
+            # by hand, by the platform's adapter or by another EA lands here
+            # beside the harness's. Nothing could tell them apart until this
+            # field existed, which meant the research ledger's sample was
+            # "every closed trade on this account" rather than "this tool's".
+            "magic": int(getattr(first, "magic", 0) or 0),
         })
 
     trades.sort(key=lambda t: t["close_time"])
