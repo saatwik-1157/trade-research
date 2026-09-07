@@ -60,6 +60,17 @@ count, and into another night of swap.
 `--relax-over 90` starts easing the floor earlier; `--relax-over 0` turns the
 ramp off and flushes at the hour.
 
+## It holds the machine awake
+
+A session cannot close anything while the laptop is asleep, and this machine
+idles to standby after 300 minutes on AC — well before a 06:00 deadline. The
+session holds the system awake for its own duration and releases it on the way
+out, including on a crash.
+
+It holds the system and not the display, so the screen still goes dark. It does
+not defeat closing the lid: that is not an idle timeout, and a lid closed at
+midnight suspends the session with its positions still open.
+
 ## Winding an existing session down
 
 ```
