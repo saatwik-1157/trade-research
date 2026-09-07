@@ -78,9 +78,28 @@ class NotificationConsumer:
         return self._task is not None and not self._task.done()
 
     async def start(self) -> None:
+        """Subscribe and begin consuming, or record why not and let the process
+        start anyway.
+
+        Same reasoning as `Hub.start`: `_read` already degrades when the bus
+        dies after startup, so a bus that was down before it must not be fatal.
+        A platform that will not boot without Redis cannot send the alert that
+        says Redis is down.
+        """
         if self.running:
             return
-        iterator = await self.bus.subscribe()
+        try:
+            iterator = await self.bus.subscribe()
+        except Exception as exc:  # noqa: BLE001 - reported, never died quietly
+            self._healthy = False
+            self._error = f"{type(exc).__name__}: {exc}"[:200]
+            log.warning(
+                "the notification consumer could not subscribe",
+                extra={"event": "notification_consumer_subscribe_failed"},
+            )
+            return
+        self._healthy = True
+        self._error = None
         self._task = asyncio.create_task(self._read(iterator), name="notifications:consumer")
 
     async def stop(self) -> None:

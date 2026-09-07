@@ -66,6 +66,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from tests.routes import api_routes
+
 SECRET = "integration-shared-secret-not-a-real-one"
 
 
@@ -906,7 +908,7 @@ async def test_no_write_route_acts_for_an_unauthenticated_caller(
     client.cookies.clear()
     checked = 0
     reached: list[str] = []
-    for route in app.routes:
+    for route in api_routes(app):
         path = getattr(route, "path", "")
         methods: set[str] = (getattr(route, "methods", set()) or set()) & {
             "POST",
