@@ -28,6 +28,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
+import ctypes
 import os
 import sys
 import time
@@ -43,6 +45,51 @@ except (AttributeError, OSError):
 
 import mt5_paper
 from mt5_paper import RefuseToTrade
+
+
+ES_CONTINUOUS = 0x80000000
+ES_SYSTEM_REQUIRED = 0x00000001
+
+
+@contextlib.contextmanager
+def keep_awake():
+    """Hold the machine awake for as long as the session runs.
+
+    A session told to be flat by 06:00 cannot close anything while the laptop
+    is asleep. Measured on this machine 2026-09-07: idle standby at 300 minutes
+    on AC and 45 on battery, against a session that needed 514 -- so the
+    deadline would have arrived with the process suspended, and the morning's
+    log would have ended mid-evening with every position still open and no
+    error anywhere to explain it.
+
+    Scoped to the run and restored on the way out, which is why this is not
+    `powercfg`: changing the machine's power plan for a trading loop leaves the
+    machine changed after the loop, and a laptop that never sleeps again is a
+    worse bug than the one being fixed.
+
+    It holds the SYSTEM awake and deliberately not the DISPLAY -- the screen
+    should still go dark. It does not defeat closing the lid or an explicit
+    sleep, neither of which is an idle timeout, so a lid closed at midnight
+    still suspends the session. Windows only; elsewhere it is a no-op and says
+    so rather than pretending.
+    """
+    held = 0
+    try:
+        held = ctypes.windll.kernel32.SetThreadExecutionState(  # type: ignore[attr-defined]
+            ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+    except (AttributeError, OSError):
+        held = 0
+    if not held:
+        print("  note: could not hold the machine awake - if it sleeps before the "
+              "deadline, nothing closes and the session simply stops")
+    try:
+        yield bool(held)
+    finally:
+        if held:
+            try:
+                ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)  # type: ignore[attr-defined]
+            except (AttributeError, OSError):
+                pass
 
 
 def net_floating(position) -> float:
@@ -263,7 +310,11 @@ def main() -> int:
     print()
 
     try:
-        out = run(mt5, args)
+        with keep_awake() as awake:
+            if awake and args.flat_by:
+                print("  holding the machine awake until the session ends "
+                      "(the display may still sleep)\n")
+            out = run(mt5, args)
     finally:
         mt5.shutdown()
 

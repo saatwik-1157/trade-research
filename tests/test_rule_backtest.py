@@ -1163,6 +1163,61 @@ def test_a_halt_does_not_flush_hours_early():
     check("and says it halted", out["halted"], True)
 
 
+def test_the_machine_is_released_even_when_the_session_raises():
+    """A held execution state that is never released is worse than sleeping.
+
+    `keep_awake` stops the laptop idling to sleep, which a session told to be
+    flat by 06:00 needs -- measured on this machine, idle standby at 300
+    minutes on AC against a session needing 514, so the deadline would have
+    arrived with the process suspended and the log would just stop. But the
+    hold is process-wide and outlives a crash, so the release has to be in a
+    `finally` and not at the end of the block.
+    """
+    print()
+    print("Keep-awake - the hold must be released on the way out, crash included")
+
+    calls = []
+    real = take_profit.ctypes
+
+    class FakeKernel:
+        @staticmethod
+        def SetThreadExecutionState(flags):  # noqa: N802
+            calls.append(flags)
+            return 1
+
+    take_profit.ctypes = types.SimpleNamespace(windll=types.SimpleNamespace(kernel32=FakeKernel))
+    try:
+        try:
+            with take_profit.keep_awake() as held:
+                check("the hold was taken", held, True)
+                raise RuntimeError("the session fell over")
+        except RuntimeError:
+            pass
+    finally:
+        take_profit.ctypes = real
+
+    check("it was taken with SYSTEM_REQUIRED, not DISPLAY",
+          calls[0], take_profit.ES_CONTINUOUS | take_profit.ES_SYSTEM_REQUIRED)
+    check("and released back to CONTINUOUS despite the crash",
+          calls[-1], take_profit.ES_CONTINUOUS)
+
+
+def test_a_platform_that_cannot_hold_says_so_and_still_runs():
+    """Windows only. Elsewhere the session must still run, and must not claim
+    a hold it does not have -- a silent no-op here means a session that quietly
+    sleeps through its own deadline."""
+    print()
+    print("Keep-awake - a platform without it is reported, not pretended")
+
+    real = take_profit.ctypes
+    take_profit.ctypes = types.SimpleNamespace(windll=None)
+    try:
+        with take_profit.keep_awake() as held:
+            check("no hold is claimed", held, False)
+    finally:
+        take_profit.ctypes = real
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -1207,6 +1262,8 @@ def main():
     test_a_deadline_is_the_wall_clock_and_rolls_to_tomorrow()
     test_the_flush_fires_when_flat_by_equals_the_stop_hour()
     test_a_halt_does_not_flush_hours_early()
+    test_the_machine_is_released_even_when_the_session_raises()
+    test_a_platform_that_cannot_hold_says_so_and_still_runs()
 
     print()
     if FAILURES:

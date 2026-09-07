@@ -52,6 +52,26 @@ pip install MetaTrader5 psutil
 exactly why it is easy to miss: absent, the single-session guard prints one line
 and proceeds unguarded.
 
+## Sleep is the thing that will actually break it
+
+A session told to be flat by 06:00 closes nothing while the laptop is asleep.
+This machine idles to standby after **300 minutes on AC and 45 on battery**,
+against a session that needs 514 — so without a hold, the deadline arrives with
+the process suspended, and the morning's log just stops mid-evening with every
+position still open and no error anywhere to explain it.
+
+The session now holds the machine awake for its own duration
+(`SetThreadExecutionState`, released in a `finally` so a crash cannot leave the
+laptop unable to sleep). Two things it does NOT do, both deliberate:
+
+* It holds the **system** and not the display, so the screen still goes dark.
+* It does not defeat **closing the lid** or an explicit sleep, because neither
+  is an idle timeout. A lid closed at midnight still suspends the session.
+
+So on the second laptop: leave it plugged in, lid open, and let the screen turn
+off. If you cannot, run `--until-hour` at an hour you will be awake for instead
+of pretending an unattended overnight run happened.
+
 ## What does NOT travel with the repository
 
 `.gitignore` excludes `data/` and `reports/` deliberately — they carry a login
