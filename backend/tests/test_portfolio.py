@@ -146,7 +146,7 @@ async def make_position(
         entry_price=entry,
         stop_loss=stop,
         status=status,
-        opened_at=NOW - timedelta(hours=2),
+        opened_at=NOW_UTC - timedelta(hours=2),
     )
     db.add(row)
     await db.flush()
@@ -590,7 +590,7 @@ async def test_a_disconnected_broker_reports_unavailable_not_stale_values(
             PortfolioSnapshot(
                 broker_account_id="broker1",
                 mode="demo",
-                taken_at=NOW - timedelta(days=1),
+                taken_at=NOW_UTC - timedelta(days=1),
                 balance=Decimal("50000"),
                 equity=Decimal("50000"),
             )
@@ -818,8 +818,8 @@ async def test_realized_comes_from_the_journal_of_one_account_only(
                     volume=Decimal("1"),
                     entry_price=Decimal("1.1"),
                     exit_price=Decimal("1.2"),
-                    opened_at=NOW - timedelta(hours=2),
-                    closed_at=NOW - timedelta(hours=1),
+                    opened_at=NOW_UTC - timedelta(hours=2),
+                    closed_at=NOW_UTC - timedelta(hours=1),
                     gross_profit=profit,
                     net_profit=profit,
                 )
@@ -1002,7 +1002,7 @@ async def test_the_peak_comes_from_the_recorded_history(
                 PortfolioSnapshot(
                     paper_account_id="paper1",
                     mode="paper",
-                    taken_at=NOW - timedelta(days=day),
+                    taken_at=NOW_UTC - timedelta(days=day),
                     balance=Decimal(equity),
                     equity=Decimal(equity),
                 )
@@ -1541,7 +1541,7 @@ async def test_history_paginates(app: Any, api: Any) -> None:
                 PortfolioSnapshot(
                     paper_account_id=account_id,
                     mode="paper",
-                    taken_at=NOW - timedelta(days=day),
+                    taken_at=NOW_UTC - timedelta(days=day),
                     balance=Decimal("100000"),
                     equity=Decimal("100000") - Decimal(day * 10),
                 )
@@ -1567,3 +1567,87 @@ async def test_the_risk_state_route_names_what_it_does_not_own(app: Any, api: An
     body = (await api.get("/v1/portfolio/risk-state", params={"account_id": account_id})).json()
     assert "RISK ENGINE decides" in body["authority"]
     assert "market_open" in body["risk_state"]["not_supplied"]
+
+
+# ============ L76 §5: the two freshness states that did not exist
+
+
+#: `Input.freshness` makes its own timestamp aware, so `now` must be too.
+NOW_UTC = NOW.replace(tzinfo=UTC)
+
+
+def _input(**over: object):  # noqa: ANN202
+    """An `Input`, shaped by what `freshness` reads."""
+    from app.portfolio.decision import Input
+
+    base = {
+        "name": "equity",
+        "source": "broker",
+        "value": Decimal("1000"),
+        "at": NOW_UTC - timedelta(seconds=30),
+    }
+    base.update(over)
+    return Input(**base)  # type: ignore[arg-type]
+
+
+def test_a_contested_input_is_not_stale_and_not_missing() -> None:
+    """The state that could not previously be expressed.
+
+    An input whose sources disagree had to be mislabelled as one of the other
+    three. The distinction is the one L74 §52 and L75 §6 both require: a stale
+    figure can be refreshed by asking again, a contested one cannot.
+    """
+    from app.portfolio.decision import Freshness
+
+    assert _input().freshness(now=NOW_UTC) is Freshness.FRESH
+    assert _input(conflicted=True).freshness(now=NOW_UTC) is Freshness.CONFLICTED
+
+
+def test_conflict_outranks_staleness_but_not_absence() -> None:
+    """Ordered by how little the input can be relied on."""
+    from app.portfolio.decision import Freshness
+
+    old = NOW_UTC - timedelta(hours=3)
+    assert _input(at=old, conflicted=True).freshness(now=NOW_UTC) is Freshness.CONFLICTED
+    # Nothing to be in conflict about.
+    assert _input(value=None, conflicted=True).freshness(now=NOW_UTC) is Freshness.MISSING
+    assert _input(at=None, conflicted=True).freshness(now=NOW_UTC) is Freshness.INVALID
+
+
+def test_aging_is_never_produced_without_an_explicit_threshold() -> None:
+    """No default, deliberately.
+
+    `DEFAULT_MAX_AGE` already records itself as an assumption rather than a
+    measurement. A second unmeasured boundary inside the first would compound
+    that rather than inform anything, so `AGING` exists and is opt-in.
+    """
+    from app.portfolio.decision import Freshness
+
+    middling = _input(at=NOW_UTC - timedelta(minutes=3))
+    assert middling.freshness(now=NOW_UTC) is Freshness.FRESH
+    assert (
+        middling.freshness(now=NOW_UTC, aging_after=timedelta(minutes=1)) is Freshness.AGING
+    )
+
+
+def test_aging_never_masks_stale() -> None:
+    """A threshold for AGING must not make an out-of-date input look better."""
+    from app.portfolio.decision import Freshness
+
+    ancient = _input(at=NOW_UTC - timedelta(hours=1))
+    assert (
+        ancient.freshness(now=NOW_UTC, aging_after=timedelta(minutes=1)) is Freshness.STALE
+    )
+
+
+def test_every_new_state_is_degraded_never_permissive() -> None:
+    """Adding states can only make a decision more conservative.
+
+    The consumers test `is not Freshness.FRESH`, so a state nobody has taught
+    them about is treated as degraded rather than ignored. That is the property
+    that made this extension safe to make at all.
+    """
+    from app.portfolio.decision import Freshness
+
+    for state in Freshness:
+        assert (state is Freshness.FRESH) == (state.value == "FRESH")

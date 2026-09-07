@@ -76,8 +76,31 @@ SEVERITY: dict[Verdict, int] = {
 
 
 class Freshness(StrEnum):
+    """How much an input is still evidence about now.
+
+    L76 section 5 names six states and four existed. The two added here are not
+    decoration, and they are added on different terms:
+
+    `CONFLICTED` could not previously be expressed at all. An input whose
+    sources disagree is not missing, not stale and not invalid -- it is
+    contested, and until now it had to be mislabelled as one of those three.
+    The distinction is the one L74 section 52 and L75 section 6 both require:
+    a stale figure can be refreshed, a conflicted one needs a person.
+
+    `AGING` is produced ONLY when a caller supplies a threshold for it. There
+    is no default, deliberately. `DEFAULT_MAX_AGE` below already records itself
+    as an assumption rather than a measurement, and inventing a second
+    unmeasured boundary to sit inside the first would compound that rather than
+    inform anything.
+
+    Every value except `FRESH` is treated as degraded by the consumers below,
+    so adding states can only make a decision more conservative, never less.
+    """
+
     FRESH = "FRESH"
+    AGING = "AGING"
     STALE = "STALE"
+    CONFLICTED = "CONFLICTED"
     MISSING = "MISSING"
     INVALID = "INVALID"
 
@@ -97,12 +120,31 @@ class Input:
     value: Any = None
     at: datetime | None = None
     version: str | None = None
+    #: Set when two or more sources disagree about this value. It is recorded
+    #: on the input rather than resolved here: choosing a winner is the
+    #: judgement L75 section 6 forbids making silently.
+    conflicted: bool = False
 
-    def freshness(self, *, now: datetime, max_age: timedelta = DEFAULT_MAX_AGE) -> Freshness:
-        """`MISSING` beats `STALE` beats `FRESH`, and none of them is `ALLOW`.
+    def freshness(
+        self,
+        *,
+        now: datetime,
+        max_age: timedelta = DEFAULT_MAX_AGE,
+        aging_after: timedelta | None = None,
+    ) -> Freshness:
+        """`MISSING` beats `INVALID` beats `CONFLICTED` beats `STALE` beats
+        `FRESH`, and none of them is `ALLOW`.
 
         A value of None is MISSING even when a timestamp is present: "we asked
         at 12:00 and got nothing" is an absent fact, not a fresh one.
+
+        The order is by how little the input can be relied on, and `CONFLICTED`
+        sits above `STALE` on purpose: a stale figure is one nobody has
+        refreshed, and a contested one is a figure two sources disagree about.
+        The second cannot be fixed by asking again.
+
+        `aging_after` is opt-in. Without it this returns exactly what it always
+        returned, so no existing caller changes behaviour.
         """
         if self.value is None:
             return Freshness.MISSING
@@ -113,7 +155,14 @@ class Input:
             # A timestamp in the future is not fresh data, it is a clock
             # problem or a fabricated reading. Neither is evidence.
             return Freshness.INVALID
-        return Freshness.FRESH if now - at <= max_age else Freshness.STALE
+        if self.conflicted:
+            return Freshness.CONFLICTED
+        age = now - at
+        if age > max_age:
+            return Freshness.STALE
+        if aging_after is not None and age > aging_after:
+            return Freshness.AGING
+        return Freshness.FRESH
 
 
 @dataclass(frozen=True)
