@@ -33,8 +33,7 @@ import ctypes
 import os
 import sys
 import time
-import types
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -45,6 +44,12 @@ except (AttributeError, OSError):
 
 import mt5_paper
 from mt5_paper import RefuseToTrade
+
+
+#: Consecutive failed passes before a session gives up. At the default 20s
+#: interval this is about three minutes of a terminal not answering -- long
+#: enough to ride out a reconnect, short enough not to spin all night.
+MAX_CONSECUTIVE_MISSES = 10
 
 
 ES_CONTINUOUS = 0x80000000
@@ -168,6 +173,10 @@ def run(mt5, args) -> dict:
         time.monotonic() + seconds_until(args.flat_by))
     harvested, opened, passes, flushed = 0, 0, 0, 0
     halted = False
+    # Consecutive failed passes. A terminal that blinks once should not end a
+    # session that has hours left to run; one that is genuinely gone should not
+    # be retried all night.
+    misses = 0
     start_balance = mt5.account_info().balance
 
     while time.monotonic() < deadline:
@@ -193,7 +202,30 @@ def run(mt5, args) -> dict:
             time.sleep(args.interval)
             continue
 
-        got = harvest(mt5, threshold_at(args, remaining), args.live)
+        # ONE PASS MUST NOT BE ABLE TO END THE SESSION.
+        #
+        # There was no exception handling here at all, and the flush that makes
+        # the account flat runs AFTER this loop -- so a single transient IPC
+        # error at 02:00 killed the process and left every position open at
+        # 06:00. The instruction was "be flat by six"; an unguarded `except`-less
+        # loop quietly converted that into "be flat by six unless anything at
+        # all goes wrong overnight".
+        try:
+            got = harvest(mt5, threshold_at(args, remaining), args.live)
+        except Exception as exc:  # noqa: BLE001 - reported, counted, retried
+            misses += 1
+            print(f"  [{stamp}] PASS FAILED ({misses}/{MAX_CONSECUTIVE_MISSES}): "
+                  f"{type(exc).__name__}: {exc}", flush=True)
+            if misses >= MAX_CONSECUTIVE_MISSES:
+                print(f"  [{stamp}] giving up after {misses} consecutive failures; "
+                      "the terminal is not answering and a flush would fail too",
+                      flush=True)
+                halted = True
+                break
+            time.sleep(args.interval)
+            continue
+        misses = 0
+
         closed = [r for r in got if r.get("status") in ("CLOSED", "DRY_RUN")]
         harvested += len(closed)
         for r in closed:
@@ -203,7 +235,14 @@ def run(mt5, args) -> dict:
         # flush will close minutes later pays the spread for no observation.
         winding_down = args.flat_by is not None and remaining <= args.relax_over * 60.0
         if not args.harvest_only and not winding_down:
-            res = mt5_paper.cycle(mt5, args)
+            try:
+                res = mt5_paper.cycle(mt5, args)
+            except Exception as exc:  # noqa: BLE001 - an entry that failed is
+                # not a reason to stop MANAGING what is already open. Skip the
+                # entry, keep harvesting, keep the deadline.
+                print(f"  [{stamp}] ENTRY FAILED: {type(exc).__name__}: {exc}",
+                      flush=True)
+                res = {"halted": False, "actions": []}
             if res["halted"]:
                 print(f"  [{stamp}] HALTED: {res['reason']}")
                 halted = True
@@ -213,10 +252,14 @@ def run(mt5, args) -> dict:
             for a in sent:
                 print(f"  [{stamp}] OPEN    {a['symbol']:<8} {a['side']:<5} @ {a.get('price')}")
 
-        bal = mt5.account_info()
-        print(f"  [{stamp}] pass {passes}: harvested={harvested} opened={opened} "
-              f"balance={bal.balance:,.2f} equity={bal.equity:,.2f} "
-              f"open={len(mt5_paper.own_positions(mt5))}", flush=True)
+        try:
+            bal = mt5.account_info()
+            print(f"  [{stamp}] pass {passes}: harvested={harvested} opened={opened} "
+                  f"balance={bal.balance:,.2f} equity={bal.equity:,.2f} "
+                  f"open={len(mt5_paper.own_positions(mt5))}", flush=True)
+        except Exception as exc:  # noqa: BLE001 - a line of log is not worth a session
+            print(f"  [{stamp}] pass {passes}: could not read the account "
+                  f"({type(exc).__name__}); the session continues", flush=True)
 
         if time.monotonic() + args.interval >= deadline:
             break
@@ -236,7 +279,14 @@ def run(mt5, args) -> dict:
     # asked; the deadline is the deadline.
     if args.flat_by is not None and not halted:
         stamp = datetime.now().strftime("%H:%M:%S")
-        left = flatten(mt5, args.live)
+        try:
+            left = flatten(mt5, args.live)
+        except Exception as exc:  # noqa: BLE001 - the one failure that must SHOUT
+            print(f"  [{stamp}] THE FLUSH FAILED: {type(exc).__name__}: {exc}")
+            print(f"  [{stamp}] POSITIONS ARE STILL OPEN AT THE VENUE. "
+                  "Close them by hand or start a --harvest-only session.",
+                  flush=True)
+            left = []
         gone = [r for r in left if r.get("status") in ("CLOSED", "DRY_RUN")]
         flushed += len(gone)
         for r in gone:
@@ -244,12 +294,29 @@ def run(mt5, args) -> dict:
         print(f"  [{stamp}] flat-by {args.flat_by}: closed {len(gone)} at the deadline",
               flush=True)
 
-    end = mt5.account_info()
-    return {"passes": passes, "harvested": harvested, "opened": opened,
-            "flushed": flushed, "halted": halted,
-            "start_balance": start_balance, "end_balance": end.balance,
-            "realised": round(end.balance - start_balance, 2),
-            "still_open": len(mt5_paper.own_positions(mt5))}
+    # The SUMMARY must not be able to kill the session either. This block read
+    # the terminal twice, unguarded, so a session that gave up cleanly on a dead
+    # terminal still died with a traceback on its way out and reported nothing
+    # about what it had done. Found by the test written for the loop guard,
+    # which is the argument for writing the test.
+    summary = {"passes": passes, "harvested": harvested, "opened": opened,
+               "flushed": flushed, "halted": halted,
+               "start_balance": start_balance,
+               "end_balance": None, "realised": None, "still_open": None}
+    try:
+        end = mt5.account_info()
+        summary["end_balance"] = end.balance
+        summary["realised"] = round(end.balance - start_balance, 2)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  could not read the closing balance ({type(exc).__name__})")
+    try:
+        summary["still_open"] = len(mt5_paper.own_positions(mt5))
+    except Exception as exc:  # noqa: BLE001
+        # NOT zero. "We could not ask" and "nothing is open" are the distinction
+        # this whole repository is built on.
+        print(f"  could not count open positions ({type(exc).__name__}); "
+              "treat the account as UNKNOWN, not flat")
+    return summary
 
 
 def main() -> int:
@@ -320,14 +387,28 @@ def main() -> int:
 
     print(f"\n  passes {out['passes']}   harvested {out['harvested']}   "
           f"opened {out['opened']}   flushed {out['flushed']}   "
-          f"still open {out['still_open']}")
-    if out["still_open"] and args.flat_by:
+          f"still open {'UNKNOWN' if out['still_open'] is None else out['still_open']}")
+
+    if args.flat_by and out["still_open"] is None:
+        # UNKNOWN is the LOUDEST case, not the quietest. `if out["still_open"]`
+        # treated None as falsy and skipped this warning exactly when nobody
+        # knew whether the account was flat -- the same "missing is never safe"
+        # rule `portfolio.decision` states, broken in a print statement.
+        print(f"  WARNING: --flat-by {args.flat_by} finished and the account could "
+              "NOT be read. Whether anything is still open is UNKNOWN; check the "
+              "terminal before assuming it is flat")
+    elif out["still_open"] and args.flat_by:
         # Said plainly rather than left to be read off a count. A wind-down
         # that did not finish is the one outcome of this mode that matters.
         print(f"  WARNING: --flat-by {args.flat_by} did not leave the account flat; "
               f"{out['still_open']} position(s) are still open at the venue")
-    print(f"  balance {out['start_balance']:,.2f} -> {out['end_balance']:,.2f}  "
-          f"({out['realised']:+.2f})")
+
+    if out["end_balance"] is None:
+        print(f"  balance {out['start_balance']:,.2f} -> UNKNOWN "
+              "(the closing balance could not be read)")
+    else:
+        print(f"  balance {out['start_balance']:,.2f} -> {out['end_balance']:,.2f}  "
+              f"({out['realised']:+.2f})")
     print("\n  A harvest count is not a win rate and this balance is not an edge.")
     print("  Read the R-multiple: python tools/track_record.py --merge\n")
     return 0
