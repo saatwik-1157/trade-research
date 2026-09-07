@@ -71,6 +71,25 @@ It holds the system and not the display, so the screen still goes dark. It does
 not defeat closing the lid: that is not an idle timeout, and a lid closed at
 midnight suspends the session with its positions still open.
 
+## Changing the rule or the position cap
+
+```
+python tools/run_overnight.py --rule rsi_reversion --max-positions 3
+```
+
+Both override a stated default rather than editing one, so the record can say
+which configuration a night was run under. An unknown flag is refused rather
+than appended -- appending would add a setting under the guise of changing one.
+
+**No rule here has a measured edge.** `rsi_reversion` is -1.50 points per trade
+at this broker's real spreads and `sma_cross` is -6.54; `random` is the one that
+reaches significance, at t = -3.60, and it is negative. Lowering
+`--max-positions` trades less, and frequency is the only lever this project has
+shown has a sign.
+
+A lower cap does not close anything. Positions already open above the new cap
+stay open, and nothing new opens until the count falls below it.
+
 ## Winding an existing session down
 
 ```
