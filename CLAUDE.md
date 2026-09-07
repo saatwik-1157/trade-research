@@ -338,6 +338,54 @@ sign, and it points down - which is the reason not to wire these rules to an
 interval and leave them running. Describe a rule's behaviour; never present one
 as an entry signal, and never tune the grid until a cell looks profitable.
 
+Candle shape and volatility regime are the sixth search, and they were run
+because they are the only families the L23 feature catalogue offers that the
+other five never covered. Five of its 22 features reconstruct rules already
+searched — `rsi_14` is the RSI family, `ema_spread_10_50` is the EMA cross
+before it is thresholded, `high_20_distance`/`low_20_distance` are the Donchian
+break, `sma_distance_20` with `volatility_20` rebuilds the Bollinger band, and
+`roc_10` is momentum at a shorter lookback. What was left untried is the shape
+of the bar itself and the ratio of short volatility to long.
+
+`tools/shape_search.py` tests 28 such candidates through `rule_search`'s own
+pipeline — same permutation null, same Bonferroni threshold, same era blocks,
+walk-forward and date clustering, same measured spread — over 19,851 H1 bars per
+symbol across the seven majors, 2023-06-26 to 2026-09-04
+(`reports/shape_search.json`). It is the cleanest null the project has produced.
+
+The best candidate, `body_fade_0.8`, scores an in-sample t of **-0.04**. It never
+looked good even before correction, which none of the previous winners can say.
+The permutation null over the same 28 candidates averaged **0.37**, so shuffling
+these rules' own signals produced better timing than the rules had. Zero of 28
+cleared 1.96 out of sample against 0.7 expected by chance, median out-of-sample
+expectancy is **-5.90 points**, and 2 of 28 are positive.
+
+Every downstream gate agrees. Date clustering takes the best out-of-sample t to
+-1.43; by symbol it is -3.06 with **0 of 7 pairs positive**. Cut into four eras
+the best candidate is positive in one (-1.79, +4.42, -3.27, -9.33). The
+walk-forward is 0 of 3 folds profitable at a mean of -20.05, and its selection
+step is worth reading: it picked `vol_expand_ride_1.3` twice on training t-stats
+of 2.95 and 0.81, and that candidate then lost -23.56 and -27.27 in the eras it
+had not seen. A 2.95 that decays to a loss in the next block is what selection
+noise looks like from inside a walk-forward.
+
+The one significant reading is negative and is not about shape. `body_ride_0.6`
+loses at **t = -4.65** over 4,884 out-of-sample trades, and its mirror
+`body_fade_0.6` is +1.89 at t = 0.61. A rule and its inverse cannot both be
+skill; what separates them is that one trades into the spread more often than
+the other. That is the same result the `random` rule gave at t = -3.60 — cost
+drag is once again the only effect in the exercise large enough to measure.
+
+Read this as closing the feature catalogue rather than as one more null. The
+families the platform can compute from H1 OHLC have now all been searched, and
+none of them separates from its own shuffle. Two remain untested and both carry
+their own caveat: MT5 supplies TICK volume, a count of quote updates rather than
+traded size, and hour-of-day already has a measured negative reading from the
+`--skip-hours 0` run. A model trained on these features would be searching this
+same space with more parameters, which is the condition under which the 36-cell
+bracket sweep scored the RANDOM rule at 1.76 against the best real candidate's
+0.83.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
@@ -374,6 +422,26 @@ The sequence matters more than any single reading. On 20 trades this account
 scored +4.60 at a pooled t of 3.27; seven trades later it was +3.44 at 1.15,
 and -0.10 clustered by entry hour. Nothing changed except that the sample
 grew. Do not quote a live t-stat without saying how many trades it rests on.
+
+Check whose trades a merge is about to take. `mt5_account.closed_trades` pairs
+every deal on the ACCOUNT, not every deal this tool opened, so anything else
+trading the same login lands in the ledger looking identical - and until the
+entry deal's magic was recorded, on 2026-09-07, nothing on the row could
+separate them. Measured that day: 258 closed trades in 30 days, `{0: 1,
+770315: 256, 770316: 1}` by magic. The untagged one was AUDCAD opened by hand
+in the terminal for -0.17, larger than any trade the platform made, and the
+next merge would have absorbed it into a 252-trade sample as one of this
+tool's own.
+
+`merge()` now defaults to this tool's own 770315 and prints the account census
+beside what it took; `--all-magics` restores the old behaviour explicitly. The
+fix is NOT retroactive and the difference matters: the platform's broker
+adapter shared 770315 until that evening, so nine of the ten trades it made at
+this venue carry the harness's tag and no filter can separate them. Those are
+excluded by position id with `--exclude`, taken from the platform's own
+`positions` table. The 252 rows already on file carry no magic at all, so the
+existing record's provenance rests on the fact that nothing else traded this
+login before that day - not on anything in the file.
 
 ## Read the fill, never the quote
 
@@ -473,13 +541,28 @@ Run `python tests/test_indicators.py` after touching `tools/indicators.py`,
 `python tests/test_cache.py` after touching the cache logic in
 `tools/market.py`, `python tests/test_edgar.py` after touching period
 alignment in `tools/edgar.py`, and `python tests/test_rule_backtest.py` after
-touching `tools/rule_backtest.py`, `tools/bracket_sweep.py`, or the order
+touching `tools/rule_backtest.py`, `tools/bracket_sweep.py`, the order
 construction or history windows in `tools/mt5_paper.py` and
-`tools/mt5_account.py`, and `python tests/test_swap.py` after touching the
+`tools/mt5_account.py`, or the ledger's provenance filters in
+`tools/track_record.py`, and `python tests/test_swap.py` after touching the
 unit conversion, the night count or the plausibility fence in `tools/swap.py`.
 The bracket-sanity and fill-recording checks are in `test_rule_backtest.py`
 too, since they are order construction.
-All six run in CI on every push, against Python 3.10, 3.12 and 3.14.
+All seven run in CI on every push, against Python 3.10, 3.12 and 3.14.
+
+`PROJECT_STATE.json` is **generated, not hand-written**. Run
+`python tools/project_state.py --write` rather than editing it, and
+`python tests/test_project_state.py` after touching the generator. The
+hand-written version drifted from the database on six counts at once -- it
+reported 0 datasets against 1 READY dataset of 638 rows, 0 training runs
+against 3, and repeated the claim that `market_bars` was empty when the table
+held 705 bars. Each of those was true when written, which is the whole problem.
+
+The same phrasing trap is worth avoiding in prose. "`market_bars` is empty" is
+a claim about a mutable table and went stale on the first ingestion, in 69
+lines across 35 files. State the REQUIREMENT instead -- correlation needs a
+common window across two or more instruments -- because that stays true until
+the thing that actually matters changes.
 
 The MT5 server clock is not the local clock. Bound a history query with
 `mt5_paper.history_end()` and `server_now()`, never `datetime.now()` — a local
