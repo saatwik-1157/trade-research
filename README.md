@@ -189,6 +189,85 @@ conclusion the figures do not support.
 It is a way to gather real evidence quickly and to be forced to look at the
 bear case. It is not an edge.
 
+## Platform migration
+
+This toolkit is being extended into an automated trading platform without
+rebuilding it. The target, the safety invariants and the DEMO / PAPER / LIVE
+definitions are in `ARCHITECTURE.md`; the audit and per-file decisions are in
+`PROJECT_AUDIT.md` and `ARCHITECTURE_MIGRATION.md`; progress is tracked in
+`PROJECT_PROGRESS.md` and `MIGRATION_STATUS.md`. Every command above keeps
+working; the platform lives beside `tools/`, not on top of it.
+
+### Platform layout (from Level 02)
+
+```
+backend/     FastAPI app: settings, JSON logging, health/readiness, Alembic
+frontend/    Next.js 16 + TypeScript + Tailwind, Vitest
+nginx/       reverse proxy config for the Compose stack
+docker-compose.yml   postgres, redis, api, frontend, nginx (dev stack)
+.env.example         every setting, with the fail-closed defaults
+```
+
+### Run the platform locally
+
+```bash
+cp .env.example .env                       # defaults: paper mode, live off
+docker compose up -d postgres redis        # host ports 5440 / 6390
+
+cd backend
+pip install -r requirements-dev.txt
+ruff check . && mypy && pytest -q          # 16 tests, no services needed
+uvicorn app.main:app --port 8000
+curl http://127.0.0.1:8000/health          # mode, live flag, blockers
+curl http://127.0.0.1:8000/health/ready    # 200 ready / 503 degraded, per dependency
+
+cd ../frontend
+npm ci && npm test && npm run typecheck && npm run build
+```
+
+Or the whole stack: `docker compose up -d --build`, then
+`http://127.0.0.1:8080` (UI through nginx) and
+`http://127.0.0.1:8080/health` (API through nginx).
+
+Accounts (from Level 04): run the migration and make the first admin, then
+register in the UI. New accounts are USER; an admin grants TRADER.
+
+```bash
+cd backend
+alembic upgrade head
+BOOTSTRAP_ADMIN_PASSWORD='choose a long one' python -m app.auth.bootstrap --email you@example.org
+```
+
+Import the existing ledgers (optional, idempotent, and it reconciles against
+the reference report or exits non-zero):
+
+```bash
+python -m app.db.import_ledgers \
+  --orders ../data/paper_trades.jsonl \
+  --trades ../data/track_record.jsonl \
+  --reference ../reports/track_record.json
+```
+
+The JSONL files stay the system of record; the importer only reads them.
+
+Seed the symbol map, then read contract specs from a running MT5 terminal
+(nothing is guessed; the sync refuses what it cannot read):
+
+```bash
+python -m app.symbols.seed               # symbols and provider mappings
+python -m app.symbols.sync_mt5           # contract specs, every mapped symbol
+python -m app.symbols.sync_mt5 --symbols EURUSD,DE40
+```
+
+TradingView names are not broker names: `XETR:DAX` resolves to `DE40`, and an
+unmapped symbol is refused rather than passed through.
+
+Modes: `TRADING_MODE=paper` (internal simulator), `demo` (MT5 demo account,
+still fenced by `tools/mt5_paper.assert_demo`), `live` (refused: it requires
+`LIVE_TRADING=true` *and* every safety gate in
+`backend/app/core/settings.py::LIVE_GATES`, none of which exists yet).
+`/health` lists the blockers.
+
 ## Your own trades
 
 Two sources, one report format, so the numbers are directly comparable.
