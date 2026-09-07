@@ -149,7 +149,22 @@ fragility) against objects that do not exist.
 * The rest: **blocked**, and building empty gates would produce a scorecard of
   `INSUFFICIENT_DATA` rows — the failure every level from 74 onward forbids.
 
-**Recommended next build, unchanged and now supported by six independent
-passes:** the per-input freshness policy (§6) is small and real; everything
-else waits on Level 74's research objects, and the ablation harness remains the
-one measurement that can be taken today.
+## What was then built
+
+The §6 gap named above — **done**. `Staleness`, `POLICY` and `staleness_for` in
+`app/portfolio/decision.py`, with `Input.kind` selecting the policy and an
+explicit argument still outranking it. A quote goes stale in 30 seconds and a
+filed quarter in 45 days, where one five-minute default had covered both.
+
+Guidance and earnings are **event-bounded**: `max_age=None`, so age alone never
+makes them `STALE`. They age into `AGING`, which means nobody has checked
+whether the event that supersedes them has happened — a statement about the
+platform, not about the fact.
+
+Every duration is an assumption and says so, enforced by a test that fails an
+entry with a thin reason. Six new tests; all 109 in `test_portfolio.py` pass;
+no existing caller changed behaviour, because an `Input` with no `kind` still
+resolves to `DEFAULT_MAX_AGE`. Written up in `DECISION_FRESHNESS_POLICY.md`.
+
+**Everything else in Level 81 still waits on Level 74's research objects**, and
+the ablation harness remains the one measurement that can be taken today.

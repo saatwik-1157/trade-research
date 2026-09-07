@@ -1575,6 +1575,8 @@ async def test_the_risk_state_route_names_what_it_does_not_own(app: Any, api: An
 #: `Input.freshness` makes its own timestamp aware, so `now` must be too.
 NOW_UTC = NOW.replace(tzinfo=UTC)
 
+from app.portfolio.decision import DEFAULT_MAX_AGE  # noqa: E402
+
 
 def _input(**over: object):  # noqa: ANN202
     """An `Input`, shaped by what `freshness` reads."""
@@ -1651,3 +1653,87 @@ def test_every_new_state_is_degraded_never_permissive() -> None:
 
     for state in Freshness:
         assert (state is Freshness.FRESH) == (state.value == "FRESH")
+
+
+# ================== L81 §6: one threshold per KIND, not one for everything
+
+
+def test_a_quote_and_a_filed_quarter_do_not_age_at_the_same_rate() -> None:
+    """L81 §6 states the rule: *"Do NOT use one universal freshness threshold
+    for all data types."*
+
+    A price is evidence about a moment. A filed quarter stays true until the
+    next one is filed. One five-minute default called the first fresh when it
+    had been superseded many times over, and the second stale within the hour.
+    """
+    from app.portfolio.decision import Freshness
+
+    an_hour = NOW_UTC - timedelta(hours=1)
+    assert _input(at=an_hour, kind="quote").freshness(now=NOW_UTC) is Freshness.STALE
+    assert _input(at=an_hour, kind="fundamentals").freshness(now=NOW_UTC) is Freshness.FRESH
+    # And the caller who names no kind is unaffected by any of it.
+    assert _input(at=an_hour).freshness(now=NOW_UTC) is Freshness.STALE
+
+
+def test_an_event_bounded_input_never_goes_stale_from_age_alone() -> None:
+    """Guidance is invalidated by the company changing it, not by a clock.
+
+    It is exactly as true the day before an earnings call as the day it was
+    issued, and then worthless in a minute. A duration cannot express that, and
+    one chosen anyway would be wrong in both directions.
+    """
+    from app.portfolio.decision import Freshness
+
+    ancient = _input(at=NOW_UTC - timedelta(days=400), kind="guidance")
+    assert ancient.freshness(now=NOW_UTC) is not Freshness.STALE
+    # AGING, not FRESH: nobody has checked whether the event happened. That is
+    # a statement about the platform, not about the guidance.
+    assert ancient.freshness(now=NOW_UTC) is Freshness.AGING
+
+    recent = _input(at=NOW_UTC - timedelta(days=3), kind="guidance")
+    assert recent.freshness(now=NOW_UTC) is Freshness.FRESH
+
+
+def test_an_explicit_argument_outranks_the_policy() -> None:
+    """The caller who knows this reading's shelf life beats a table written for
+    its kind in general."""
+    from app.portfolio.decision import Freshness
+
+    row = _input(at=NOW_UTC - timedelta(hours=1), kind="fundamentals")
+    assert row.freshness(now=NOW_UTC) is Freshness.FRESH
+    assert row.freshness(now=NOW_UTC, max_age=timedelta(minutes=1)) is Freshness.STALE
+
+
+def test_an_unknown_kind_gets_the_strictest_thing_available() -> None:
+    """Not an exception. A caller naming a kind nobody wrote a policy for is in
+    a decision path, and raising there would turn a missing table entry into an
+    outage."""
+    from app.portfolio.decision import Freshness, staleness_for
+
+    assert staleness_for("no_such_kind").max_age == DEFAULT_MAX_AGE
+    old = _input(at=NOW_UTC - timedelta(hours=1), kind="no_such_kind")
+    assert old.freshness(now=NOW_UTC) is Freshness.STALE
+
+
+def test_every_policy_entry_says_why() -> None:
+    """A table of confident-looking durations with no reasoning is worse than
+    one default, because it looks measured. None of these is a measurement and
+    each has to say what it rests on."""
+    from app.portfolio.decision import POLICY
+
+    for kind, rule in POLICY.items():
+        assert rule.why.strip(), f"{kind} has no stated reason"
+        assert len(rule.why) > 40, f"{kind}'s reason is too thin to argue with"
+        # An event-bounded kind must still tell somebody to look.
+        if rule.max_age is None:
+            assert rule.aging_after is not None, f"{kind} can never prompt a check"
+
+
+def test_missing_and_invalid_still_outrank_every_policy() -> None:
+    """No threshold makes an absent fact fresh."""
+    from app.portfolio.decision import Freshness
+
+    assert _input(value=None, kind="fundamentals").freshness(now=NOW_UTC) is Freshness.MISSING
+    assert _input(at=None, kind="guidance").freshness(now=NOW_UTC) is Freshness.INVALID
+    conflicted = _input(kind="fundamentals", conflicted=True)
+    assert conflicted.freshness(now=NOW_UTC) is Freshness.CONFLICTED

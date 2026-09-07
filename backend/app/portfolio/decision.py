@@ -120,6 +120,98 @@ DEFAULT_MAX_AGE = timedelta(minutes=5)
 
 
 @dataclass(frozen=True)
+class Staleness:
+    """How long one KIND of input stays evidence about now.
+
+    **`max_age=None` means age cannot make this input stale**, and that is not a
+    licence to trust it forever. Some facts are invalidated by an EVENT rather
+    than by a clock: guidance is exactly as true the day before an earnings call
+    as the day after it was issued, and then it can be worthless in a minute. A
+    duration cannot express that, and a duration chosen anyway would say
+    something false in both directions -- stale while still current, fresh the
+    moment it stopped being true.
+
+    Those kinds carry `aging_after` instead, which never yields `STALE`. `AGING`
+    on an event-bounded input means "nobody has checked whether the event
+    happened", which is a statement about the platform rather than about the
+    fact -- the same distinction the review layer draws between UNKNOWN and
+    POOR.
+    """
+
+    max_age: timedelta | None
+    aging_after: timedelta | None
+    why: str
+
+
+#: What each kind of input's freshness actually depends on. **L81 section 6:**
+#: *"Do NOT use one universal freshness threshold for all data types."*
+#:
+#: Every duration here is an ASSUMPTION and not a measurement, on the same terms
+#: `DEFAULT_MAX_AGE` records itself. Nothing on this platform has a measured
+#: staleness distribution for any of them, and a table of confident-looking
+#: numbers would hide that. They are written down so they can be argued with and
+#: approved, which is the only thing that makes them better than one value used
+#: everywhere.
+POLICY: dict[str, Staleness] = {
+    "quote": Staleness(
+        timedelta(seconds=30), timedelta(seconds=10),
+        "a price is evidence about a moment; the venue quotes continuously and a "
+        "minute-old quote has been superseded many times over",
+    ),
+    "position": Staleness(
+        timedelta(minutes=5), timedelta(minutes=2),
+        "what the venue holds changes only when something fills, but a stale "
+        "reading is how a platform trades against a position it no longer has",
+    ),
+    "account": Staleness(
+        timedelta(minutes=5), timedelta(minutes=2),
+        "balance and margin move with every open position's float",
+    ),
+    "risk_state": Staleness(
+        timedelta(minutes=1), timedelta(seconds=30),
+        "a limit breached a minute ago and not re-read is a limit not enforced",
+    ),
+    "fundamentals": Staleness(
+        timedelta(days=45), timedelta(days=21),
+        "a filed quarter stays true until the next one is filed. 45 days spans a "
+        "quarter plus filing lag; 21 marks when the next report is near enough "
+        "that the figures are about to be superseded",
+    ),
+    "guidance": Staleness(
+        None, timedelta(days=21),
+        "EVENT-BOUNDED. Guidance is invalidated by the company changing it, not "
+        "by time passing -- it can die the minute an earnings call starts and is "
+        "otherwise as good as the day it was issued",
+    ),
+    "earnings": Staleness(
+        None, timedelta(days=21),
+        "EVENT-BOUNDED. A reported quarter does not decay; it is superseded by "
+        "the next report",
+    ),
+    "channel": Staleness(
+        timedelta(days=30), timedelta(days=7),
+        "an observation about demand describes the window it was taken in. This "
+        "is the least defensible entry in the table, because no channel source "
+        "is wired and nothing has measured how fast one would decay",
+    ),
+}
+
+
+def staleness_for(kind: str | None) -> Staleness:
+    """The policy for one kind, or the universal default.
+
+    An unknown kind gets the DEFAULT rather than an error, deliberately: a
+    caller naming a kind nobody has written a policy for should get the
+    strictest thing available, not an exception in a decision path.
+    """
+    if kind and kind in POLICY:
+        return POLICY[kind]
+    return Staleness(
+        DEFAULT_MAX_AGE, None, "no policy for this kind; the universal default applies"
+    )
+
+
+@dataclass(frozen=True)
 class Input:
     """One fact the decision rests on, and whether it is still true."""
 
@@ -132,12 +224,15 @@ class Input:
     #: on the input rather than resolved here: choosing a winner is the
     #: judgement L75 section 6 forbids making silently.
     conflicted: bool = False
+    #: Which staleness policy applies. `None` uses the universal default, so
+    #: every caller written before POLICY existed behaves exactly as it did.
+    kind: str | None = None
 
     def freshness(
         self,
         *,
         now: datetime,
-        max_age: timedelta = DEFAULT_MAX_AGE,
+        max_age: timedelta | None = None,
         aging_after: timedelta | None = None,
     ) -> Freshness:
         """`MISSING` beats `INVALID` beats `CONFLICTED` beats `STALE` beats
@@ -151,8 +246,15 @@ class Input:
         refreshed, and a contested one is a figure two sources disagree about.
         The second cannot be fixed by asking again.
 
-        `aging_after` is opt-in. Without it this returns exactly what it always
-        returned, so no existing caller changes behaviour.
+        **Which threshold applies** is the L81 section 6 rule: an explicit
+        argument beats this input's `kind` policy, which beats the universal
+        default. An input with no `kind` gets `DEFAULT_MAX_AGE` and behaves
+        exactly as every caller written before `POLICY` existed.
+
+        A kind whose policy has `max_age=None` is EVENT-BOUNDED -- guidance,
+        a reported quarter -- and age alone never makes it `STALE`. It can still
+        become `AGING`, which says nobody has checked whether the event that
+        would supersede it has happened.
         """
         if self.value is None:
             return Freshness.MISSING
@@ -165,10 +267,19 @@ class Input:
             return Freshness.INVALID
         if self.conflicted:
             return Freshness.CONFLICTED
+
+        # An explicit argument beats the policy, which beats the default. The
+        # caller who knows this particular reading's shelf life outranks a table
+        # written for its kind in general.
+        policy = staleness_for(self.kind)
+        limit = max_age if max_age is not None else policy.max_age
+        soft = aging_after if aging_after is not None else policy.aging_after
+
         age = now - at
-        if age > max_age:
+        # `limit is None` is the event-bounded case: age cannot make it stale.
+        if limit is not None and age > limit:
             return Freshness.STALE
-        if aging_after is not None and age > aging_after:
+        if soft is not None and age > soft:
             return Freshness.AGING
         return Freshness.FRESH
 
