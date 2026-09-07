@@ -322,7 +322,7 @@ def test_autonomy_is_a_ceiling_and_nothing_here_raises_it() -> None:
             {"medium_violations": 3},
             {},
         ):
-            d = downgrade_for(current=current, **kwargs)  # type: ignore[arg-type]
+            d = downgrade_for(current=current, **kwargs)
             if d is not None:
                 assert d.to <= current, f"{kwargs} raised autonomy from {current.name}"
 

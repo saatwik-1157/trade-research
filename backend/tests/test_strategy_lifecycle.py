@@ -134,8 +134,11 @@ def test_the_statuses_match_the_database_constraint() -> None:
     """The enum and the CHECK constraint must not drift apart. A status the
     enum allows and the column refuses is an insert that fails at commit."""
     from app.models.strategies import StrategyVersion
+    from sqlalchemy import Table
 
-    checks = [c for c in StrategyVersion.__table__.constraints if hasattr(c, "sqltext")]
+    table = StrategyVersion.__table__
+    assert isinstance(table, Table)
+    checks = [c for c in table.constraints if hasattr(c, "sqltext")]
     text = " ".join(str(c.sqltext) for c in checks)
     for status in VersionStatus:
         assert f"'{status.value}'" in text, f"{status} is not in the CHECK constraint"

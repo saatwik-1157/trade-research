@@ -615,7 +615,7 @@ async def _enable_bot(app: FastAPI, **over: object) -> None:
             "max_risk_per_trade": D("100"),
         }
         base.update(over)
-        db.add(Bot(**base))  # type: ignore[arg-type]
+        db.add(Bot(**base))
         await db.commit()
 
 

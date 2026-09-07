@@ -135,7 +135,7 @@ def test_a_deferred_recommendation_is_revalidated_before_it_applies() -> None:
 
     for gate in ok:
         broken = dict(ok, **{gate: False})
-        result = revalidate(deferred, now=NOW, **broken)  # type: ignore[arg-type]
+        result = revalidate(deferred, now=NOW, **broken)
         assert not result.allowed, f"{gate} did not block revalidation"
 
     late = revalidate(deferred, now=NOW + timedelta(days=8), **ok)

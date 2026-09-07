@@ -154,8 +154,18 @@ async def sessions() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     await engine.dispose()
 
 
+class CountingBroker(FakeBroker):
+    """A `FakeBroker` carrying the record of what it was asked to send.
+
+    The list is attached by the fixture below; naming it here is what lets the
+    assertions read `venue.sends` without reaching past the declared type.
+    """
+
+    sends: list[object]
+
+
 @pytest.fixture
-async def venue() -> AsyncIterator[FakeBroker]:
+async def venue() -> AsyncIterator[CountingBroker]:
     """A venue that counts every `place_order` it is asked to make.
 
     `FakeBroker._orders_placed` is NOT that count: it increments after the
@@ -164,7 +174,7 @@ async def venue() -> AsyncIterator[FakeBroker]:
     Counting the calls rather than the successes is the difference between
     testing the guard and testing the simulator.
     """
-    fake = FakeBroker(mode="paper")
+    fake = CountingBroker(mode="paper")
     await fake.connect()
     fake.set_quote("EURUSD", "1.10000", "1.10002")
 
@@ -176,7 +186,7 @@ async def venue() -> AsyncIterator[FakeBroker]:
         return await original(request)  # type: ignore[arg-type]
 
     fake.place_order = counting  # type: ignore[assignment,method-assign]
-    fake.sends = sends  # type: ignore[attr-defined]
+    fake.sends = sends
     yield fake
     await fake.disconnect()
 
@@ -230,7 +240,7 @@ async def orders_for(
 
 
 async def test_an_unknown_order_is_not_resent_after_a_restart(
-    venue: FakeBroker, sessions: async_sessionmaker[AsyncSession]
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
 ) -> None:
     """**The C-1 regression.** One signal, one venue, one restart, one order.
 
@@ -266,7 +276,7 @@ async def test_an_unknown_order_is_not_resent_after_a_restart(
 
 
 async def test_the_restart_regression_is_capable_of_failing(
-    venue: FakeBroker, sessions: async_sessionmaker[AsyncSession]
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
 ) -> None:
     """The same scenario with no store reproduces the defect exactly.
 
@@ -292,7 +302,7 @@ async def test_the_restart_regression_is_capable_of_failing(
 
 
 async def test_a_completed_order_is_not_repeated_after_a_restart(
-    venue: FakeBroker, sessions: async_sessionmaker[AsyncSession]
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
 ) -> None:
     """Not only the unknown case. A signal that FILLED must not fill twice.
 
@@ -402,7 +412,7 @@ def test_the_one_state_where_the_record_is_stricter_than_the_oms() -> None:
 
 
 async def test_a_failed_send_is_refused_a_second_order_row(
-    venue: FakeBroker, sessions: async_sessionmaker[AsyncSession]
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
 ) -> None:
     """The stricter reading, exercised end to end.
 
@@ -459,7 +469,7 @@ class RecordingStore:
 
 
 async def test_the_order_is_recorded_before_the_venue_is_called(
-    venue: FakeBroker, sessions: async_sessionmaker[AsyncSession]
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
 ) -> None:
     """Brief §18: the CREATED row exists before anything is transmitted.
 
@@ -492,7 +502,7 @@ class BrokenStore:
 
 
 async def test_an_order_that_cannot_be_recorded_is_never_sent(
-    venue: FakeBroker, sessions: async_sessionmaker[AsyncSession]
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
 ) -> None:
     """An order at a venue with no record of it is the failure §18 exists to
     prevent. So a storage fault refuses the pass rather than sending anyway."""
@@ -506,7 +516,7 @@ async def test_an_order_that_cannot_be_recorded_is_never_sent(
 
 
 async def test_a_signal_refused_by_storage_is_not_consumed(
-    venue: FakeBroker, sessions: async_sessionmaker[AsyncSession]
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
 ) -> None:
     """The database coming back must not cost a real trading signal.
 
@@ -526,7 +536,7 @@ async def test_a_signal_refused_by_storage_is_not_consumed(
     assert manager.orders == {}
 
     # Storage recovers, on the same pipeline, and the signal still trades.
-    pipeline.store = DatabaseOrderStore(sessions)  # type: ignore[assignment]
+    pipeline.store = DatabaseOrderStore(sessions)
     recovered = await pipeline.process(signal(), now=T0)
     assert recovered.outcome is Outcome.filled
     assert len(venue.sends) == 1
@@ -536,7 +546,7 @@ async def test_a_signal_refused_by_storage_is_not_consumed(
 
 
 async def test_startup_reconciliation_can_see_the_pipelines_unresolved_order(
-    venue: FakeBroker, sessions: async_sessionmaker[AsyncSession]
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
 ) -> None:
     """The second half of C-1, and the reason it was CRITICAL rather than a
     duplicate-order bug.
@@ -557,7 +567,7 @@ async def test_startup_reconciliation_can_see_the_pipelines_unresolved_order(
 
 
 async def test_a_recorded_order_carries_its_account(
-    venue: FakeBroker, sessions: async_sessionmaker[AsyncSession]
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
 ) -> None:
     """`persist` never wrote an account, so every stored order had both account
     columns NULL.
@@ -574,7 +584,7 @@ async def test_a_recorded_order_carries_its_account(
 
 
 async def test_an_order_whose_account_is_unknown_is_still_recorded(
-    venue: FakeBroker, sessions: async_sessionmaker[AsyncSession]
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
 ) -> None:
     """Both account columns carry a foreign key, so an id with no row would
     turn a successful order into an IntegrityError at commit.
@@ -609,7 +619,7 @@ async def test_an_order_whose_account_is_unknown_is_still_recorded(
 
 
 async def test_an_unresolved_order_can_be_reloaded_into_a_new_manager(
-    venue: FakeBroker, sessions: async_sessionmaker[AsyncSession]
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
 ) -> None:
     """`OrderManager.resume` and `load_unresolved` were built, tested and never
     called. They work; nothing wired them. This asserts the round trip, so the
@@ -675,7 +685,7 @@ def test_a_pipeline_without_a_store_says_so() -> None:
 
 
 async def test_an_order_that_reached_the_venue_cannot_be_discarded(
-    venue: FakeBroker, sessions: async_sessionmaker[AsyncSession]
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
 ) -> None:
     """`discard` exists for one caller and one moment: a durable write that
     failed before anything was sent.

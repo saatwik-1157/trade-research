@@ -130,9 +130,7 @@ class AblationReport:
 
     @property
     def demonstrated(self) -> tuple[str, ...]:
-        return tuple(
-            c.component for c in self.contributions if c.verdict == "VALUE_DEMONSTRATED"
-        )
+        return tuple(c.component for c in self.contributions if c.verdict == "VALUE_DEMONSTRATED")
 
     def as_dict(self) -> dict[str, Any]:
         return {
