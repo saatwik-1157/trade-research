@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+/*
+ * Dark trading-terminal theme. One committed look: the surfaces, ink and
+ * status colours are the dark column of the validated data-viz palette, so
+ * charts and chrome share one system. Status colours are reserved for state
+ * and always ship with a label; series colours are for data only.
+ *
+ * FOUR VALUES ARE NO LONGER VERBATIM FROM THAT PALETTE. They were measured
+ * against the surface they actually sit on and failed, so they were lifted --
+ * hue and saturation preserved, lightness raised to the smallest value that
+ * clears the bar. The old figures are kept in the comments because a palette
+ * that claims to be validated has to say where it stopped being a quotation.
+ *
+ * `ui.contrast.test.ts` recomputes every one of these ratios and fails if any
+ * drops back below its floor.
+ */
+:root {
+  color-scheme: dark;
+
+  --plane: #0d0d0d;        /* page */
+  --surface: #1a1a19;      /* panels, chart surface */
+  --surface-2: #32322f;    /* raised rows, inputs, active nav. was #222220 */
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --line: #474743;         /* hairline grid + panel edge. was #2c2c2a */
+  --baseline: #666660;     /* axis / stronger divider. was #383835 */
+  --ring: rgba(255, 255, 255, 0.1);
+
+  --accent: #3987e5;       /* series-1 blue: selection, links, focus */
+  --series-2: #d95926;
+  --series-3: #199e70;
+
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d75858;     /* was #d03b3b, which failed as small text */
+
+  /*
+   * Panels separate from the page by EDGE AND SHADOW, not by fill. Lifting
+   * the surface far enough to separate on luminance alone is not available
+   * here: even a pure-black page only reaches 1.21 against this surface, so
+   * chasing it would have greyed out the whole terminal for nothing.
+   */
+  --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 8px -2px rgb(0 0 0 / 0.3);
+  --raised-shadow: 0 2px 4px rgb(0 0 0 / 0.45), 0 8px 24px -6px rgb(0 0 0 / 0.5);
+}
+
+@theme inline {
+  --color-plane: var(--plane);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-baseline: var(--baseline);
+  --color-accent: var(--accent);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-good: var(--good);
+  --color-warning: var(--warning);
+  --color-serious: var(--serious);
+  --color-critical: var(--critical);
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  /*
+   * The small end of the type scale, named rather than written as one-off
+   * bracket values. It was three arbitrary sizes -- 10px, 11px and 12px --
+   * doing five different jobs between them, and the biggest of the three
+   * problems was not that they were small. It was that `text-[11px]` was
+   * used 192 times and most of those were PROSE: the notes, the authority
+   * statements, the reasons a thing is unavailable. The sentences a reader
+   * most has to read carefully were set smaller than the table data beside
+   * them, which is the hierarchy backwards.
+   *
+   * Three steps, each with one job. Anything larger is `text-sm` upward and
+   * is unchanged.
+   */
+  --text-micro: 11px;   /* badges, level tags, the legend: read in bursts */
+  --text-micro--line-height: 1.45;
+  --text-mini: 12px;    /* uppercase tracked labels and table headers */
+  --text-mini--line-height: 1.4;
+  --text-body: 13px;    /* prose, notes, hints, table cells */
+  --text-body--line-height: 1.55;
+  --shadow-panel: var(--panel-shadow);
+  --shadow-raised: var(--raised-shadow);
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--plane);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* Numbers that must align in columns. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A control that exists but has nothing behind it yet: visibly inert. */
+fieldset:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+fieldset:disabled * {
+  pointer-events: none;
+}
+
+::selection {
+  background: rgba(57, 135, 229, 0.35);
+}
+
+/*
+ * One focus ring for everything focusable, offset off the control's own
+ * border. Without the offset it lands exactly on the 1px edge and reads as a
+ * slightly thicker border rather than as focus.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/*
+ * The default dark-mode scrollbar in Chrome is a light grey slab that reads as
+ * an unstyled page. These are the same surfaces everything else uses.
+ */
+* {
+  scrollbar-color: var(--baseline) transparent;
+  scrollbar-width: thin;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--baseline);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/*
+ * Motion is decoration here -- every transition in this app is a colour or a
+ * 1px shift. Somebody who has asked their OS to stop it loses nothing.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

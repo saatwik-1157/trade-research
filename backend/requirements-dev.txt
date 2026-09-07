@@ -1,0 +1,14 @@
+-r requirements.txt
+pytest>=8
+pytest-asyncio>=0.23
+httpx>=0.27
+ruff>=0.6
+mypy>=1.11
+aiosqlite>=0.20   # in-memory database for auth tests
+# L41. `tests/test_deployment.py` parses the compose files to assert that
+# production publishes no datastore port and that the API and the worker
+# split the background work. Declared because CI installs ONLY this file:
+# it was available locally as a transitive dependency and would have failed
+# collection on a clean runner. Found by the L42 dependency audit.
+PyYAML>=6
+

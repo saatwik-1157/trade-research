@@ -1,0 +1,25 @@
+# Backend runtime. The research toolkit's own dependencies stay in the root
+# requirements.txt; nothing here is needed to run tools/.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+pydantic-settings>=2.3
+sqlalchemy[asyncio]>=2.0
+# asyncpg rather than psycopg: psycopg's async mode refuses the Proactor event
+# loop uvicorn uses on Windows, and the MT5 worker must run on Windows.
+asyncpg>=0.31
+alembic>=1.13
+redis>=5.0
+# Authentication (L04)
+argon2-cffi>=23
+email-validator>=2
+
+# Numerical (L08+). The backend has imported numpy since L12 through
+# app/strategies/indicators.py, app/backtest/runner.py, app/replay/engine.py
+# and app/strategies/rules.py, and it was never declared here -- it worked only
+# because a developer machine has the research toolkit's own requirements
+# installed. Found by the L24 dependency audit. See the note in
+# PROJECT_AUDIT.md section 21: declaring it fixes half the problem, and the
+# other half is that the image does not carry tools/ either.
+numpy>=1.24
+
