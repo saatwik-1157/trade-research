@@ -28,7 +28,7 @@ import json
 import pathlib
 import subprocess
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -114,7 +114,7 @@ def invariants() -> dict[str, Any]:
         from app.safety.invariants import INVARIANTS, InvariantStatus  # noqa: PLC0415
     except Exception:
         return {"available": False, "why": "the safety package could not be imported"}
-    cert = certify(now=datetime.now(UTC))
+    cert = certify(now=datetime.now(timezone.utc))
     return {
         "available": True,
         "total": len(INVARIANTS),
@@ -149,7 +149,7 @@ def build() -> dict[str, Any]:
             "A figure that could not be measured is absent from `measured` and named",
             "in `unmeasured`. It is NEVER written as 0 -- zero is a measurement.",
         ],
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "generated_by": "tools/project_state.py",
         "measurement_source": "the running deployment: tr-postgres and /api/health",
         "trading_mode": api.get("trading_mode"),
