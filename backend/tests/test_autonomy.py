@@ -206,11 +206,12 @@ def test_the_trading_mode_is_never_reassigned_after_construction() -> None:
             if func.name == "__init__":
                 continue
             for node in ast.walk(func):
-                targets: list[ast.expr] = []
                 if isinstance(node, ast.Assign):
-                    targets = list(node.targets)
+                    targets: list[ast.expr] = list(node.targets)
                 elif isinstance(node, ast.AugAssign):
                     targets = [node.target]
+                else:
+                    continue
                 for target in targets:
                     if getattr(target, "attr", None) in ("trading_mode", "live_trading"):
                         offenders.append(f"{path.relative_to(APP)}:{node.lineno} in {func.name}()")

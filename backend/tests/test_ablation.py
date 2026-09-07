@@ -148,7 +148,8 @@ def test_a_component_whose_removal_helps_is_not_credited_either() -> None:
         [_arm("no-anomaly", "anomaly", trades=90, expectancy=1.6)],
     )
     assert report.contributions[0].verdict == "NO_INCREMENTAL_VALUE_DEMONSTRATED"
-    assert report.contributions[0].delta < 0
+    delta = report.contributions[0].delta
+    assert delta is not None and delta < 0
 
 
 def test_a_difference_below_the_materiality_threshold_is_not_a_finding() -> None:
@@ -191,9 +192,7 @@ def test_a_thin_baseline_concludes_nothing_about_anything() -> None:
 def test_removing_eight_components_is_eight_hypotheses() -> None:
     """Picking the largest of eight deltas and calling it valuable is the
     selection error `research.selection` exists to catch."""
-    variants = [
-        _arm(f"no-{i}", f"component_{i}", trades=90, expectancy=0.5) for i in range(8)
-    ]
+    variants = [_arm(f"no-{i}", f"component_{i}", trades=90, expectancy=0.5) for i in range(8)]
     report = ablation.ablate(_strong_baseline(1.0), variants)
 
     assert report.family is not None
@@ -204,9 +203,7 @@ def test_removing_eight_components_is_eight_hypotheses() -> None:
 
 
 def test_the_family_assessment_is_present_even_when_nothing_cleared() -> None:
-    variants = [
-        _arm(f"no-{i}", f"component_{i}", trades=90, expectancy=1.0) for i in range(5)
-    ]
+    variants = [_arm(f"no-{i}", f"component_{i}", trades=90, expectancy=1.0) for i in range(5)]
     report = ablation.ablate(_strong_baseline(1.0), variants)
     assert report.family is not None
     assert report.family.cleared == 0

@@ -151,6 +151,7 @@ def test_the_adapters_only_self_call_is_the_bracket_it_just_placed() -> None:
     ]
     assert len(calls) == 1, f"expected exactly one venue write in the MT5 adapter, got {len(calls)}"
     only = calls[0]
+    assert isinstance(only.func, ast.Attribute)  # held by the filter above
     assert isinstance(only.func.value, ast.Name) and only.func.value.id == "self", (
         "the MT5 adapter's one venue write must be on itself, not on another adapter"
     )

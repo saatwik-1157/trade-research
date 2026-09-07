@@ -2627,7 +2627,7 @@ async def _a_bot(app: FastAPI, **over: object) -> str:
             "max_risk_per_trade": D("100"),
         }
         fields.update(over)
-        db.add(Bot(**fields))  # type: ignore[arg-type]
+        db.add(Bot(**fields))
         await db.commit()
     return str(fields["id"])
 

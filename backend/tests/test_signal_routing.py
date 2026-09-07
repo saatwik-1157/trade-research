@@ -106,7 +106,7 @@ async def _bot(db: AsyncSession, **over: object):  # noqa: ANN201
         "max_risk_per_trade": Decimal("100"),
     }
     base.update(over)
-    bot = Bot(**base)  # type: ignore[arg-type]
+    bot = Bot(**base)
     db.add(bot)
     await db.flush()
     return bot
