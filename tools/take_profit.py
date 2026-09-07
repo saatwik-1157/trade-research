@@ -363,8 +363,12 @@ def main() -> int:
     print(f"  harvest at >= {args.min_profit} {acct['currency']}  "
           f"entries={'off' if args.harvest_only else args.rule}  "
           f"sl={args.sl_atr}xATR tp={args.tp_atr}xATR")
-    print(f"  size: {'risk %.2f %s per trade off the stop distance' % (args.risk_usd, acct['currency'])
-                     if args.risk_usd else 'fixed %g lots' % args.lot}")
+    sizing = (
+        "risk %.2f %s per trade off the stop distance" % (args.risk_usd, acct["currency"])
+        if args.risk_usd
+        else "fixed %g lots" % args.lot
+    )
+    print(f"  size: {sizing}")
     print(f"  mode: {'LIVE ORDERS (demo account)' if args.live else 'DRY RUN - no orders sent'}")
     print(f"  running {args.minutes:g} minutes, one pass every {args.interval}s")
     if args.flat_by:
