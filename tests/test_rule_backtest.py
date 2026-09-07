@@ -1253,6 +1253,78 @@ def test_a_setting_can_be_overridden_but_not_invented():
         check("an unknown setting is refused, not appended", False, True)
 
 
+def test_one_bad_pass_does_not_end_a_session_with_hours_left():
+    """The loop had NO exception handling, and the flush runs after it.
+
+    So a single transient IPC error at 02:00 killed the process and left every
+    position open at 06:00 -- quietly converting "be flat by six" into "be flat
+    by six unless anything at all goes wrong overnight". Measured as a defect by
+    reading the code, not by losing a night to it.
+    """
+    print()
+    print("Loop resilience - a blink is not the end of the session")
+
+    class Blinks(HarvestMT5):
+        """Fails the first close_own call, then behaves."""
+
+        def __init__(self, positions):
+            super().__init__(positions)
+            self.calls = 0
+
+        def positions_get(self):
+            self.calls += 1
+            if self.calls == 1:
+                raise OSError("IPC timeout")
+            return tuple(self._positions)
+
+    c = Blinks([pos(1, profit=-2.25)])
+    args = types.SimpleNamespace(
+        minutes=0.02, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by="06:00", harvest_only=True, live=True)
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        out = take_profit.run(c, args)
+    finally:
+        mt5_paper._log = real_log
+
+    check("the session survived the blink", out["halted"], False)
+    check("and the deadline flush still ran", out["flushed"], 1)
+
+
+def test_a_terminal_that_never_answers_is_given_up_on():
+    """The other half. A session that retried a dead terminal every 20 seconds
+    until 06:00 would fill a log with nothing and close nothing."""
+    print()
+    print("Loop resilience - a dead terminal is not retried all night")
+
+    class Dead(HarvestMT5):
+        def positions_get(self):
+            raise OSError("terminal gone")
+
+    c = Dead([pos(1, profit=-2.25)])
+    args = types.SimpleNamespace(
+        minutes=5.0, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by="06:00", harvest_only=True, live=True)
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        out = take_profit.run(c, args)
+    finally:
+        mt5_paper._log = real_log
+
+    check("it gave up rather than spinning", out["halted"], True)
+    # And did NOT try to flush: a flush against a terminal that will not answer
+    # closes nothing and reports success.
+    check("and attempted no flush it could not complete", out["flushed"], 0)
+    # NOT zero. "We could not ask" and "nothing is open" must not look alike.
+    check("an uncountable account is UNKNOWN, not flat", out["still_open"], None)
+    check("after the stated number of misses",
+          take_profit.MAX_CONSECUTIVE_MISSES, 10)
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -1300,6 +1372,8 @@ def main():
     test_the_machine_is_released_even_when_the_session_raises()
     test_a_platform_that_cannot_hold_says_so_and_still_runs()
     test_a_setting_can_be_overridden_but_not_invented()
+    test_one_bad_pass_does_not_end_a_session_with_hours_left()
+    test_a_terminal_that_never_answers_is_given_up_on()
 
     print()
     if FAILURES:
