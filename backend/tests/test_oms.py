@@ -1254,8 +1254,9 @@ async def test_a_fill_is_keyed_by_the_deal_when_the_venue_reports_one(
 
 async def test_two_fills_of_one_order_are_both_kept(oms: OrderManager) -> None:
     """The defect the key change exists to prevent, driven end to end."""
-    order = oms.create(approve(**{"volume": Decimal("1")}), intent_id="i-1",
-                       account_id="acct-a", at=T0).order
+    order = oms.create(
+        approve(**{"volume": Decimal("1")}), intent_id="i-1", account_id="acct-a", at=T0
+    ).order
     order.move(OrderStatus.submitted, at=T0, source="pipeline")
     order.move(OrderStatus.accepted, at=T0, source="broker")
     for deal in ("deal-1", "deal-2"):

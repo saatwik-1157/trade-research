@@ -247,11 +247,12 @@ def test_research_being_unavailable_leaves_the_certified_policy_authoritative() 
             continue
         tree = ast.parse(f.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            mod = ""
             if isinstance(node, ast.ImportFrom) and node.module:
                 mod = node.module
             elif isinstance(node, ast.Import):
                 mod = next((a.name for a in node.names), "")
+            else:
+                continue
             if "policy_research" in mod:
                 importers.append(f"{f.name}:{node.lineno}")
     assert importers == [], f"policy research reaches production code via {importers}"

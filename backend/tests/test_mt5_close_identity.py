@@ -30,7 +30,7 @@ def _adapter(row: dict[str, Any] | None) -> MT5Adapter:
     adapter._state = ConnectionState.connected  # noqa: SLF001
     adapter._mt5 = SimpleNamespace()  # noqa: SLF001
     adapter._paper = SimpleNamespace(  # noqa: SLF001
-        close_own=lambda *a, **k: ([] if row is None else [row]),
+        close_own=lambda *a, **k: [] if row is None else [row],
     )
     return adapter
 
@@ -40,8 +40,8 @@ CLOSED = {
     "symbol": "EURUSD",
     "status": "CLOSED",
     "retcode": 10009,
-    "order": 74110771234,   # the close ORDER's ticket
-    "deal": 74110779999,    # the EXECUTION's ticket
+    "order": 74110771234,  # the close ORDER's ticket
+    "deal": 74110779999,  # the EXECUTION's ticket
     "fill_price": 1.16239,
     "closed_volume": 0.01,
     "requested_volume": 0.01,

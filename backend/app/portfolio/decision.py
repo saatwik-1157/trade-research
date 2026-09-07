@@ -154,42 +154,49 @@ class Staleness:
 #: everywhere.
 POLICY: dict[str, Staleness] = {
     "quote": Staleness(
-        timedelta(seconds=30), timedelta(seconds=10),
+        timedelta(seconds=30),
+        timedelta(seconds=10),
         "a price is evidence about a moment; the venue quotes continuously and a "
         "minute-old quote has been superseded many times over",
     ),
     "position": Staleness(
-        timedelta(minutes=5), timedelta(minutes=2),
+        timedelta(minutes=5),
+        timedelta(minutes=2),
         "what the venue holds changes only when something fills, but a stale "
         "reading is how a platform trades against a position it no longer has",
     ),
     "account": Staleness(
-        timedelta(minutes=5), timedelta(minutes=2),
+        timedelta(minutes=5),
+        timedelta(minutes=2),
         "balance and margin move with every open position's float",
     ),
     "risk_state": Staleness(
-        timedelta(minutes=1), timedelta(seconds=30),
+        timedelta(minutes=1),
+        timedelta(seconds=30),
         "a limit breached a minute ago and not re-read is a limit not enforced",
     ),
     "fundamentals": Staleness(
-        timedelta(days=45), timedelta(days=21),
+        timedelta(days=45),
+        timedelta(days=21),
         "a filed quarter stays true until the next one is filed. 45 days spans a "
         "quarter plus filing lag; 21 marks when the next report is near enough "
         "that the figures are about to be superseded",
     ),
     "guidance": Staleness(
-        None, timedelta(days=21),
+        None,
+        timedelta(days=21),
         "EVENT-BOUNDED. Guidance is invalidated by the company changing it, not "
         "by time passing -- it can die the minute an earnings call starts and is "
         "otherwise as good as the day it was issued",
     ),
     "earnings": Staleness(
-        None, timedelta(days=21),
-        "EVENT-BOUNDED. A reported quarter does not decay; it is superseded by "
-        "the next report",
+        None,
+        timedelta(days=21),
+        "EVENT-BOUNDED. A reported quarter does not decay; it is superseded by the next report",
     ),
     "channel": Staleness(
-        timedelta(days=30), timedelta(days=7),
+        timedelta(days=30),
+        timedelta(days=7),
         "an observation about demand describes the window it was taken in. This "
         "is the least defensible entry in the table, because no channel source "
         "is wired and nothing has measured how fast one would decay",

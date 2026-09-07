@@ -1386,7 +1386,8 @@ async def test_a_position_belonging_to_no_account_is_reported_not_skipped(
 
     assert report.failed is None
     assert orphan.id in report.unattributed
-    assert orphan.id in report.as_dict()["unattributed"]
+    dumped = report.as_dict()["unattributed"]
+    assert isinstance(dumped, list) and orphan.id in dumped
     # Reported and NOT acted on. This sweep holds one account's adapter and
     # cannot know the orphan was ever held there.
     assert orphan.status == "open"

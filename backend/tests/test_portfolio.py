@@ -1627,9 +1627,7 @@ def test_aging_is_never_produced_without_an_explicit_threshold() -> None:
 
     middling = _input(at=NOW_UTC - timedelta(minutes=3))
     assert middling.freshness(now=NOW_UTC) is Freshness.FRESH
-    assert (
-        middling.freshness(now=NOW_UTC, aging_after=timedelta(minutes=1)) is Freshness.AGING
-    )
+    assert middling.freshness(now=NOW_UTC, aging_after=timedelta(minutes=1)) is Freshness.AGING
 
 
 def test_aging_never_masks_stale() -> None:
@@ -1637,9 +1635,7 @@ def test_aging_never_masks_stale() -> None:
     from app.portfolio.decision import Freshness
 
     ancient = _input(at=NOW_UTC - timedelta(hours=1))
-    assert (
-        ancient.freshness(now=NOW_UTC, aging_after=timedelta(minutes=1)) is Freshness.STALE
-    )
+    assert ancient.freshness(now=NOW_UTC, aging_after=timedelta(minutes=1)) is Freshness.STALE
 
 
 def test_every_new_state_is_degraded_never_permissive() -> None:
