@@ -43,6 +43,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from tests.routes import api_routes
+
 ALICE = {"email": "alice@tr-platform.io", "password": "correct horse battery"}
 
 # Measured from this broker's terminal. Two genuinely different instruments:
@@ -577,10 +579,13 @@ async def test_a_mapping_is_disabled_never_deleted(app: FastAPI, client: AsyncCl
 
 
 async def test_there_is_no_delete_route_for_a_mapping(app: FastAPI) -> None:
-    for route in app.routes:
+    seen = 0
+    for route in api_routes(app):
         path = getattr(route, "path", "")
         if path.startswith("/v1/admin/symbols"):
+            seen += 1
             assert "DELETE" not in (getattr(route, "methods", set()) or set()), path
+    assert seen, "no symbol-admin routes were examined; the sweep is not working"
 
 
 async def test_the_status_route_is_readable_by_any_signed_in_user(

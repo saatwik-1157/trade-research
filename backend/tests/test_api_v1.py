@@ -30,6 +30,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from tests.routes import api_routes
+
 ALICE = {"email": "alice@tr-platform.io", "password": "correct horse battery"}
 
 BASE = datetime(2026, 8, 1, 12, 0, 0)
@@ -734,7 +736,7 @@ async def test_no_duplicate_path_and_method_pairs(app: FastAPI) -> None:
     """Two handlers on one path and method is the duplicate-endpoint failure
     this level exists to avoid."""
     seen: set[tuple[str, str]] = set()
-    for route in app.routes:
+    for route in api_routes(app):
         path = getattr(route, "path", "")
         for method in getattr(route, "methods", set()) or set():
             key = (method, path)
@@ -1568,7 +1570,7 @@ async def test_there_is_no_route_that_marks_a_dataset_ready(app: FastAPI) -> Non
     """The builder decides. An operator who disagrees has to fix the data."""
     methods = {
         (getattr(route, "path", ""), method)
-        for route in app.routes
+        for route in api_routes(app)
         for method in getattr(route, "methods", set())
         if getattr(route, "path", "").startswith("/v1/datasets")
     }
@@ -1754,7 +1756,7 @@ async def test_there_is_no_route_that_promotes_or_deletes_a_model(app: FastAPI) 
     """§36 and §32: promotion is level 28's, and nothing here replaces a model."""
     methods = {
         (getattr(route, "path", ""), method)
-        for route in app.routes
+        for route in api_routes(app)
         for method in getattr(route, "methods", set())
         if getattr(route, "path", "").startswith("/v1/ai")
     }
@@ -1958,7 +1960,7 @@ async def test_there_is_no_route_that_promotes_a_trained_model(app: FastAPI) -> 
     """§26: promotion is a separate, controlled process and not this level's."""
     methods = {
         (getattr(route, "path", ""), method)
-        for route in app.routes
+        for route in api_routes(app)
         for method in getattr(route, "methods", set())
         if getattr(route, "path", "").startswith("/v1/ai/training")
     }
@@ -2140,7 +2142,7 @@ async def test_there_is_no_route_that_promotes_a_validated_model(app: FastAPI) -
     """§34: a PASS is not a promotion, and no verb here could make it one."""
     methods = {
         (getattr(route, "path", ""), method)
-        for route in app.routes
+        for route in api_routes(app)
         for method in getattr(route, "methods", set())
         if getattr(route, "path", "").startswith("/v1/ai/validation")
     }
@@ -2339,7 +2341,7 @@ async def test_there_is_no_route_by_which_ai_reaches_a_venue(app: FastAPI) -> No
     """§50. No verb under /v1/ai names an execution action."""
     paths = {
         (getattr(route, "path", ""), method)
-        for route in app.routes
+        for route in api_routes(app)
         for method in getattr(route, "methods", set())
         if getattr(route, "path", "").startswith("/v1/ai")
     }
@@ -2590,7 +2592,7 @@ async def test_there_is_no_route_that_deletes_a_model(app: FastAPI) -> None:
     """§22. Nothing is ever physically deleted."""
     methods = {
         (getattr(route, "path", ""), method)
-        for route in app.routes
+        for route in api_routes(app)
         for method in getattr(route, "methods", set())
         if getattr(route, "path", "").startswith("/v1/ai")
     }
@@ -2601,7 +2603,7 @@ async def test_there_is_no_route_that_deletes_a_model(app: FastAPI) -> None:
 
 async def test_the_registry_never_uploads_an_artifact(app: FastAPI) -> None:
     """§33. There is no upload route, so there is no path to traverse."""
-    paths = {getattr(route, "path", "") for route in app.routes}
+    paths = {getattr(route, "path", "") for route in api_routes(app)}
     for word in ("upload", "artifact/file", "import-model"):
         assert not any(word in path for path in paths)
 

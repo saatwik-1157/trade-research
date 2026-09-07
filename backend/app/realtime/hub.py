@@ -168,10 +168,30 @@ class Hub:
         The subscription is established before this returns, so an event
         published immediately after startup is delivered rather than dropped
         into the gap between "the task exists" and "the task is listening".
+
+        A bus that will not answer does NOT stop the process. `_read_bus`
+        already treats a bus that dies a second AFTER startup as degraded and
+        reports it through `status()`; a bus that was down a second BEFORE
+        startup has to mean the same thing, or availability depends on Redis in
+        exactly the direction `RedisEventBus` says it must not -- its breaker
+        exists because correctness never depended on Redis. Live delivery is
+        off until something calls `start` again; nothing else in the process is
+        waiting on this subscription.
         """
         if self._reader is not None and not self._reader.done():
             return
-        iterator = await self.bus.subscribe()
+        try:
+            iterator = await self.bus.subscribe()
+        except Exception as exc:  # noqa: BLE001 - the hub reports, it does not die quietly
+            self._bus_healthy = False
+            self._bus_error = f"{type(exc).__name__}: {exc}"[:200]
+            log.warning(
+                "realtime bus subscribe failed; live delivery is off",
+                extra={"event": "realtime_bus_subscribe_failed"},
+            )
+            return
+        self._bus_healthy = True
+        self._bus_error = None
         self._reader = asyncio.create_task(self._read_bus(iterator), name="realtime:bus-reader")
 
     async def stop(self) -> None:

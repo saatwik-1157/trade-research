@@ -34,6 +34,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from tests.routes import api_routes
+
 T0 = datetime(2026, 9, 1, tzinfo=UTC)
 ALICE = {"email": "alice@tr-platform.io", "password": "correct horse battery"}
 BOB = {"email": "bob@tr-platform.io", "password": "another strong one"}
@@ -781,7 +783,12 @@ async def test_a_built_strategy_creates_a_signal_never_an_order(
 
 
 async def test_the_builder_surface_has_no_execution_verb(app: FastAPI) -> None:
-    for route in app.routes:
+    seen = 0
+    for route in api_routes(app):
         path = getattr(route, "path", "")
         if path.startswith("/v1/strategy-builder"):
+            seen += 1
             assert "DELETE" not in (getattr(route, "methods", set()) or set()), path
+    # An empty sweep proves nothing about the surface, and read `app.routes`
+    # for one FastAPI release too long already.
+    assert seen, "no builder routes were examined; the sweep is not working"
