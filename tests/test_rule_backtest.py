@@ -43,6 +43,7 @@ import rule_backtest as rb  # noqa: E402
 import take_profit  # noqa: E402
 import rule_search  # noqa: E402
 import track_record  # noqa: E402
+import run_overnight  # noqa: E402
 
 FAILURES: list[str] = []
 
@@ -1218,6 +1219,40 @@ def test_a_platform_that_cannot_hold_says_so_and_still_runs():
         take_profit.ctypes = real
 
 
+def test_a_setting_can_be_overridden_but_not_invented():
+    """`--rule` and `--max-positions` change a stated default, and only that.
+
+    The session's settings are what every figure in the live record was taken
+    under, so they are not edited casually -- but a default nobody can override
+    from the command line is a default somebody eventually edits in the file,
+    and then the record describes two configurations under one name.
+    """
+    print()
+    print("Session overrides - change a stated default, never append a new one")
+
+    settings = ["--rule", "random", "--max-positions", "7", "--interval", "20"]
+
+    check("an override replaces the value in place",
+          run_overnight.override(settings, "--rule", "rsi_reversion")[:2],
+          ["--rule", "rsi_reversion"])
+    check("and leaves every other setting alone",
+          run_overnight.override(settings, "--rule", "rsi_reversion")[2:],
+          ["--max-positions", "7", "--interval", "20"])
+    check("None means no override at all",
+          run_overnight.override(settings, "--rule", None), settings)
+    check("the original list is not mutated", settings[1], "random")
+
+    # Appending an unknown flag would be ADDING a setting under the guise of
+    # changing one, and the caller would never see the difference.
+    try:
+        run_overnight.override(settings, "--leverage", "50")
+    except SystemExit as exc:
+        check("an unknown setting is refused, not appended",
+              "cannot be overridden" in str(exc), True)
+    else:
+        check("an unknown setting is refused, not appended", False, True)
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -1264,6 +1299,7 @@ def main():
     test_a_halt_does_not_flush_hours_early()
     test_the_machine_is_released_even_when_the_session_raises()
     test_a_platform_that_cannot_hold_says_so_and_still_runs()
+    test_a_setting_can_be_overridden_but_not_invented()
 
     print()
     if FAILURES:

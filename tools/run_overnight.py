@@ -69,6 +69,11 @@ from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Imported for the rule NAMES only, so `--rule` refuses a typo at the command
+# line instead of at the first pass. `mt5_paper` imports MetaTrader5 inside
+# `connect()` rather than at module scope, so this costs no terminal.
+import mt5_paper  # noqa: E402
+
 SETTINGS = [
     "--rule", "random",
     "--symbols", "EURUSD,GBPUSD,USDJPY,USDCAD,AUDUSD,USDCHF,NZDUSD",
@@ -82,6 +87,28 @@ SETTINGS = [
 ]
 
 SESSION_SCRIPTS = ("run_overnight.py", "take_profit.py")
+
+
+def override(argv: list[str], flag: str, value: str | None) -> list[str]:
+    """Replace one flag's value in a settings list, or leave it alone.
+
+    The settings above are the session's defaults and every figure in the live
+    record was taken under them, so they are not edited casually -- but a
+    default nobody can override from the command line is a default somebody
+    eventually edits in the file, and then the record silently describes two
+    different configurations under one name.
+
+    Refuses a flag that is not already present rather than appending it. An
+    override is a change to a stated default; appending an unknown flag would
+    be adding a setting under the guise of changing one.
+    """
+    if value is None:
+        return argv
+    if flag not in argv:
+        raise SystemExit(f"{flag} is not one of this session's settings, so it cannot be overridden")
+    out = list(argv)
+    out[out.index(flag) + 1] = value
+    return out
 
 
 class _Tee:
@@ -218,6 +245,13 @@ def main() -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--until-hour", type=int, default=6,
                     help="local hour to stop at (default 6, i.e. 06:00)")
+    ap.add_argument("--rule", default=None, choices=sorted(mt5_paper.RULES),
+                    help="override the session's entry rule. NONE of them has a measured "
+                         "edge; see CLAUDE.md for what each was worth per trade")
+    ap.add_argument("--max-positions", default=None, metavar="N",
+                    help="override how many positions may be open at once. Fewer means "
+                         "less spread paid, and frequency is the one lever with a "
+                         "measured sign")
     ap.add_argument("--relax-over", type=float, default=45.0, metavar="MINUTES",
                     help="minutes before the stop hour over which the profit floor "
                          "decays to zero, and inside which nothing new is opened "
@@ -250,7 +284,9 @@ def main() -> int:
             return 1
 
     minutes, target = minutes_until(args.until_hour)
-    argv = SETTINGS + ["--minutes", f"{minutes:.0f}"]
+    argv = override(SETTINGS, "--rule", args.rule)
+    argv = override(argv, "--max-positions", args.max_positions)
+    argv = argv + ["--minutes", f"{minutes:.0f}"]
     # Flat by the same hour the session stops at. A session that stops while
     # holding positions leaves them to the weekend, the next session's
     # `max-positions` count and the swap -- which is what happened on
