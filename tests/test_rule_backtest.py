@@ -1132,6 +1132,56 @@ def test_the_flush_fires_when_flat_by_equals_the_stop_hour():
     check("and they are not counted as harvests", out["harvested"], 0)
 
 
+def test_a_refused_flush_is_retried_and_named():
+    """The 2026-09-08 defect, both halves.
+
+    The machine woke at the deadline and the flush fired into a terminal that
+    was awake but had no trade server yet: `order_send` returned 10031, the one
+    attempt was spent, and the position stayed open all day carrying swap. What
+    the operator saw was `flat-by 06:00: closed 0 at the deadline`, which is
+    exactly what an already-flat account prints. The retcode was in the record
+    and never left it.
+    """
+    print()
+    print("Wind-down - a refused close is not a closed position")
+
+    class Refusing(HarvestMT5):
+        """Refuses with 10031 until `fails` attempts have been spent."""
+
+        def __init__(self, positions, fails):
+            super().__init__(positions)
+            self.fails = fails
+            self.attempts = 0
+
+        def order_send(self, request):
+            self.attempts += 1
+            if self.attempts <= self.fails:
+                return types.SimpleNamespace(retcode=10031, order=0, deal=0,
+                                             price=0.0, volume=0.0)
+            self._positions = []
+            return super().order_send(request)
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        # Refuses once, then succeeds: the retry is what makes the account flat.
+        c = Refusing([pos(1, profit=-2.25)], fails=1)
+        closed, still = take_profit.flush_until_flat(c, live=True, attempts=4, wait=0)
+        check("the retry closed what one attempt could not", closed, 1)
+        check("and nothing is left failing", still, [])
+        check("it took a second attempt to do it", c.attempts, 2)
+
+        # Refuses throughout: the caller must be told, with the retcode.
+        c = Refusing([pos(2, profit=-2.25)], fails=99)
+        closed, still = take_profit.flush_until_flat(c, live=True, attempts=3, wait=0)
+        check("a flush that never succeeded closed nothing", closed, 0)
+        check("and says so rather than reporting a flat account", len(still), 1)
+        check("naming the retcode the venue gave", still[0]["retcode"], 10031)
+        check("after every attempt it was given", c.attempts, 3)
+    finally:
+        mt5_paper._log = real_log
+
+
 def test_a_halt_does_not_flush_hours_early():
     """`--max-daily-loss` firing at 22:00 stops trading; it does not mean close
     everything six hours before the operator asked."""
@@ -1408,6 +1458,7 @@ def main():
     test_the_flush_closes_losers_and_the_harvest_never_does()
     test_a_deadline_is_the_wall_clock_and_rolls_to_tomorrow()
     test_the_flush_fires_when_flat_by_equals_the_stop_hour()
+    test_a_refused_flush_is_retried_and_named()
     test_a_halt_does_not_flush_hours_early()
     test_the_two_halts_are_told_apart_by_value()
     test_the_machine_is_released_even_when_the_session_raises()
