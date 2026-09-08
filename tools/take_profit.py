@@ -173,6 +173,11 @@ def run(mt5, args) -> dict:
         time.monotonic() + seconds_until(args.flat_by))
     harvested, opened, passes, flushed = 0, 0, 0, 0
     halted = False
+    # WHICH halt, not just that there was one. A risk halt and a dead
+    # terminal call for opposite responses from anything supervising this
+    # process: one must not be restarted, the other exists to be. Reported
+    # as a value rather than left to be matched out of the printed line.
+    halt_kind: str | None = None
     # Consecutive failed passes. A terminal that blinks once should not end a
     # session that has hours left to run; one that is genuinely gone should not
     # be retried all night.
@@ -221,6 +226,7 @@ def run(mt5, args) -> dict:
                       "the terminal is not answering and a flush would fail too",
                       flush=True)
                 halted = True
+                halt_kind = "terminal"
                 break
             time.sleep(args.interval)
             continue
@@ -246,6 +252,7 @@ def run(mt5, args) -> dict:
             if res["halted"]:
                 print(f"  [{stamp}] HALTED: {res['reason']}")
                 halted = True
+                halt_kind = "risk"
                 break
             sent = [a for a in res["actions"] if a.get("status") in ("SENT", "DRY_RUN")]
             opened += len(sent)
@@ -300,7 +307,7 @@ def run(mt5, args) -> dict:
     # about what it had done. Found by the test written for the loop guard,
     # which is the argument for writing the test.
     summary = {"passes": passes, "harvested": harvested, "opened": opened,
-               "flushed": flushed, "halted": halted,
+               "flushed": flushed, "halted": halted, "halt_kind": halt_kind,
                "start_balance": start_balance,
                "end_balance": None, "realised": None, "still_open": None}
     try:
@@ -415,6 +422,20 @@ def main() -> int:
               f"({out['realised']:+.2f})")
     print("\n  A harvest count is not a win rate and this balance is not an edge.")
     print("  Read the R-multiple: python tools/track_record.py --merge\n")
+
+    # A halt is not a clean finish, and the two halts are not each other.
+    # 2 is the risk limit: whatever supervises this must NOT start another
+    # session, because restarting through a daily loss limit is how a limit
+    # becomes a speed bump. 3 is a terminal that stopped answering, which is
+    # exactly what a supervisor is for. This DOES change the dated session:
+    # a run that hit its daily loss limit used to exit 0 like any other, and
+    # now exits 2. That is the point -- 'the session ended' and 'the session
+    # was stopped by a risk limit' were the same answer, and the launcher
+    # printed the same line for both.
+    if out["halt_kind"] == "risk":
+        return 2
+    if out["halt_kind"] == "terminal":
+        return 3
     return 0
 
 
