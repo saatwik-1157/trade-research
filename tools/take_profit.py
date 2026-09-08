@@ -112,6 +112,65 @@ def harvest(mt5, min_profit: float, live: bool) -> list[dict]:
     return mt5_paper.close_own(mt5, live, where=lambda p: net_floating(p) >= min_profit)
 
 
+#: A flush gets more than one attempt. The terminal can be awake and still have
+#: no trade server behind it: a machine resuming from sleep answers
+#: `positions_get` while `order_send` returns 10031, no connection, for the
+#: seconds it takes the session to come back. Measured on 2026-09-08 -- one
+#: attempt at 06:36:18, retcode 10031, and the position was still open that
+#: evening carrying swap, because nothing tried again and nothing said why.
+FLUSH_ATTEMPTS = 6
+FLUSH_WAIT_SECONDS = 10.0
+
+
+def flush_until_flat(mt5, live: bool, attempts: int = FLUSH_ATTEMPTS,
+                     wait: float = FLUSH_WAIT_SECONDS) -> tuple[int, list[dict]]:
+    """Close every own position, retrying while any refuse, and SAY which.
+
+    Two failures this replaces, both from the same night. The flush counted
+    only the closes that worked and printed `closed 0` for the ones that did
+    not, so a refusal read exactly like an account that was already flat --
+    the retcode was in the record and never reached the operator. And it made
+    exactly one attempt, at the worst possible moment: the deadline fires the
+    instant the machine wakes, which is when the trade server is least likely
+    to be there.
+
+    Returns (closed, still_failing). A dry run reports every position as gone
+    on the first pass, so it never loops.
+    """
+    closed = 0
+    failures: list[dict] = []
+    for attempt in range(1, attempts + 1):
+        stamp = datetime.now().strftime("%H:%M:%S")
+        try:
+            results = flatten(mt5, live)
+        except Exception as exc:  # noqa: BLE001 - the one failure that must SHOUT
+            print(f"  [{stamp}] THE FLUSH RAISED: {type(exc).__name__}: {exc}",
+                  flush=True)
+            results = []
+        gone = [r for r in results if r.get("status") in ("CLOSED", "DRY_RUN")]
+        closed += len(gone)
+        for r in gone:
+            print(f"  [{stamp}] FLAT    {r.get('symbol', '?'):<8} #{r['ticket']}")
+        failures = [r for r in results
+                    if r.get("status") not in ("CLOSED", "DRY_RUN")]
+        for r in failures:
+            # The retcode is the whole point. 10031 is "no connection with the
+            # trade server" and means try again; 10018 is a closed market and
+            # means the session cannot be flat until it opens. Printing the
+            # number rather than a guess at what it means keeps the operator
+            # able to look it up.
+            print(f"  [{stamp}] FLUSH REFUSED {r.get('symbol', '?'):<8} "
+                  f"#{r.get('ticket')} status={r.get('status')} "
+                  f"retcode={r.get('retcode')}", flush=True)
+        if not failures:
+            return closed, []
+        if attempt < attempts:
+            print(f"  [{stamp}] {len(failures)} still open; retrying in "
+                  f"{wait:.0f}s (attempt {attempt}/{attempts})", flush=True)
+            time.sleep(wait)
+    return closed, failures
+
+
 def flatten(mt5, live: bool) -> list[dict]:
     """Close every own position, whatever it is worth.
 
@@ -240,6 +299,14 @@ def run(mt5, args) -> dict:
         # Nothing new inside the wind-down window. Opening a trade that the
         # flush will close minutes later pays the spread for no observation.
         winding_down = args.flat_by is not None and remaining <= args.relax_over * 60.0
+        # Why a pass opened nothing. `cycle` already decides this per symbol and
+        # returns it -- no_signal, no_history, skipped_already_open,
+        # skipped_max_positions -- and none of it was ever printed, so a session
+        # that opened twice in 1201 passes looked identical whether the rule was
+        # being selective or the terminal was returning no bars. With
+        # rsi_reversion, which signals rarely by design, that is the difference
+        # between working and broken, and it was not observable.
+        why = ""
         if not args.harvest_only and not winding_down:
             try:
                 res = mt5_paper.cycle(mt5, args)
@@ -256,6 +323,12 @@ def run(mt5, args) -> dict:
                 break
             sent = [a for a in res["actions"] if a.get("status") in ("SENT", "DRY_RUN")]
             opened += len(sent)
+            if not sent:
+                tally: dict[str, int] = {}
+                for a in res["actions"]:
+                    key = str(a.get("status", "?"))
+                    tally[key] = tally.get(key, 0) + 1
+                why = "  why=" + ",".join(f"{k}:{v}" for k, v in sorted(tally.items()))
             for a in sent:
                 print(f"  [{stamp}] OPEN    {a['symbol']:<8} {a['side']:<5} @ {a.get('price')}")
 
@@ -263,7 +336,7 @@ def run(mt5, args) -> dict:
             bal = mt5.account_info()
             print(f"  [{stamp}] pass {passes}: harvested={harvested} opened={opened} "
                   f"balance={bal.balance:,.2f} equity={bal.equity:,.2f} "
-                  f"open={len(mt5_paper.own_positions(mt5))}", flush=True)
+                  f"open={len(mt5_paper.own_positions(mt5))}{why}", flush=True)
         except Exception as exc:  # noqa: BLE001 - a line of log is not worth a session
             print(f"  [{stamp}] pass {passes}: could not read the account "
                   f"({type(exc).__name__}); the session continues", flush=True)
@@ -286,20 +359,19 @@ def run(mt5, args) -> dict:
     # asked; the deadline is the deadline.
     if args.flat_by is not None and not halted:
         stamp = datetime.now().strftime("%H:%M:%S")
-        try:
-            left = flatten(mt5, args.live)
-        except Exception as exc:  # noqa: BLE001 - the one failure that must SHOUT
-            print(f"  [{stamp}] THE FLUSH FAILED: {type(exc).__name__}: {exc}")
-            print(f"  [{stamp}] POSITIONS ARE STILL OPEN AT THE VENUE. "
-                  "Close them by hand or start a --harvest-only session.",
-                  flush=True)
-            left = []
-        gone = [r for r in left if r.get("status") in ("CLOSED", "DRY_RUN")]
-        flushed += len(gone)
-        for r in gone:
-            print(f"  [{stamp}] FLAT    {r.get('symbol', '?'):<8} #{r['ticket']}")
-        print(f"  [{stamp}] flat-by {args.flat_by}: closed {len(gone)} at the deadline",
+        gone_count, still = flush_until_flat(mt5, args.live)
+        flushed += gone_count
+        stamp = datetime.now().strftime("%H:%M:%S")
+        print(f"  [{stamp}] flat-by {args.flat_by}: closed {gone_count} at the deadline",
               flush=True)
+        if still:
+            print(f"  [{stamp}] POSITIONS ARE STILL OPEN AT THE VENUE after "
+                  f"{FLUSH_ATTEMPTS} attempts: "
+                  + ", ".join(f"{r.get('symbol', '?')} retcode={r.get('retcode')}"
+                              for r in still))
+            print(f"  [{stamp}] Close them by hand, or start a wind-down session: "
+                  "python tools/run_overnight.py --harvest-only --relax-over 0",
+                  flush=True)
 
     # The SUMMARY must not be able to kill the session either. This block read
     # the terminal twice, unguarded, so a session that gave up cleanly on a dead
