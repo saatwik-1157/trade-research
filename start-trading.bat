@@ -19,14 +19,62 @@ REM Close this window or press Ctrl+C to stop the session early.
 title trade-research overnight session
 cd /d "%~dp0"
 
+REM -------------------------------------------------------------- interpreter
+REM `python` is whatever PATH says today, and that is not a stable answer. This
+REM machine lists Python312 ahead of Python314 in the user PATH while the
+REM toolkit's dependencies are installed only on 3.14, so a window opened after
+REM that PATH entry appeared picked 3.12 and the session died on `import numpy`
+REM three imports in -- after printing "Starting overnight harvest session", so
+REM it read like a session that had begun.
+REM
+REM Choose by asking each interpreter whether it can import what the session
+REM needs, rather than by trusting a name. Requirement 3 above is the thing
+REM being checked, so a machine that never met it gets told which package is
+REM missing instead of a traceback from inside a module it has never heard of.
+setlocal
+set "TR_PYTHON="
+for %%C in (
+  "%LOCALAPPDATA%\Programs\Python\Python314\python.exe"
+  "%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
+  "%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+  "%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+  "%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
+) do if not defined TR_PYTHON if exist %%C (
+  %%C -c "import numpy, pandas, requests, MetaTrader5, psutil" >nul 2>&1
+  if not errorlevel 1 set "TR_PYTHON=%%~C"
+)
+if not defined TR_PYTHON (
+  python -c "import numpy, pandas, requests, MetaTrader5, psutil" >nul 2>&1
+  if not errorlevel 1 set "TR_PYTHON=python"
+)
+if not defined TR_PYTHON (
+  echo.
+  echo   NO USABLE PYTHON. Nothing was started and no order was sent.
+  echo.
+  echo   Every interpreter found is missing at least one of numpy, pandas,
+  echo   requests, MetaTrader5 or psutil. Install them into ONE of them and
+  echo   run this again -- the first that can import all five is the one used:
+  echo.
+  echo       "%%LOCALAPPDATA%%\Programs\Python\Python314\python.exe" -m pip install -r requirements.txt
+  echo       "%%LOCALAPPDATA%%\Programs\Python\Python314\python.exe" -m pip install MetaTrader5 psutil
+  echo.
+  echo   psutil is the one worth checking twice: absent, run_overnight.py
+  echo   cannot see a session already running on this machine and proceeds
+  echo   UNGUARDED, and two harvest loops on one account double the risk.
+  echo.
+  pause
+  exit /b 1
+)
+
 echo Starting overnight harvest session - demo account, stops at 06:00
 echo Everything still open at 06:00 is closed at what it is worth.
+echo Python: %TR_PYTHON%
 echo.
 
-python tools\run_overnight.py %*
+"%TR_PYTHON%" tools\run_overnight.py %*
 
 echo.
 echo Session ended. For the read that matters, run:
-echo     python tools\track_record.py --merge
+echo     "%TR_PYTHON%" tools\track_record.py --merge
 echo.
 pause

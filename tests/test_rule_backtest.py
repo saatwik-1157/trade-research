@@ -1164,6 +1164,46 @@ def test_a_halt_does_not_flush_hours_early():
     check("and says it halted", out["halted"], True)
 
 
+def test_the_two_halts_are_told_apart_by_value():
+    """A risk halt and a dead terminal call for opposite responses from
+    anything supervising the session: one must not be restarted, the other
+    exists to be. `run_overnight --continuous` acts on this, so the two have to
+    be separable by a value rather than by matching the printed line -- the
+    same rule the MT5 registration route follows when it tells a fence refusal
+    from a missing package.
+    """
+    print()
+    print("Halts - which one, not just that there was one")
+
+    args = types.SimpleNamespace(
+        minutes=0.001, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by=None, harvest_only=False, live=True,
+        rule="random", symbols="EURUSD", lot=0.01, risk_usd=None,
+        sl_atr=1.5, tp_atr=1.5, max_positions=7, max_daily_loss=0.01)
+
+    real_cycle, real_log = mt5_paper.cycle, mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        mt5_paper.cycle = lambda mt5, a: {"halted": True, "reason": "daily loss",
+                                          "actions": []}
+        risk = take_profit.run(HarvestMT5([pos(1, profit=-2.25)]), args)
+    finally:
+        mt5_paper.cycle = real_cycle
+        mt5_paper._log = real_log
+
+    check("the risk limit names itself", risk["halt_kind"], "risk")
+
+    class Dead(HarvestMT5):
+        def positions_get(self, **kw):
+            raise RuntimeError("terminal not answering")
+
+    terminal = take_profit.run(Dead([]), args)
+    check("a terminal that stopped answering is a different halt",
+          terminal["halt_kind"], "terminal")
+    check("and a session that simply ran out of time halted at all", False,
+          bool(risk["halt_kind"] == terminal["halt_kind"]))
+
+
 def test_the_machine_is_released_even_when_the_session_raises():
     """A held execution state that is never released is worse than sleeping.
 
@@ -1369,6 +1409,7 @@ def main():
     test_a_deadline_is_the_wall_clock_and_rolls_to_tomorrow()
     test_the_flush_fires_when_flat_by_equals_the_stop_hour()
     test_a_halt_does_not_flush_hours_early()
+    test_the_two_halts_are_told_apart_by_value()
     test_the_machine_is_released_even_when_the_session_raises()
     test_a_platform_that_cannot_hold_says_so_and_still_runs()
     test_a_setting_can_be_overridden_but_not_invented()
