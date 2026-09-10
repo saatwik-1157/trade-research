@@ -587,7 +587,10 @@ construction or history windows in `tools/mt5_paper.py` and
 unit conversion, the night count or the plausibility fence in `tools/swap.py`.
 The bracket-sanity and fill-recording checks are in `test_rule_backtest.py`
 too, since they are order construction.
-All seven run in CI on every push, against Python 3.10, 3.12 and 3.14.
+Run `python tests/test_crash_report.py` after touching
+`tools/crash_report.py`, `tools/console_guard.py`, or the PASS_HOOK and
+STOP_REQUESTED wiring in `tools/take_profit.py` and `tools/run_overnight.py`.
+All eight run in CI on every push, against Python 3.10, 3.12 and 3.14.
 
 `PROJECT_STATE.json` is **generated, not hand-written**. Run
 `python tools/project_state.py --write` rather than editing it, and

@@ -71,7 +71,45 @@ echo Everything still open at 06:00 is closed at what it is worth.
 echo Python: %TR_PYTHON%
 echo.
 
+REM --detach: run with no console at all.
+REM
+REM Eight sessions in a row ended between one 20-second tick and the next,
+REM with no traceback and no KeyboardInterrupt, and the finally that
+REM releases the keep-awake hold never ran. That is an externally
+REM terminated process, and the most likely outside is this window closing.
+REM
+REM run_overnight.py now installs a console handler, which turns a close
+REM into a wind-down -- but Windows allows only a few seconds for that and
+REM closing seven positions may not fit. Detaching is the stronger fix:
+REM with pythonw there is no console to close, so the event never arrives.
+REM The session log holds everything the window would have shown.
+set "TR_ARGS=%*"
+set "TR_DETACH="
+if not "%TR_ARGS%"=="%TR_ARGS:--detach=%" set "TR_DETACH=1"
+
+if defined TR_DETACH (
+  call set "TR_ARGS=%%TR_ARGS:--detach=%%"
+  call set "TR_PYTHONW=%%TR_PYTHON:python.exe=pythonw.exe%%"
+  if not exist "%TR_PYTHONW%" set "TR_PYTHONW=%TR_PYTHON%"
+  echo Starting DETACHED - this window can be closed safely.
+  echo Python: %TR_PYTHONW%
+  echo.
+  start "trade-research session" /B "%TR_PYTHONW%" tools\run_overnight.py %TR_ARGS%
+  echo Session launched; it is not tied to this window.
+  echo     log:    logs\overnight-*.log
+  echo     record: CRASH_REPORTS\session-*.json
+  echo     stop:   taskkill /IM pythonw.exe
+  echo.
+  pause
+  exit /b 0
+)
+
+echo Closing this window asks the session to wind down rather than killing
+echo it outright. Use --detach to run with no console at all.
+echo.
 "%TR_PYTHON%" tools\run_overnight.py %*
+
+:done
 
 echo.
 echo Session ended. For the read that matters, run:

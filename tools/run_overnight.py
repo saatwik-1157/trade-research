@@ -79,6 +79,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Imported for the rule NAMES only, so `--rule` refuses a typo at the command
 # line instead of at the first pass. `mt5_paper` imports MetaTrader5 inside
 # `connect()` rather than at module scope, so this costs no terminal.
+import console_guard  # noqa: E402
+import crash_report  # noqa: E402
 import mt5_paper  # noqa: E402
 
 SETTINGS = [
@@ -523,6 +525,15 @@ def main() -> int:
             print("  you meant.\n")
             return 1
 
+    # What a previous session left open, when it never got to say goodbye.
+    # Printed BEFORE anything starts, because an abandoned tail is counted
+    # against this session's --max-positions and pays another night of swap.
+    for record in crash_report.unfinished()[:3]:
+        print("\n  PREVIOUS SESSION DID NOT FINISH:")
+        print(f"    {crash_report.summarise(record)}")
+        print("  If positions are still open, close them first:")
+        print("      start-trading.bat --harvest-only\n")
+
     if args.continuous:
         return run_continuous(args)
 
@@ -546,6 +557,16 @@ def main() -> int:
 
     log_path, restore = (None, None) if args.dry_run else start_logging()
 
+    session_id = crash_report.new_session_id()
+    if not args.dry_run:
+        crash_report.start(
+            session_id,
+            command=["take_profit.py"] + argv,
+            log_path=log_path,
+            deadline=f"{target:%Y-%m-%d %H:%M}",
+            live=not args.paper,
+        )
+
     try:
         print(f"\n  now {datetime.now():%H:%M} -> stop {target:%H:%M} "
               f"({minutes:.0f} minutes)")
@@ -557,9 +578,39 @@ def main() -> int:
             return 0
 
         import take_profit
+
+        # The heartbeat. Every pass rewrites the record with the session's
+        # last known state, so a kill that reaches no handler still leaves a
+        # file saying when it was alive and what it was holding.
+        take_profit.PASS_HOOK = lambda n, st: crash_report.beat(session_id, n, st)
+
+        def _stop(reason: str) -> None:
+            # Record FIRST, wind down second. On a console close the OS is
+            # already counting down, and the evidence has to survive even
+            # when the flush does not.
+            crash_report.finish(
+                session_id, status=reason, reason="stop requested from the console"
+            )
+            take_profit.STOP_REQUESTED = True
+
+        print(f"  stop handling: {console_guard.install(_stop)}")
+
         sys.argv = ["take_profit.py"] + argv
-        return take_profit.main()
+        code = take_profit.main()
+        if not console_guard.stopping():
+            crash_report.finish(
+                session_id, status="completed", reason=f"exit code {code}"
+            )
+        return code
+    except BaseException as exc:
+        crash_report.finish(
+            session_id, status="error", reason=f"{type(exc).__name__}: {exc}"
+        )
+        raise
     finally:
+        mod = sys.modules.get("take_profit")
+        if mod is not None:
+            mod.PASS_HOOK = None
         if log_path:
             print(f"\n  session log: {log_path}")
         if restore is not None:

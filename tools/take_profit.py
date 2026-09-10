@@ -51,6 +51,20 @@ from mt5_paper import RefuseToTrade
 #: enough to ride out a reconnect, short enough not to spin all night.
 MAX_CONSECUTIVE_MISSES = 10
 
+#: Called once per pass with (passes, state) when a wrapper sets it, so a
+#: session's last known state survives a kill. `run_overnight.py` points this
+#: at `crash_report.beat`. Left None here because take_profit.py is also run
+#: directly, and a heartbeat is the wrapper's concern rather than the loop's.
+#: Failures are swallowed at the call site: a crash journal that can end a
+#: session is worse than no crash journal.
+PASS_HOOK = None
+
+#: Set by a console control handler to ask the loop to wind down at the next
+#: opportunity. Checked once per pass. Polled rather than acted on from the
+#: handler thread, because closing a position from a handler while the loop is
+#: mid-order is how one intention becomes two.
+STOP_REQUESTED = False
+
 
 ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x00000001
@@ -233,6 +247,12 @@ def run(mt5, args) -> dict:
     harvested, opened, passes, flushed = 0, 0, 0, 0
     halted = False
     blind = 0  # consecutive passes whose venue reads did not answer
+    # Last values the venue actually confirmed. None means "not read this
+    # pass", never zero -- the heartbeat has to be able to say UNKNOWN, since
+    # a record claiming 0 positions open would send a recovery run away empty.
+    open_count: int | None = None
+    balance_seen: float | None = None
+    equity_seen: float | None = None
     # WHICH halt, not just that there was one. A risk halt and a dead
     # terminal call for opposite responses from anything supervising this
     # process: one must not be restarted, the other exists to be. Reported
@@ -371,6 +391,7 @@ def run(mt5, args) -> dict:
             # opening nothing, halting nothing, with --max-daily-loss unable
             # to evaluate. A disconnect is not a cosmetic failure.
             blind += 1
+            open_count = balance_seen = equity_seen = None
             print(f"  [{stamp}] pass {passes}: ACCOUNT UNREADABLE "
                   f"({blind}/{MAX_CONSECUTIVE_MISSES}); account_info() returned None",
                   flush=True)
@@ -383,9 +404,11 @@ def run(mt5, args) -> dict:
                 break
         else:
             try:
+                open_count = len(mt5_paper.own_positions(mt5))
+                balance_seen, equity_seen = float(bal.balance), float(bal.equity)
                 print(f"  [{stamp}] pass {passes}: harvested={harvested} opened={opened} "
                       f"balance={bal.balance:,.2f} equity={bal.equity:,.2f} "
-                      f"open={len(mt5_paper.own_positions(mt5))}{why}", flush=True)
+                      f"open={open_count}{why}", flush=True)
                 blind = 0
             except mt5_paper.VenueUnreadable as exc:
                 blind += 1
@@ -401,6 +424,27 @@ def run(mt5, args) -> dict:
             except Exception as exc:  # noqa: BLE001 - a formatting fault is not a session
                 print(f"  [{stamp}] pass {passes}: could not format the status line "
                       f"({type(exc).__name__}); the session continues", flush=True)
+
+        if PASS_HOOK is not None:
+            try:
+                PASS_HOOK(passes, {
+                    "harvested": harvested,
+                    "opened": opened,
+                    "positions_open": open_count,
+                    "balance": balance_seen,
+                    "equity": equity_seen,
+                    "blind": blind,
+                    "misses": misses,
+                })
+            except Exception:  # noqa: BLE001 - a journal never ends a session
+                pass
+
+        if STOP_REQUESTED:
+            # A console close or Ctrl-C. Break to the flush below rather than
+            # exiting here: the whole point is that the wind-down still runs.
+            print(f"  [{stamp}] stop requested; winding down", flush=True)
+            halt_kind = "stopped"
+            break
 
         if time.monotonic() + args.interval >= deadline:
             break
