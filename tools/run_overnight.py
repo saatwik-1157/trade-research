@@ -92,6 +92,18 @@ SETTINGS = [
     "--min-profit", "0.50",
     "--max-positions", "7",
     "--max-daily-loss", "200",
+    # OFF by default, deliberately, for the same reason --risk-usd and
+    # --cost-swap are off: every figure in the live record was taken without
+    # it, and a default that silently restated them would make the history
+    # unreadable.
+    #
+    # Choose N from the arithmetic, not from a round number. The venue record
+    # over 476 trades runs an 80.5% win rate, so a loss is p=0.195 and three
+    # in a row is p=0.0074 -- about 3.5 occurrences in six days, a real pause
+    # several times a week. Five is p=0.00028, roughly one per 3,500 trades,
+    # against a longest observed run of 7. So 3 reacts to ordinary variance
+    # and 5 reacts to an outlier.
+    "--max-consecutive-losses", "0",
     "--interval", "20",
 ]
 
@@ -276,6 +288,8 @@ def leg_argv(args) -> list[str]:
     """
     argv = override(SETTINGS, "--rule", args.rule)
     argv = override(argv, "--max-positions", args.max_positions)
+    argv = override(argv, "--max-consecutive-losses",
+                    args.max_consecutive_losses)
     argv = argv + ["--minutes", f"{args.leg_minutes:g}"]
     if args.harvest_only:
         argv = argv + ["--harvest-only"]
@@ -480,6 +494,11 @@ def main() -> int:
                     help="override how many positions may be open at once. Fewer means "
                          "less spread paid, and frequency is the one lever with a "
                          "measured sign")
+    ap.add_argument("--max-consecutive-losses", default=None, metavar="N",
+                    help="pause new entries after N losing trades in a row. "
+                         "Open positions are still managed and the wind-down "
+                         "still runs. 5 reacts to an outlier at this win rate, "
+                         "3 to ordinary variance -- see SETTINGS")
     ap.add_argument("--relax-over", type=float, default=45.0, metavar="MINUTES",
                     help="minutes before the stop hour over which the profit floor "
                          "decays to zero, and inside which nothing new is opened "
@@ -540,6 +559,8 @@ def main() -> int:
     minutes, target = minutes_until(args.until_hour)
     argv = override(SETTINGS, "--rule", args.rule)
     argv = override(argv, "--max-positions", args.max_positions)
+    argv = override(argv, "--max-consecutive-losses",
+                    args.max_consecutive_losses)
     argv = argv + ["--minutes", f"{minutes:.0f}"]
     # Flat by the same hour the session stops at. A session that stops while
     # holding positions leaves them to the weekend, the next session's

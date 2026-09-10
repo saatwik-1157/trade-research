@@ -1630,6 +1630,158 @@ def test_the_heartbeat_reports_unknown_rather_than_zero_when_blind():
           all(s["positions_open"] is None for s in blind), True)
 
 
+def test_a_streak_is_counted_per_position_not_per_deal():
+    """One position makes two deals. Counting deals scores every trade twice.
+
+    And an OPEN position already has an entry deal sitting in history at
+    profit 0, so admitting anything without a closing deal would put an
+    unfinished trade into a record of how the finished ones went.
+    """
+    print()
+    print("A streak counts closed positions, not deals")
+
+    class Deal:
+        def __init__(self, pid, profit, entry, t):
+            self.position_id = pid
+            self.profit = profit
+            self.commission = 0.0
+            self.swap = 0.0
+            self.entry = entry
+            self.time = t
+            self.magic = mt5_paper.MAGIC
+
+    class Venue:
+        DEAL_ENTRY_OUT = 1
+
+        def __init__(self, deals):
+            self._deals = deals
+
+        def history_deals_get(self, *a):
+            return self._deals
+
+    # Position 1 won, 2 and 3 lost, 4 is still open (entry deal only).
+    deals = [
+        Deal(1, 0.0, 0, 10), Deal(1, 2.50, 1, 11),
+        Deal(2, 0.0, 0, 12), Deal(2, -1.20, 1, 13),
+        Deal(3, 0.0, 0, 14), Deal(3, -0.80, 1, 15),
+        Deal(4, 0.0, 0, 16),
+    ]
+    real = mt5_paper.server_day_start
+    real_end = mt5_paper.history_end
+    mt5_paper.server_day_start = lambda _m: 0
+    mt5_paper.history_end = lambda _m: 99
+    try:
+        got = mt5_paper.closed_outcomes(Venue(deals))
+    finally:
+        mt5_paper.server_day_start = real
+        mt5_paper.history_end = real_end
+    check("three closed positions, not seven deals", len(got), 3)
+    check("in the order they closed", [round(x, 2) for x in got],
+          [2.50, -1.20, -0.80])
+    check("the open position is absent", 4 in [1, 2, 3], False)
+    check("and the trailing streak is two", mt5_paper.consecutive_losses(got), 2)
+
+
+def test_a_break_even_breaks_the_streak():
+    """A trade that cost nothing is not evidence the rule is failing."""
+    print()
+    print("A scratch is not a loss")
+    check("a zero ends the run", mt5_paper.consecutive_losses([-1, -1, 0.0]), 0)
+    check("a win ends it too", mt5_paper.consecutive_losses([-1, -1, 5.0]), 0)
+    check("losses after it still count",
+          mt5_paper.consecutive_losses([-1, 0.0, -1, -1]), 2)
+    check("an empty record is not a streak", mt5_paper.consecutive_losses([]), 0)
+
+
+def test_the_streak_pauses_entries_without_halting_the_session():
+    """The distinction that matters. A halt skips the wind-down; a pause does
+    not, so the positions the streak produced are still managed and still
+    flushed. Reaching the same abandoned book by a different road would be no
+    better than the crash."""
+    print()
+    print("A losing streak pauses entries; it does not halt the session")
+
+    class Venue:
+        DEAL_ENTRY_OUT = 1
+
+        def positions_get(self):
+            return ()
+
+        def history_deals_get(self, *a):
+            class D:
+                magic = mt5_paper.MAGIC
+                commission = swap = 0.0
+                entry = 1
+
+            out = []
+            for i in range(4):
+                d = D()
+                d.position_id = i
+                d.profit = -1.0
+                d.time = i
+                out.append(d)
+            return out
+
+    args = types.SimpleNamespace(
+        symbols=["EURUSD", "GBPUSD"], max_daily_loss=200.0, max_positions=7,
+        max_consecutive_losses=3, rule="random", lot=0.01, sl_atr=1.5,
+        tp_atr=1.5, live=False, risk_usd=None)
+
+    real = mt5_paper.server_day_start
+    mt5_paper.server_day_start = lambda _m: 0
+    real_end = mt5_paper.history_end
+    mt5_paper.history_end = lambda _m: 1
+    try:
+        res = mt5_paper.cycle(Venue(), args)
+    finally:
+        mt5_paper.server_day_start = real
+        mt5_paper.history_end = real_end
+
+    check("four losses trips a cap of three", res["consecutive_losses"], 4)
+    check("entries are paused", res["paused"], True)
+    # NOT halted. A halt suppresses the flush.
+    check("but the session is NOT halted", res["halted"], False)
+    check("and every symbol is skipped for that reason",
+          sorted({a["status"] for a in res["actions"]}),
+          ["skipped_consecutive_losses"])
+
+
+def test_the_cap_is_off_unless_asked_for():
+    """0 means off, and off must not read the history at all."""
+    print()
+    print("The cap is opt-in")
+
+    class Venue:
+        TIMEFRAME_H1 = 16385
+
+        def positions_get(self):
+            return ()
+
+        def history_deals_get(self, *a):
+            return []
+
+        def copy_rates_from_pos(self, *a):
+            return None
+
+    args = types.SimpleNamespace(
+        symbols=["EURUSD"], max_daily_loss=200.0, max_positions=7,
+        max_consecutive_losses=0, rule="random", lot=0.01, sl_atr=1.5,
+        tp_atr=1.5, live=False, risk_usd=None)
+
+    real = mt5_paper.server_day_start
+    mt5_paper.server_day_start = lambda _m: 0
+    real_end = mt5_paper.history_end
+    mt5_paper.history_end = lambda _m: 1
+    try:
+        res = mt5_paper.cycle(Venue(), args)
+    finally:
+        mt5_paper.server_day_start = real
+        mt5_paper.history_end = real_end
+
+    check("not paused", res["paused"], False)
+    check("and the streak is not counted", res["consecutive_losses"], 0)
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -1664,6 +1816,10 @@ def main():
     test_a_stop_request_still_runs_the_flush()
     test_a_failing_heartbeat_cannot_end_a_session()
     test_the_heartbeat_reports_unknown_rather_than_zero_when_blind()
+    test_a_streak_is_counted_per_position_not_per_deal()
+    test_a_break_even_breaks_the_streak()
+    test_the_streak_pauses_entries_without_halting_the_session()
+    test_the_cap_is_off_unless_asked_for()
     test_min_lot_floor_is_reported_not_hidden()
     test_missing_tick_value_refuses_to_size()
     test_place_sends_the_derived_volume()

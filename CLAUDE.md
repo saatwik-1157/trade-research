@@ -529,6 +529,29 @@ record to say which was intended. Round the ratio before flooring. The
 arithmetic was right at every step and the number that reached the server was
 still wrong, which is the same class as reading the quote instead of the fill.
 
+## Before setting a consecutive-loss cap
+
+`--max-consecutive-losses N` pauses NEW entries after N losing trades in a
+row. It is OFF by default, on the same reasoning as `--risk-usd` and
+`--cost-swap`: every figure in the live record was taken without it.
+
+**It pauses; it does not halt.** A halt suppresses the `--flat-by` flush, so
+a streak that halted would leave the positions it produced unmanaged - the
+abandoned book the flush exists to prevent, reached by a different road. Open
+positions keep being harvested and the wind-down still runs.
+
+Choose N from the arithmetic rather than from a round number. The venue record
+over 476 trades runs an 80.5% win rate, so a loss is p=0.195 and three in a row
+is p=0.0074 - about **3.5 occurrences in six days**, a real pause several times
+a week. Five is p=0.00028, roughly one per 3,500 trades, against a longest
+observed run of **7**. So 3 reacts to ordinary variance and 5 reacts to an
+outlier, and neither is wrong as long as which one you asked for is deliberate.
+
+A streak is counted per closed POSITION, not per deal - one position produces
+an entry deal and an exit deal, and an open position already has an entry deal
+sitting in history at profit 0. A break-even breaks the streak: a trade that
+cost nothing is not evidence the rule is failing.
+
 ## Before running an overnight session
 
 `run_overnight.py` wraps `take_profit.py` and is the thing that actually

@@ -547,6 +547,10 @@ def main() -> int:
     ap.add_argument("--max-positions", type=int, default=5)
     ap.add_argument("--max-daily-loss", type=float, default=50.0)
     ap.add_argument("--live", action="store_true", help="actually send orders (demo only)")
+    ap.add_argument("--max-consecutive-losses", type=int, default=0,
+                    metavar="N",
+                    help="pause new entries after N losing trades in a row "
+                         "(0 = off); open positions are still managed")
     ap.add_argument("--path", default=None)
     args = ap.parse_args()
     args.symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]

@@ -279,6 +279,60 @@ def realised_today(mt5) -> float:
     return sum(d.profit + d.commission + d.swap for d in deals if d.magic == MAGIC)
 
 
+def closed_outcomes(mt5, magic: int = MAGIC) -> list[float]:
+    """Net result per CLOSED position today, oldest close first.
+
+    Grouped by `position_id` rather than counted per deal: one position
+    produces an entry deal and an exit deal, and a streak counted over deals
+    would score every trade twice and call the entry -- which books no
+    profit -- a break-even.
+
+    A position is closed only when it has a deal with `entry == DEAL_ENTRY_OUT`.
+    An open position also has an entry deal sitting in history at profit 0, and
+    admitting it would put a trade that has not finished into a record of how
+    the finished ones went.
+    """
+    start = server_day_start(mt5)
+    deals = mt5.history_deals_get(start, history_end(mt5))
+    if deals is None:
+        raise VenueUnreadable(
+            "history_deals_get returned None; the recent outcomes are unknown"
+        )
+
+    out_flag = getattr(mt5, "DEAL_ENTRY_OUT", 1)
+    nets: dict[int, float] = {}
+    closed_at: dict[int, float] = {}
+    finished: set[int] = set()
+    for d in deals:
+        if getattr(d, "magic", None) != magic:
+            continue
+        pid = getattr(d, "position_id", None)
+        if pid is None:
+            continue
+        nets[pid] = nets.get(pid, 0.0) + d.profit + d.commission + d.swap
+        if getattr(d, "entry", None) == out_flag:
+            finished.add(pid)
+            closed_at[pid] = max(closed_at.get(pid, 0.0), float(d.time))
+
+    return [nets[p] for p in sorted(finished, key=lambda p: closed_at.get(p, 0.0))]
+
+
+def consecutive_losses(outcomes: list[float]) -> int:
+    """How many losses in a row end the sequence.
+
+    A break-even (0.0) BREAKS the streak rather than extending it. A trade
+    that cost nothing is not evidence that the rule is failing, and counting
+    it as one would trip the pause on a quiet run of scratches.
+    """
+    n = 0
+    for net in reversed(outcomes):
+        if net < 0:
+            n += 1
+        else:
+            break
+    return n
+
+
 def bracket_is_sane(is_buy: bool, fill: float, sl: float, tp: float) -> bool:
     """A stop must sit against the position and a target with it.
 
@@ -635,7 +689,34 @@ def cycle(mt5, args) -> dict:
         return {"halted": True, "reason": f"daily loss limit hit ({pnl_today:.2f})",
                 "realised_today": round(pnl_today, 2)}
 
+    # Consecutive losses PAUSE new entries; they do not halt the session.
+    # The distinction is the whole point. A halt would stop managing what is
+    # already open and skip the wind-down, so a losing streak would leave the
+    # positions it produced sitting unmanaged -- which is the failure the
+    # flush exists to prevent, reached by a different road.
+    #
+    # And it is a pause rather than a size change on purpose. The response to
+    # a losing streak is to stop opening, never to open bigger: that is
+    # martingale, and it is forbidden outright.
+    streak = 0
+    cap = getattr(args, "max_consecutive_losses", 0) or 0
+    if cap > 0:
+        streak = consecutive_losses(closed_outcomes(mt5))
+
     actions = []
+    if cap > 0 and streak >= cap:
+        return {
+            "halted": False,
+            "paused": True,
+            "reason": f"{streak} consecutive losses (cap {cap}); new entries paused",
+            "realised_today": round(pnl_today, 2),
+            "consecutive_losses": streak,
+            "open_positions": len(open_now),
+            "actions": [
+                {"symbol": s_, "status": "skipped_consecutive_losses"}
+                for s_ in args.symbols
+            ],
+        }
     for symbol in args.symbols:
         if len(open_now) + len([a for a in actions if a.get("status") in ("SENT", "DRY_RUN")]) >= args.max_positions:
             actions.append({"symbol": symbol, "status": "skipped_max_positions"})
@@ -655,7 +736,9 @@ def cycle(mt5, args) -> dict:
                             args.tp_atr, args.live,
                             getattr(args, "risk_usd", None)))
 
-    return {"halted": False, "realised_today": round(pnl_today, 2),
+    return {"halted": False, "paused": False,
+            "realised_today": round(pnl_today, 2),
+            "consecutive_losses": streak,
             "open_positions": len(open_now), "actions": actions}
 
 
@@ -670,6 +753,11 @@ def main() -> int:
     ap.add_argument("--sl-atr", type=float, default=1.5, help="stop loss in ATR multiples")
     ap.add_argument("--tp-atr", type=float, default=1.5, help="take profit in ATR multiples")
     ap.add_argument("--max-positions", type=int, default=3)
+    ap.add_argument("--max-consecutive-losses", type=int, default=0,
+                    metavar="N",
+                    help="pause NEW entries after N losing trades in a row "
+                         "(0 = off). Open positions keep being managed and "
+                         "the wind-down still runs; nothing is ever sized up")
     ap.add_argument("--max-daily-loss", type=float, default=500.0)
     ap.add_argument("--interval", type=int, default=0, help="seconds between cycles; 0 runs once")
     ap.add_argument("--once", action="store_true")
