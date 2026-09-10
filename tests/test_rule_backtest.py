@@ -1511,6 +1511,125 @@ def test_an_unreadable_venue_never_reports_a_limit_as_satisfied():
           mt5_paper.own_positions(Empty()), [])
 
 
+def test_a_stop_request_still_runs_the_flush():
+    """P1b. The whole point of catching a console close.
+
+    Eight sessions were killed mid-pass and none ran `--flat-by`, so each left
+    its losing tail open -- the harvest floor books winners and holds losers,
+    so whatever is open when a session dies IS the tail. Converting the kill
+    into a stop request is only worth doing if the flush still happens, so
+    that is what this asserts rather than that the loop exited.
+    """
+    print()
+    print("A stop request winds down rather than abandoning the book")
+
+    c = HarvestMT5([pos(1, profit=-2.25)])
+    # 0.02 minutes, not 5: this test must be bounded by the stop request it is
+    # testing, and a 5-minute deadline would hide a stop that never fired
+    # behind five minutes of spinning.
+    args = types.SimpleNamespace(
+        minutes=0.02, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by="06:00", harvest_only=True, live=True)
+
+    # Ask for a stop on the second pass, the way a console close would.
+    calls = {"n": 0}
+
+    def hook(_passes, _state):
+        calls["n"] += 1
+        if calls["n"] >= 2:
+            take_profit.STOP_REQUESTED = True
+
+    real_log, real_hook = mt5_paper._log, take_profit.PASS_HOOK
+    mt5_paper._log = lambda r: None
+    take_profit.PASS_HOOK = hook
+    try:
+        out = take_profit.run(c, args)
+    finally:
+        mt5_paper._log = real_log
+        take_profit.PASS_HOOK = real_hook
+        take_profit.STOP_REQUESTED = False
+
+    check("it stopped early", out["passes"] <= 3, True)
+    # NOT halted: a halt suppresses the flush, and a stop must not.
+    check("and did not mark itself halted", out["halted"], False)
+    check("so the deadline flush still ran", out["flushed"], 1)
+    # NOT `still_open == 0`: this mock re-serves the same position after every
+    # close, so a 1 there is the fixture rather than a leak. `flushed` above is
+    # what proves the wind-down closed what it found.
+    check("and recorded why it stopped", out["halt_kind"], "stopped")
+
+
+def test_a_failing_heartbeat_cannot_end_a_session():
+    """A crash journal that can end a trading session is worse than none."""
+    print()
+    print("A journal that throws is swallowed by the loop")
+
+    def explode(_passes, _state):
+        raise OSError("disk full")
+
+    # A LOSING position: one above the harvest floor is closed and re-served
+    # by this mock every pass, which spins the loop until its deadline. The
+    # hook here raises, so it cannot be used to stop the loop either -- the
+    # bound has to be the clock.
+    c = HarvestMT5([pos(1, profit=-2.25)])
+    args = types.SimpleNamespace(
+        minutes=0.02, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by="06:00", harvest_only=True, live=True)
+
+    real_log, real_hook = mt5_paper._log, take_profit.PASS_HOOK
+    mt5_paper._log = lambda r: None
+    take_profit.PASS_HOOK = explode
+    try:
+        out = take_profit.run(c, args)
+        raised = None
+    except BaseException as exc:  # pragma: no cover - the failure being guarded
+        out, raised = None, type(exc).__name__
+    finally:
+        mt5_paper._log = real_log
+        take_profit.PASS_HOOK = real_hook
+        take_profit.STOP_REQUESTED = False
+
+    check("the session did not raise", raised, None)
+    check("it ran to its own end", out is not None and out["halted"], False)
+    check("and still flushed", out is not None and out["flushed"], 1)
+
+
+def test_the_heartbeat_reports_unknown_rather_than_zero_when_blind():
+    """A record claiming 0 open would send a recovery run away empty."""
+    print()
+    print("A blind pass records UNKNOWN, not an empty book")
+
+    class HalfDead(HarvestMT5):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, **kw)
+            self._reads = 0
+
+        def account_info(self):
+            self._reads += 1
+            return super().account_info() if self._reads == 1 else None
+
+    seen = []
+    c = HalfDead([])
+    args = types.SimpleNamespace(
+        minutes=0.02, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by="06:00", harvest_only=True, live=True)
+
+    real_log, real_hook = mt5_paper._log, take_profit.PASS_HOOK
+    mt5_paper._log = lambda r: None
+    take_profit.PASS_HOOK = lambda n, st: seen.append(st)
+    try:
+        take_profit.run(c, args)
+    finally:
+        mt5_paper._log = real_log
+        take_profit.PASS_HOOK = real_hook
+        take_profit.STOP_REQUESTED = False
+
+    blind = [s for s in seen if s["blind"] > 0]
+    check("some passes were blind", len(blind) > 0, True)
+    check("and each recorded an UNKNOWN book",
+          all(s["positions_open"] is None for s in blind), True)
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -1542,6 +1661,9 @@ def main():
     test_rounding_never_risks_more_than_the_budget()
     test_a_partial_disconnect_is_not_a_cosmetic_failure()
     test_an_unreadable_venue_never_reports_a_limit_as_satisfied()
+    test_a_stop_request_still_runs_the_flush()
+    test_a_failing_heartbeat_cannot_end_a_session()
+    test_the_heartbeat_reports_unknown_rather_than_zero_when_blind()
     test_min_lot_floor_is_reported_not_hidden()
     test_missing_tick_value_refuses_to_size()
     test_place_sends_the_derived_volume()
