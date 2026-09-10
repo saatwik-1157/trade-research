@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 
 import console_guard  # noqa: E402
 import crash_report  # noqa: E402
+import watchdog  # noqa: E402
 
 FAILED = []
 
@@ -212,6 +213,77 @@ def test_a_handler_that_raises_cannot_end_the_session():
     console_guard._STOPPING.clear()
 
 
+# ---------------------------------------------------------------- watchdog
+
+
+def test_the_watchdog_refuses_the_restarts_that_matter():
+    """It refuses more often than it acts, and these are the refusals.
+
+    Restarting past a risk halt is how an automated loss LIMIT becomes an
+    automated loss. Restarting past a deliberate stop is fighting the
+    operator. Both are worse than having no watchdog at all.
+    """
+    print()
+    print("The watchdog refuses more often than it acts")
+
+    cases = [
+        ({"status": "completed"}, True, "a finished session"),
+        ({"status": "kill_switch"}, True, "the kill switch"),
+        ({"status": "console_closed"}, True, "a closed console"),
+        ({"status": "sigterm"}, True, "a signal"),
+        ({"status": "error", "reason": "daily loss limit hit (-201.00)"},
+         True, "a daily-loss halt"),
+        ({"status": "running"}, False, "an abrupt death"),
+        ({"status": "error", "reason": "OSError: terminal gone"},
+         False, "a dead terminal"),
+    ]
+    for record, should_refuse, label in cases:
+        refused = bool(watchdog.refuses_restart(record))
+        check(f"{label:22} -> {'refuse' if should_refuse else 'restart'}",
+              refused, should_refuse)
+
+    check("no record at all is not a refusal",
+          bool(watchdog.refuses_restart(None)), False)
+
+
+def test_a_fast_exit_costs_more_of_the_budget():
+    """A session that ends in seconds did not trade, it failed to start.
+
+    Usually the terminal's Algo Trading toggle. Retrying that is pure spin,
+    so it costs double and the budget runs out sooner.
+    """
+    print()
+    print("A failure to start costs more than a crash")
+    check("the fast-exit threshold", watchdog.FAST_EXIT_SECONDS, 90.0)
+    check("a fast exit costs double", watchdog.FAST_EXIT_COST, 2)
+    check("the budget is finite", watchdog.MAX_RESTARTS, 5)
+    spent, tries = 0, 0
+    while spent <= watchdog.MAX_RESTARTS:
+        spent += watchdog.FAST_EXIT_COST
+        tries += 1
+    check("so a non-starting session is retried 3 times, not 5", tries, 3)
+
+
+def test_the_watchdog_never_imports_a_venue():
+    """It starts and watches a process that trades. It does not trade."""
+    print()
+    print("The watchdog has no trading code")
+    import ast
+
+    path = os.path.join(os.path.dirname(__file__), "..", "tools", "watchdog.py")
+    with open(path, encoding="utf-8") as fh:
+        src = fh.read()
+    names = set()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Import):
+            names.update(a.name for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names.add(node.module)
+    check("no MetaTrader5", "MetaTrader5" in names, False)
+    check("no mt5_paper", "mt5_paper" in names, False)
+    check("no take_profit", "take_profit" in names, False)
+
+
 def main():
     print("crash journal and console guard checks")
     test_a_record_is_written_and_readable()
@@ -223,6 +295,9 @@ def main():
     test_the_guard_installs_and_reports_what_it_got()
     test_a_stop_fires_once_however_many_times_it_is_asked()
     test_a_handler_that_raises_cannot_end_the_session()
+    test_the_watchdog_refuses_the_restarts_that_matter()
+    test_a_fast_exit_costs_more_of_the_budget()
+    test_the_watchdog_never_imports_a_venue()
 
     if FAILED:
         print(f"\n{len(FAILED)} check(s) failed")
