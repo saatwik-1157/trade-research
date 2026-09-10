@@ -17,7 +17,7 @@ The audit is done and the highest-risk defect is fixed. The system is not
 | **Risk Status** | 30+ veto codes, RiskEngine is the final veto on the platform path. **Bypassed entirely by the harness path** |
 | **Windows Build Status** | **none.** No PyInstaller/Inno/NSIS/electron-builder anywhere |
 | **Stability** | 8 of 8 recent sessions terminated early; 0 ran the deadline flush |
-| **Tests** | 7 toolkit gates pass (py3.14) · backend `ruff` + `mypy` clean, 411 files · 179 research/portfolio tests pass |
+| **Tests** | 8 toolkit gates pass (py3.14) · **full backend suite 2,976 passed / 0 failed** (21m33s) · `ruff` + `mypy` clean, 411 files |
 
 ## Completed
 
@@ -34,7 +34,7 @@ The audit is done and the highest-risk defect is fixed. The system is not
 
 ## In Progress
 
-Nothing. Stopped for instruction, per L83 §37.
+Nothing. P1b complete; awaiting one clean overnight run as evidence.
 
 ## Blocked
 
@@ -52,6 +52,9 @@ Nothing. Stopped for instruction, per L83 §37.
    platform path and is violated on this one.
 2. **No session reaches its deadline**, so the `--flat-by` flush — the one
    mechanism bounding the losing tail — has not run in 8 attempts.
+   **Mitigated (P1b):** crash journal, console guard and `--detach` are
+   committed and gated. No session has yet been *observed* finishing, so
+   this stays critical until field evidence exists.
 3. **Foreign keys are unenforced across the test suite.** SQLite runs with the
    pragma off; only `orders.signal_id` is covered. 2,700 tests are weaker
    evidence than the count suggests.
@@ -73,9 +76,13 @@ max drawdown −65.50 on 100,000 (−0.065%).
 
 ## Next Recommended Action
 
-**P1b — recoverable flush + console-independent session + `CRASH_REPORTS/`.**
-Small, and it is what stops the tail surviving a dead session. Then P2, fence
-the harness path.
+**P2 — fence the harness path.** P1b is done: the crash journal, the console
+guard and `--detach` are committed, gated and demonstrated. What remains is
+the critical finding — the harness reaches a broker through four
+`order_send` sites while importing nothing from `app/`.
+
+Before P2, run one overnight session and confirm it reaches its deadline.
+That is the evidence P1b does not yet have.
 
 Do not train a model. `ModelTrainingNeedAssessment` = **DO_NOT_TRAIN**: six
 search families across five universes have already failed to clear their own
