@@ -35,3 +35,7 @@ CRASH_REPORTS/
 # otherwise report. Same reason as data/ and reports/: a session log names
 # the account and its balance.
 logs/
+
+# The operator kill switch. Its PRESENCE stops every running session, so a
+# committed one would halt a fresh checkout before it started.
+/STOP
