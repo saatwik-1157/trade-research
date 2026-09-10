@@ -49,6 +49,7 @@ from app.risk.engine import (
     LimitKind,
     OrderProposal,
     PortfolioState,
+    RiskDecision,
     RiskEngine,
     RiskLimits,
 )
@@ -560,10 +561,16 @@ def test_a_weaker_lock_cannot_displace_an_emergency_stop() -> None:
 
 def test_the_states_needing_authorised_reset_are_the_dangerous_ones() -> None:
     assert NEEDS_AUTHORISED_RESET == {
+        RiskState.weekly_loss_locked,
         RiskState.drawdown_locked,
         RiskState.emergency_stop,
         RiskState.disabled,
     }
+    # The daily lock is the exception, and the reason is that refresh() can
+    # PROVE its day has ended. It cannot prove a week has -- that needs the
+    # day the broker's week starts on, which varies by venue. So a weekly
+    # lock is released by a person who has looked, which is the right
+    # friction for a limit that took a week to breach.
     assert RiskState.daily_loss_locked not in NEEDS_AUTHORISED_RESET
 
 
@@ -577,8 +584,121 @@ def test_a_lock_with_no_day_recorded_never_clears_itself() -> None:
 def test_the_latching_limits_are_the_session_stopping_ones() -> None:
     assert LATCHING == {
         LimitKind.max_daily_loss: RiskState.daily_loss_locked,
+        LimitKind.max_weekly_loss: RiskState.weekly_loss_locked,
         LimitKind.max_drawdown: RiskState.drawdown_locked,
     }
+    # max_consecutive_losses is deliberately absent: a streak clears itself on
+    # the next win, and latching it would turn a pause that ends by itself into
+    # a lock that needs a person.
+    assert LimitKind.max_consecutive_losses not in LATCHING
+
+
+# ================================================ THE THREE ADDED AT P4
+
+
+def _state(**kw: object) -> PortfolioState:
+    base: dict[str, object] = {
+        "equity": Decimal("10000"),
+        "balance": Decimal("10000"),
+        "open_positions": 0,
+        "realised_today": Decimal("0"),
+        "trades_today": 0,
+    }
+    base.update(kw)
+    return PortfolioState(**base)  # type: ignore[arg-type]
+
+
+def _fails(verdict, kind) -> bool:
+    return any(c.limit is kind and not c.passed for c in verdict.checks)
+
+
+def test_a_breached_week_halts_rather_than_vetoes() -> None:
+    """A week that has breached does not un-breach before the next order."""
+    engine = RiskEngine(RiskLimits(require_stop_loss=False, max_weekly_loss=Decimal("500")))
+    verdict = engine.evaluate(proposal(), _state(realised_week=Decimal("-501")), now=T0)
+    assert verdict.decision is RiskDecision.halt
+    assert _fails(verdict, LimitKind.max_weekly_loss)
+
+
+def test_an_unknown_week_fails_rather_than_passes() -> None:
+    """The rule the daily limit already follows: missing is never safe."""
+    engine = RiskEngine(RiskLimits(require_stop_loss=False, max_weekly_loss=Decimal("500")))
+    verdict = engine.evaluate(proposal(), _state(realised_week=None), now=T0)
+    assert _fails(verdict, LimitKind.max_weekly_loss)
+
+
+def test_a_losing_streak_vetoes_but_does_not_halt() -> None:
+    """The distinction that matters.
+
+    A halt stops the session managing what is already open. A streak is a
+    reason to stop OPENING, never a reason to stop watching -- and it clears
+    itself on the next win, so latching it would turn a pause that ends by
+    itself into a lock that needs a person.
+    """
+    engine = RiskEngine(RiskLimits(require_stop_loss=False, max_consecutive_losses=3))
+    verdict = engine.evaluate(proposal(), _state(consecutive_losses=3), now=T0)
+    assert verdict.decision is RiskDecision.veto
+    assert verdict.decision is not RiskDecision.halt
+    assert _fails(verdict, LimitKind.max_consecutive_losses)
+
+
+def test_a_streak_under_the_cap_passes() -> None:
+    engine = RiskEngine(RiskLimits(require_stop_loss=False, max_consecutive_losses=3))
+    verdict = engine.evaluate(proposal(), _state(consecutive_losses=2), now=T0)
+    assert not _fails(verdict, LimitKind.max_consecutive_losses)
+
+
+def test_an_uncounted_streak_fails_rather_than_passes() -> None:
+    """None is not zero. It means the outcomes could not be counted."""
+    engine = RiskEngine(RiskLimits(require_stop_loss=False, max_consecutive_losses=3))
+    verdict = engine.evaluate(proposal(), _state(consecutive_losses=None), now=T0)
+    assert _fails(verdict, LimitKind.max_consecutive_losses)
+
+
+def test_a_correlation_limit_with_no_correlation_data_refuses() -> None:
+    """The one of the three with no data source, and it fails closed.
+
+    A correlation needs a common window across two or more instruments and
+    this repository has 705 bars across 2 symbols. An unmeasurable limit that
+    APPROVED would be worse than no limit, because it reads as one that was
+    checked.
+    """
+    engine = RiskEngine(
+        RiskLimits(require_stop_loss=False, max_correlated_exposure=Decimal("5000"))
+    )
+    verdict = engine.evaluate(proposal(), _state(correlated_exposure=None), now=T0)
+    assert _fails(verdict, LimitKind.max_correlated_exposure)
+    detail = next(c.detail for c in verdict.checks if c.limit is LimitKind.max_correlated_exposure)
+    assert "two or more instruments" in detail
+
+
+def test_correlated_exposure_within_the_limit_passes() -> None:
+    engine = RiskEngine(
+        RiskLimits(require_stop_loss=False, max_correlated_exposure=Decimal("5000"))
+    )
+    verdict = engine.evaluate(proposal(), _state(correlated_exposure=Decimal("4999")), now=T0)
+    assert not _fails(verdict, LimitKind.max_correlated_exposure)
+
+
+def test_none_of_the_three_fires_when_it_is_not_configured() -> None:
+    """All three are opt-in and must not refuse anything when unset.
+
+    Note what this does NOT assert. The engine records a check for every
+    limit kind whether or not it is configured -- `max_daily_loss` is in
+    the list too, unconfigured -- so 'the check is absent' would be the
+    wrong property and asserting it would only prove the assertion was
+    written without running it. What matters is that an unset limit
+    PASSES rather than refuses.
+    """
+    engine = RiskEngine(RiskLimits(require_stop_loss=False))
+    verdict = engine.evaluate(proposal(), _state(), now=T0)
+    for kind in (
+        LimitKind.max_weekly_loss,
+        LimitKind.max_consecutive_losses,
+        LimitKind.max_correlated_exposure,
+    ):
+        assert not _fails(verdict, kind), kind
+    assert verdict.decision is RiskDecision.approve
 
 
 # ========================================================== THE SERVICE
