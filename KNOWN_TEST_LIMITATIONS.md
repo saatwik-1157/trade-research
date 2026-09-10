@@ -48,10 +48,42 @@ any route can write a dangling reference, pass every test, and fail on the real
 database — which is exactly what `POST /v1/orders` did, through 174 API tests.
 
 `tests/test_orders_foreign_keys.py` turns the pragma on and covers
-`orders.signal_id`. **Every other foreign key in the schema is still
-unenforced in the rest of the suite.** Turning the pragma on globally is the
-real fix; it is a wider change than one column and would likely surface more of
-these, which is the argument for doing it.
+`orders.signal_id`. **Every other foreign key is still unenforced in the
+SQLite suite**, and that has not changed.
+
+### Narrowed at P2/P4 — a PostgreSQL job now enforces all of them in CI
+
+`tests/test_postgres_schema.py` runs against a real `postgres:16` service
+and reports **105 foreign key constraints enforced**, against the 1 the
+SQLite suite covers. It also closes a second gap nobody had named: the 27
+Alembic revisions that build production's schema were **exercised by
+nothing**, because every test calls `Base.metadata.create_all` instead. So
+`create_all` and `upgrade head` were two independent descriptions of one
+schema that had never been compared, and a model could drift from its
+migration indefinitely while the suite stayed green.
+
+Five checks, all passing as of 2026-09-10:
+
+- the migrations apply to an empty PostgreSQL from nothing to head
+- the stamped head matches the revision the repository declares
+- **the migrations and the models describe the same schema** — tables and
+  columns, compared in both directions, because a table only in the models
+  never gets created and a table only in the migrations is dead weight
+- PostgreSQL refuses a dangling `orders.signal_id`, which SQLite accepts
+- the schema really does carry foreign keys, counted rather than assumed
+
+**What this does NOT do.** It does not re-run the suite against PostgreSQL.
+49 test files hardcode a `sqlite+aiosqlite://` URL, so pointing the whole
+suite at PostgreSQL is a wider change than this and is still the real fix.
+What the job does is run the checks SQLite *cannot* do, so the untested
+half of the schema story is no longer untested.
+
+These tests are not vacuous, and that was established by watching them
+fail: they failed 5 of 5 on the first run, then 1 of 5, then 0 of 5, for
+three separate real reasons — alembic's `env.py` calls `asyncio.run()` and
+cannot be invoked from inside an async test, and it overrides
+`sqlalchemy.url` from `get_settings()`, so the first version silently
+migrated a different database and reported that nothing had happened.
 
 ## 2. ~~True request concurrency is not tested~~ — RESOLVED at L43
 

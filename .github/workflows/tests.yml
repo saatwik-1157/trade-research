@@ -88,6 +88,69 @@ jobs:
       - run: mypy
       - run: pytest -q
 
+  # ------------------------------------------------------------ PostgreSQL
+  # The suite runs on in-memory SQLite, which has two blind spots that have
+  # both drawn blood: foreign keys are OFF unless a pragma is issued per
+  # connection, and the 27 Alembic revisions that build production's schema
+  # are exercised by NOTHING -- every test calls create_all instead. So a
+  # model can drift from its migration indefinitely while the suite stays
+  # green, and a route can write a dangling reference and pass 174 API tests
+  # before failing on the real database, which is exactly what POST /v1/orders
+  # did on 2026-09-07.
+  #
+  # This job is small on purpose. It does not re-run the suite against
+  # PostgreSQL -- 49 test files hardcode a SQLite URL, and changing them all
+  # is a wider job than this. It runs the checks SQLite CANNOT do.
+  postgres:
+    runs-on: ubuntu-latest
+    name: postgres (migrations, schema parity, foreign keys)
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tr
+          POSTGRES_PASSWORD: tr
+          POSTGRES_DB: tr_ci
+        ports:
+          - 5432:5432
+        # Without the health check the first step can beat the server to
+        # ready and fail on connection refused rather than on anything real.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+
+      - name: Migrations, schema parity and referential integrity
+        env:
+          POSTGRES_TEST_URL: postgresql+asyncpg://tr:tr@127.0.0.1:5432/tr_ci
+        run: python -m pytest tests/test_postgres_schema.py -v
+
+      # A skip here would be silent success: the tests skip when
+      # POSTGRES_TEST_URL is unset, so a broken env would turn this whole
+      # job green without checking anything.
+      - name: Verify the checks actually ran
+        env:
+          POSTGRES_TEST_URL: postgresql+asyncpg://tr:tr@127.0.0.1:5432/tr_ci
+        run: |
+          python -m pytest tests/test_postgres_schema.py -q 2>&1 | tee out.txt
+          grep -qE '[0-9]+ passed' out.txt || { echo 'nothing passed'; exit 1; }
+          grep -q 'skipped' out.txt && { echo 'tests skipped; the URL did not take'; exit 1; }
+          echo 'postgres checks ran'
+
   # Platform frontend (L02+).
   frontend:
     runs-on: ubuntu-latest
