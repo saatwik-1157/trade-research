@@ -28,3 +28,10 @@ tools/*.egg-info/
 # a record names the account, the balance and the log path. The directory is
 # created on demand by tools/crash_report.py, so nothing needs to be tracked.
 CRASH_REPORTS/
+
+# Session logs and the detached launcher capture. The *.log rule above
+# already covered the session logs; the directory also holds the launch
+# capture, which is where a detached start writes a traceback it could not
+# otherwise report. Same reason as data/ and reports/: a session log names
+# the account and its balance.
+logs/
