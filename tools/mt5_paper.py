@@ -74,6 +74,17 @@ TRADE_LOG = os.path.join(
 )
 
 
+class VenueUnreadable(RuntimeError):
+    """The terminal did not answer a read. NOT the same as an empty result.
+
+    The MetaTrader5 package returns `None` from a failed call and an empty
+    tuple from a successful one that found nothing, and `x or []` collapses
+    the two. Every risk limit in this file is computed from a read, so a
+    collapsed disconnect is a limit evaluated against no data -- which passes.
+    Raised so that a caller has to decide, rather than inheriting a zero.
+    """
+
+
 class RefuseToTrade(RuntimeError):
     """Raised when the safety fence blocks execution."""
 
@@ -189,7 +200,12 @@ def _log(record: dict) -> None:
 
 
 def own_positions(mt5, magic: int = MAGIC):
-    return [p for p in (mt5.positions_get() or []) if p.magic == magic]
+    got = mt5.positions_get()
+    if got is None:
+        # An uncountable account is UNKNOWN, not flat. Reporting zero here
+        # would read as "nothing is open" and re-open the full book.
+        raise VenueUnreadable("positions_get returned None; the open book is unknown")
+    return [p for p in got if p.magic == magic]
 
 
 
@@ -252,7 +268,14 @@ def realised_today(mt5) -> float:
     --max-daily-loss silently stops being a limit at all.
     """
     start = server_day_start(mt5)
-    deals = mt5.history_deals_get(start, history_end(mt5)) or []
+    deals = mt5.history_deals_get(start, history_end(mt5))
+    if deals is None:
+        # The docstring above has always said what happens when this goes
+        # wrong: "returns 0.0 rather than an error, so --max-daily-loss
+        # silently stops being a limit at all". Observed 2026-09-10, when a
+        # partial disconnect left positions_get answering and account_info
+        # returning None for 23 consecutive passes. Fail closed.
+        raise VenueUnreadable("history_deals_get returned None; today's P&L is unknown")
     return sum(d.profit + d.commission + d.swap for d in deals if d.magic == MAGIC)
 
 

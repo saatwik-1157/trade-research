@@ -232,6 +232,7 @@ def run(mt5, args) -> dict:
         time.monotonic() + seconds_until(args.flat_by))
     harvested, opened, passes, flushed = 0, 0, 0, 0
     halted = False
+    blind = 0  # consecutive passes whose venue reads did not answer
     # WHICH halt, not just that there was one. A risk halt and a dead
     # terminal call for opposite responses from anything supervising this
     # process: one must not be restarted, the other exists to be. Reported
@@ -241,7 +242,18 @@ def run(mt5, args) -> dict:
     # session that has hours left to run; one that is genuinely gone should not
     # be retried all night.
     misses = 0
-    start_balance = mt5.account_info().balance
+    # The third place `account_info()` was dereferenced without checking it.
+    # A terminal that is already down when the session starts produced a raw
+    # AttributeError here -- a stack trace instead of a reason, before a
+    # single pass had run. Refuse to start rather than start blind: every
+    # limit below is measured against this opening balance.
+    opening = mt5.account_info()
+    if opening is None:
+        raise mt5_paper.VenueUnreadable(
+            "account_info() returned None at startup; the terminal is not "
+            "answering, so the session has no balance to measure against"
+        )
+    start_balance = opening.balance
 
     while time.monotonic() < deadline:
         passes += 1
@@ -310,6 +322,24 @@ def run(mt5, args) -> dict:
         if not args.harvest_only and not winding_down:
             try:
                 res = mt5_paper.cycle(mt5, args)
+            except mt5_paper.VenueUnreadable as exc:
+                # NOT an entry failure. cycle() computes the daily-loss limit
+                # and the position cap from reads that did not answer, so
+                # continuing would run both limits against no data. Counted
+                # toward the same budget as a failed harvest so the tested
+                # give-up path below fires.
+                blind += 1
+                print(f"  [{stamp}] VENUE UNREADABLE ({blind}/{MAX_CONSECUTIVE_MISSES}): "
+                      f"{exc}", flush=True)
+                if blind >= MAX_CONSECUTIVE_MISSES:
+                    print(f"  [{stamp}] giving up after {blind} consecutive unreadable "
+                          "passes; the terminal is not answering and a flush would "
+                          "fail too", flush=True)
+                    halted = True
+                    halt_kind = "terminal"
+                    break
+                time.sleep(args.interval)
+                continue
             except Exception as exc:  # noqa: BLE001 - an entry that failed is
                 # not a reason to stop MANAGING what is already open. Skip the
                 # entry, keep harvesting, keep the deadline.
@@ -332,14 +362,45 @@ def run(mt5, args) -> dict:
             for a in sent:
                 print(f"  [{stamp}] OPEN    {a['symbol']:<8} {a['side']:<5} @ {a.get('price')}")
 
-        try:
-            bal = mt5.account_info()
-            print(f"  [{stamp}] pass {passes}: harvested={harvested} opened={opened} "
-                  f"balance={bal.balance:,.2f} equity={bal.equity:,.2f} "
-                  f"open={len(mt5_paper.own_positions(mt5))}{why}", flush=True)
-        except Exception as exc:  # noqa: BLE001 - a line of log is not worth a session
-            print(f"  [{stamp}] pass {passes}: could not read the account "
-                  f"({type(exc).__name__}); the session continues", flush=True)
+        bal = mt5.account_info()
+        if bal is None:
+            # `account_info()` returns None when the terminal drops, and the
+            # old handler here caught the resulting AttributeError as though a
+            # log line had failed to format -- "the session continues".
+            # Observed 2026-09-10: 23 consecutive passes, harvesting nothing,
+            # opening nothing, halting nothing, with --max-daily-loss unable
+            # to evaluate. A disconnect is not a cosmetic failure.
+            blind += 1
+            print(f"  [{stamp}] pass {passes}: ACCOUNT UNREADABLE "
+                  f"({blind}/{MAX_CONSECUTIVE_MISSES}); account_info() returned None",
+                  flush=True)
+            if blind >= MAX_CONSECUTIVE_MISSES:
+                print(f"  [{stamp}] giving up after {blind} consecutive unreadable "
+                      "passes; the terminal is not answering and a flush would fail too",
+                      flush=True)
+                halted = True
+                halt_kind = "terminal"
+                break
+        else:
+            try:
+                print(f"  [{stamp}] pass {passes}: harvested={harvested} opened={opened} "
+                      f"balance={bal.balance:,.2f} equity={bal.equity:,.2f} "
+                      f"open={len(mt5_paper.own_positions(mt5))}{why}", flush=True)
+                blind = 0
+            except mt5_paper.VenueUnreadable as exc:
+                blind += 1
+                print(f"  [{stamp}] pass {passes}: ACCOUNT UNREADABLE "
+                      f"({blind}/{MAX_CONSECUTIVE_MISSES}); {exc}", flush=True)
+                if blind >= MAX_CONSECUTIVE_MISSES:
+                    print(f"  [{stamp}] giving up after {blind} consecutive unreadable "
+                          "passes; the terminal is not answering and a flush would "
+                          "fail too", flush=True)
+                    halted = True
+                    halt_kind = "terminal"
+                    break
+            except Exception as exc:  # noqa: BLE001 - a formatting fault is not a session
+                print(f"  [{stamp}] pass {passes}: could not format the status line "
+                      f"({type(exc).__name__}); the session continues", flush=True)
 
         if time.monotonic() + args.interval >= deadline:
             break

@@ -1415,6 +1415,102 @@ def test_a_terminal_that_never_answers_is_given_up_on():
           take_profit.MAX_CONSECUTIVE_MISSES, 10)
 
 
+def test_a_partial_disconnect_is_not_a_cosmetic_failure():
+    """The 2026-09-10 shape: positions_get answers, account_info does not.
+
+    This is the case the old handler could not see. `account_info()` returns
+    None on a dropped terminal, `bal.balance` on None raises AttributeError,
+    and that was caught as though a log line had failed to format -- printing
+    "the session continues" and doing exactly that, 23 times, harvesting
+    nothing and with --max-daily-loss unable to evaluate.
+
+    It also needs its OWN budget. `misses` is reset by the next good harvest,
+    and here every harvest succeeds, so a shared counter would be spent and
+    refilled forever and the session would never give up.
+    """
+    print()
+    print("A partial disconnect stops the session rather than blinding it")
+
+    class HalfDead(HarvestMT5):
+        """Answers the position query. Stops answering the account query.
+
+        Readable at startup and None afterwards, which is the real sequence:
+        the session began fine at 09:05 and the terminal dropped at 10:25.
+        A mock that is dead from the first call would be stopped by the
+        startup guard and would never exercise the loop.
+        """
+
+        def __init__(self, *a, **kw):
+            super().__init__(*a, **kw)
+            self._reads = 0
+
+        def account_info(self):
+            self._reads += 1
+            if self._reads == 1:
+                return super().account_info()
+            return None
+
+    c = HalfDead([])
+    args = types.SimpleNamespace(
+        minutes=5.0, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by="06:00", harvest_only=True, live=True)
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        out = take_profit.run(c, args)
+    finally:
+        mt5_paper._log = real_log
+
+    check("a blind session halts instead of spinning", out["halted"], True)
+    check("and names the terminal as the reason", out["halt_kind"], "terminal")
+    # The budget is spent on consecutive blind passes, not reset by the
+    # harvest that keeps succeeding beside them.
+    check("after the stated number of unreadable passes",
+          out["passes"] <= take_profit.MAX_CONSECUTIVE_MISSES, True)
+
+
+def test_an_unreadable_venue_never_reports_a_limit_as_satisfied():
+    """A risk limit computed from a read that did not answer is not a limit.
+
+    `history_deals_get` and `positions_get` both return None on a dropped
+    terminal, and `x or []` turned that into an empty result -- a daily P&L of
+    0.00 that passes any loss limit, and an open book of 0 that invites the
+    full position count to be re-opened.
+    """
+    print()
+    print("An unreadable venue fails closed, not open")
+
+    class NoHistory:
+        def positions_get(self):
+            return None
+
+        def history_deals_get(self, *a):
+            return None
+
+        def symbol_info_tick(self, s):
+            return None
+
+    v = NoHistory()
+
+    raised = None
+    try:
+        mt5_paper.own_positions(v)
+    except mt5_paper.VenueUnreadable as exc:
+        raised = type(exc).__name__
+    check("an unreadable open book raises rather than reading empty",
+          raised, "VenueUnreadable")
+
+    # An EMPTY tuple is a real answer and must still work: the distinction
+    # between "nothing is open" and "we could not ask" is the whole point.
+    class Empty(NoHistory):
+        def positions_get(self):
+            return ()
+
+    check("but a genuinely empty book is still empty",
+          mt5_paper.own_positions(Empty()), [])
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -1444,6 +1540,8 @@ def main():
     test_unrepairable_bracket_is_closed_not_held()
     test_lot_is_sized_off_the_stop_distance()
     test_rounding_never_risks_more_than_the_budget()
+    test_a_partial_disconnect_is_not_a_cosmetic_failure()
+    test_an_unreadable_venue_never_reports_a_limit_as_satisfied()
     test_min_lot_floor_is_reported_not_hidden()
     test_missing_tick_value_refuses_to_size()
     test_place_sends_the_derived_volume()
