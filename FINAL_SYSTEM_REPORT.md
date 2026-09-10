@@ -41,7 +41,7 @@ frontend; PostgreSQL; Docker Compose; MetaTrader5 via its Python package.
 | 4 | **Unguarded startup account read** — a terminal already down produced a stack trace instead of a reason. Found *by writing the test* for #2. | HIGH | **fixed** |
 | 5 | **8/8 sessions die before their deadline**, so the `--flat-by` flush — the one mechanism bounding the losing tail — has never run. | CRITICAL | **mitigated** — see P1b below |
 | 6 | Foreign keys unenforced across the suite (SQLite pragma off; only `orders.signal_id` covered). | HIGH | **open** — documented in `KNOWN_TEST_LIMITATIONS.md` |
-| 7 | `webhooks/gateway.py` docstring claims risk/sizing/OMS "are not built"; all three exist. | MEDIUM | **open** |
+| 7 | `webhooks/gateway.py` docstring claimed risk/sizing/OMS "are not built"; all three exist, and it also imports `execution.routing` now. | MEDIUM | **fixed** |
 | 8 | Demo MT5 login number in 14 tracked documents. | LOW | **open** |
 | 9 | `OrderStatus` defined twice under one name — `brokers/base.py` (3 venue values) and `oms/state.py` (13 platform values). Different layers, genuinely different types. | LOW | **documented, not changed** |
 

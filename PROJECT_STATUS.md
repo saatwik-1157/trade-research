@@ -61,8 +61,6 @@ Nothing. P1b complete; awaiting one clean overnight run as evidence.
 
 ## High Issues
 
-- `webhooks/gateway.py` docstring claims risk/sizing/OMS "are not built" — all
-  three exist. Misleads anyone auditing the gate.
 - `SIGNAL_CREATED` has no consumer; `ExecutionWorker` polls instead.
 - RiskEngine lacks weekly-loss, consecutive-loss and correlation vetoes.
 - No watchdog across workers; no crash journal; no restart-loop limiting.
