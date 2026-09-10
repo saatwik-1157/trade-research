@@ -12,11 +12,23 @@ Signal is written and committed **before** the event is published, so an event
 never refers to a row that does not exist -- and a publish that fails leaves a
 durable signal rather than losing it.
 
-**This gateway cannot trade.** It writes a `Signal` with status `new` and
-publishes `SIGNAL_CREATED`. Nothing consumes that event today: the strategy
-engine (L12), the risk engine (L17), sizing (L18) and the OMS (L19) are not
-built, and a test asserts no module here imports any of them. A TradingView
-alert reaching a broker would need every one of those, in order.
+**This gateway cannot trade**, and the reason is worth stating precisely
+because it has changed. It writes a `Signal` with status `new` and publishes
+`SIGNAL_CREATED`.
+
+It used to be true that nothing downstream existed. That is no longer the
+case: the strategy engine, `app.risk`, `app.sizing` and `app.oms` are all
+built, and `app.execution.pipeline` runs a signal through every one of them
+in order. What still holds is that **none of it is reachable from here**.
+This module imports no risk engine, no sizing calculator, no order manager
+and no broker adapter; the only `app.execution` import is `routing`, which
+decides which account a signal belongs to and cannot send anything anywhere.
+
+The consumer is `ExecutionWorker`, which claims `new` signals from the table
+on its own supervised loop. So a row written here reaches a venue only by
+being picked up in a separate process, through the pipeline, past the
+RiskEngine's veto. The gap between "recorded" and "traded" is a poll, not
+a call.
 
 The response says what the *webhook layer* did -- accepted, duplicate,
 rejected, unauthorized -- and never claims a fill, a position or a trade. A
