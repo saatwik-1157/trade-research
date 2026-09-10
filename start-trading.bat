@@ -94,7 +94,13 @@ if defined TR_DETACH (
   echo Starting DETACHED - this window can be closed safely.
   echo Python: %TR_PYTHONW%
   echo.
-  start "trade-research session" /B "%TR_PYTHONW%" tools\run_overnight.py %TR_ARGS%
+  REM Redirected, and NOT to NUL. pythonw.exe launched with no valid stdout
+  REM handle dies on its first print, and because it has no console the
+  REM traceback goes nowhere -- the session log gets its header line and
+  REM then nothing. Measured 2026-09-10: a detached launch exited inside 8
+  REM seconds and left a one-line log. Giving it a file fixes the handle and
+  REM catches any startup failure that happens before logging is up.
+  start "trade-research session" /B "%TR_PYTHONW%" tools\run_overnight.py %TR_ARGS% > "logs\detach-launch.log" 2>&1
   echo Session launched; it is not tied to this window.
   echo     log:    logs\overnight-*.log
   echo     record: CRASH_REPORTS\session-*.json
