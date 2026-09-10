@@ -19,3 +19,7 @@ venv/
 # the suite again.
 backend/.pytest_*.txt
 backend/.pytest_*.err
+
+# Build artifacts from `pip install -e ./tools` / `pip wheel ./tools`.
+tools/build/
+tools/*.egg-info/

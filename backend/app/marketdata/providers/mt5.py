@@ -40,7 +40,9 @@ import logging
 import sys
 from datetime import UTC, datetime
 from decimal import Decimal
+from types import ModuleType
 
+from app.core import toolkit
 from app.marketdata.base import (
     HistoricalProvider,
     ProviderStatus,
@@ -57,22 +59,15 @@ log = logging.getLogger("app.marketdata.mt5")
 SUPPORTED: tuple[Timeframe, ...] = (Timeframe.H1, Timeframe.H4, Timeframe.D1)
 
 
-def _toolkit():  # noqa: ANN202 - the toolkit module, imported lazily
-    """Import `tools/rule_backtest.py` without moving it.
+def _toolkit() -> ModuleType:
+    """Import `rule_backtest` without moving it.
 
-    The toolkit is a sibling of the backend, not a package it depends on. It
-    is added to `sys.path` here rather than copied, so every command in
-    README.md and NIGHTLY.md keeps working against the same source.
+    The toolkit is a sibling of the backend, not a package it depends on --
+    unless `pip install -e ./tools` has made it one, which `app.core.toolkit`
+    prefers when present. Either way the source is the same file, so every
+    command in README.md and NIGHTLY.md keeps working against it.
     """
-    import os
-
-    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    tools = os.path.join(os.path.dirname(root), "tools")
-    if os.path.isdir(tools) and tools not in sys.path:
-        sys.path.insert(0, tools)
-    import rule_backtest
-
-    return rule_backtest
+    return toolkit.load("rule_backtest")
 
 
 class MT5MarketData(QuoteProvider, HistoricalProvider):
