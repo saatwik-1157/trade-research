@@ -32,16 +32,16 @@ from __future__ import annotations
 
 import logging
 import math
-import os
-import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
+from types import ModuleType
 from typing import Any
 
 from app.ai.decision import SignalContext
 from app.analytics import metrics as _metrics
 from app.backtest.config import ENGINE_VERSION, BacktestConfig, SizingMode
+from app.core import toolkit
 from app.marketdata.types import Bar
 from app.marketdata.validation import find_duplicates, find_gaps, inspect_series
 from app.sizing.calculator import SizingMethod, SizingRequest
@@ -61,14 +61,9 @@ class BacktestError(Exception):
     """The run could not be performed. Never reported as an empty result."""
 
 
-def _toolkit():  # noqa: ANN202
-    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    tools = os.path.join(root, "tools")
-    if os.path.isdir(tools) and tools not in sys.path:
-        sys.path.insert(0, tools)
-    import rule_backtest
-
-    return rule_backtest
+def _toolkit() -> ModuleType:
+    """The simulator, from an installed tr_toolkit or the sibling tools/."""
+    return toolkit.load("rule_backtest")
 
 
 @dataclass(frozen=True)

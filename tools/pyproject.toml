@@ -1,0 +1,62 @@
+# The research toolkit as an installable package.
+#
+#     pip install -e ./tools
+#
+# Editable on purpose. The tools are edited constantly and are also commands
+# run straight from this directory, so a copy in site-packages would be a
+# second version of the same file -- the exact duplication the backend's four
+# hand-rolled `sys.path` inserts were avoiding by reaching into the source.
+# An editable install keeps one copy and adds one import name.
+#
+# `package-dir` maps the package onto this directory rather than a src/
+# subdirectory. The alternative was moving 27 scripts into tools/tr_toolkit/,
+# which would have broken every documented command -- `python tools/snapshot.py`,
+# start-trading.bat's `tools\run_overnight.py`, and the seven CI gates that
+# invoke `python tests/test_*.py` against these paths.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tr-toolkit"
+version = "0.1.0"
+description = "Research toolkit: indicators, backtests, rule search and the MT5 harness. Numbers are computed, never generated."
+readme = "README.md"
+# The SPDX expression rather than `file = "../LICENSE"`: a path outside this
+# directory is refused at metadata generation, and the repository LICENSE is
+# one level up. The text stays where it is; this names it.
+license = "MIT"
+# PEP 604 unions (str | None) are used throughout, and CI runs 3.10, 3.12
+# and 3.14. The floor here is the floor that is actually tested.
+requires-python = ">=3.10"
+
+# Mirrors the root requirements.txt. Kept in step by test_toolkit_package.py,
+# because two dependency lists that drift are worse than one that is wrong.
+dependencies = [
+    "yfinance>=1.6.0",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+# Windows-only, and needed only by mt5_paper.py, mt5_account.py, take_profit.py
+# and run_overnight.py. An extra rather than a dependency so that installing
+# the toolkit on Linux or macOS does not fail.
+#
+# psutil is in here with MetaTrader5 rather than on its own, and the reason is
+# in requirements.txt: run_overnight.py's refusal to start a second
+# order-sending session on one account is a psutil process scan, and without
+# psutil it prints one line and PROCEEDS UNGUARDED. Anyone installing the MT5
+# extra is installing the thing that sends orders.
+mt5 = ["MetaTrader5", "psutil"]
+# Needed only by crypto_market.py and `rule_search.py --source crypto`.
+crypto = ["ccxt"]
+
+[tool.setuptools]
+packages = ["tr_toolkit"]
+package-dir = { tr_toolkit = "." }
+
+[tool.setuptools.package-data]
+tr_toolkit = ["universe.txt"]
