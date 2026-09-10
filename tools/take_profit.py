@@ -42,6 +42,7 @@ try:
 except (AttributeError, OSError):
     pass
 
+import kill_switch
 import mt5_paper
 from mt5_paper import RefuseToTrade
 
@@ -58,6 +59,10 @@ MAX_CONSECUTIVE_MISSES = 10
 #: Failures are swallowed at the call site: a crash journal that can end a
 #: session is worse than no crash journal.
 PASS_HOOK = None
+
+#: The last completed session's summary, including the post-flush
+#: `still_open`. Read by run_overnight.py when it closes the crash record.
+LAST_SUMMARY = None
 
 #: Set by a console control handler to ask the loop to wind down at the next
 #: opportunity. Checked once per pass. Polled rather than acted on from the
@@ -439,6 +444,17 @@ def run(mt5, args) -> dict:
             except Exception:  # noqa: BLE001 - a journal never ends a session
                 pass
 
+        # The operator's stop. Checked every pass rather than once at start,
+        # because the point is to reach a session that is ALREADY running --
+        # and, when detached, one with no console to signal. Breaking here
+        # runs the flush below; killing the process would not.
+        if kill_switch.engaged():
+            print(f"  [{stamp}] KILL SWITCH: {kill_switch.reason()}", flush=True)
+            print(f"  [{stamp}] winding down; the flush below still runs",
+                  flush=True)
+            halt_kind = "kill_switch"
+            break
+
         if STOP_REQUESTED:
             # A console close or Ctrl-C. Break to the flush below rather than
             # exiting here: the whole point is that the wind-down still runs.
@@ -570,6 +586,12 @@ def main() -> int:
                 print("  holding the machine awake until the session ends "
                       "(the display may still sleep)\n")
             out = run(mt5, args)
+            # The heartbeat's last state is the last PASS, taken before the
+            # flush. A completed session whose record still says 7 open is
+            # the confusion the journal exists to prevent, so the wrapper
+            # reads the post-flush summary from here.
+            global LAST_SUMMARY
+            LAST_SUMMARY = out
     finally:
         mt5.shutdown()
 

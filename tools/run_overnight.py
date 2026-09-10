@@ -598,8 +598,20 @@ def main() -> int:
         sys.argv = ["take_profit.py"] + argv
         code = take_profit.main()
         if not console_guard.stopping():
+            # The post-flush state, not the last heartbeat. A record that
+            # closed `completed` while still reporting the positions the
+            # final pass saw would read as an abandoned tail.
+            done = getattr(take_profit, "LAST_SUMMARY", None) or {}
             crash_report.finish(
-                session_id, status="completed", reason=f"exit code {code}"
+                session_id, status="completed", reason=f"exit code {code}",
+                state={
+                    "positions_open": done.get("still_open"),
+                    "flushed": done.get("flushed"),
+                    "passes": done.get("passes"),
+                    "harvested": done.get("harvested"),
+                    "opened": done.get("opened"),
+                    "realised": done.get("realised"),
+                } if done else None,
             )
         return code
     except BaseException as exc:
