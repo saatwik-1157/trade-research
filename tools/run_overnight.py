@@ -550,8 +550,27 @@ def main() -> int:
     for record in crash_report.unfinished()[:3]:
         print("\n  PREVIOUS SESSION DID NOT FINISH:")
         print(f"    {crash_report.summarise(record)}")
+        # Whether the process is still alive changes what this means, and the
+        # banner used to say nothing about it: a session killed on Tuesday read
+        # exactly like one trading right now. It also never cleared, so it
+        # printed on every launch from then on -- and a warning that never
+        # clears stops being read, which is expensive when the next one is real.
+        alive = crash_report.process_alive(record)
+        if alive is True:
+            print(f"    Its process (pid {record.get('pid')}) is STILL RUNNING.")
+        elif alive is False:
+            print(f"    Its process (pid {record.get('pid')}) is gone; this is a "
+                  "notice about its tail, not a live session.")
+        else:
+            print(f"    Whether pid {record.get('pid')} is still running could "
+                  "not be determined.")
         print("  If positions are still open, close them first:")
-        print("      start-trading.bat --harvest-only\n")
+        print("      start-trading.bat --harvest-only")
+        if alive is not True:
+            print("  Once they are closed, clear this notice:")
+            print("      python tools/crash_report.py --resolve "
+                  f"{record.get('session_id')}")
+        print()
 
     if args.continuous:
         return run_continuous(args)

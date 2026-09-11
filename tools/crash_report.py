@@ -205,3 +205,97 @@ def summarise(record: dict[str, Any]) -> str:
         f"with positions_open={opened if opened is not None else 'UNKNOWN'} "
         f"({where})"
     )
+
+
+def process_alive(record: dict[str, Any]) -> bool | None:
+    """Is the process this record belongs to still running? None if unknowable.
+
+    A record reading `running` says only that nothing ever wrote an ending to
+    it. Whether the session is ALIVE is a different question, and the answer
+    changes what the operator should do: a live one must not be started
+    alongside, while a dead one is a notice about a tail that may still be
+    open. The banner said neither, so a record from a session killed days ago
+    read exactly like one still trading.
+
+    None rather than False when psutil is absent or the pid is missing.
+    An unknowable answer is not a negative one.
+    """
+    pid = record.get("pid")
+    if not isinstance(pid, int):
+        return None
+    try:
+        import psutil
+    except Exception:  # noqa: BLE001 - absent psutil is a gap, not a dead process
+        return None
+    try:
+        return psutil.pid_exists(pid)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def resolve(session_id: str, note: str = "") -> bool:
+    """Stamp a stuck `running` record `abandoned`. The operator's answer to it.
+
+    **Why this exists.** `unfinished()` is permanent. A session killed from
+    outside leaves `running` behind forever, so the warning it produces prints
+    on every launch from then on, long after its positions were closed. A
+    warning that never clears stops being read, and the one it will be
+    confused with is a real abandoned tail.
+
+    **Stamped, not deleted.** The record is the only evidence that session
+    existed, and `abandoned` is true where `running` is a lie about a process
+    that is gone. What it does not claim is that the tail was closed; it
+    records that a person said so, and when.
+
+    Refuses a record that is not `running`, so a finished session cannot be
+    rewritten by a typo in a session id.
+    """
+    path = _path(session_id)
+    payload = _read(path)
+    if not payload or payload.get("status") != "running":
+        return False
+    payload["status"] = "abandoned"
+    payload["resolved_at"] = datetime.now(timezone.utc).isoformat()
+    payload["resolved_note"] = note or "acknowledged by the operator"
+    return _write(path, payload)
+
+
+def main() -> int:
+    """List the stuck records, or resolve one by id."""
+    import argparse
+
+    ap = argparse.ArgumentParser(
+        description="Sessions that never wrote an ending, and how to clear them.")
+    ap.add_argument("--resolve", metavar="SESSION_ID", default=None,
+                    help="stamp that record `abandoned`; use once its positions "
+                         "are closed")
+    ap.add_argument("--note", default="", help="why, recorded beside it")
+    args = ap.parse_args()
+
+    if args.resolve:
+        if resolve(args.resolve, args.note):
+            print(f"  {args.resolve}: resolved")
+            return 0
+        print(f"  {args.resolve}: no record reading `running` under that id. "
+              "Nothing was changed.")
+        return 1
+
+    stuck = unfinished()
+    if not stuck:
+        print("  no unfinished sessions")
+        return 0
+    for record in stuck:
+        alive = process_alive(record)
+        state = {True: "STILL RUNNING", False: "process is gone",
+                 None: "liveness unknown"}[alive]
+        print(f"\n  {summarise(record)}")
+        print(f"    pid {record.get('pid')}: {state}")
+        if alive is not True:
+            print(f"    clear it with: python tools/crash_report.py "
+                  f"--resolve {record.get('session_id')}")
+    print()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
