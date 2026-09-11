@@ -87,28 +87,69 @@ set "TR_ARGS=%*"
 set "TR_DETACH="
 if not "%TR_ARGS%"=="%TR_ARGS:--detach=%" set "TR_DETACH=1"
 
-if defined TR_DETACH (
-  call set "TR_ARGS=%%TR_ARGS:--detach=%%"
-  call set "TR_PYTHONW=%%TR_PYTHON:python.exe=pythonw.exe%%"
-  if not exist "%TR_PYTHONW%" set "TR_PYTHONW=%TR_PYTHON%"
-  echo Starting DETACHED - this window can be closed safely.
-  echo Python: %TR_PYTHONW%
-  echo.
-  REM Redirected, and NOT to NUL. pythonw.exe launched with no valid stdout
-  REM handle dies on its first print, and because it has no console the
-  REM traceback goes nowhere -- the session log gets its header line and
-  REM then nothing. Measured 2026-09-10: a detached launch exited inside 8
-  REM seconds and left a one-line log. Giving it a file fixes the handle and
-  REM catches any startup failure that happens before logging is up.
-  start "trade-research session" /B "%TR_PYTHONW%" tools\run_overnight.py %TR_ARGS% > "logs\detach-launch.log" 2>&1
-  echo Session launched; it is not tied to this window.
-  echo     log:    logs\overnight-*.log
-  echo     record: CRASH_REPORTS\session-*.json
-  echo     stop:   taskkill /IM pythonw.exe
-  echo.
-  pause
-  exit /b 0
-)
+if not defined TR_DETACH goto :attached
+
+REM ------------------------------------------------------------ detached run
+REM FLAT, not inside `if defined TR_DETACH ( ... )`, and that is the fix rather
+REM than a matter of style.
+REM
+REM cmd expands %VAR% in a parenthesised block when it PARSES the block, before
+REM a single line inside it runs. So `call set "TR_PYTHONW=..."` set the
+REM variable at runtime while the `start` two lines below had already been
+REM expanded with the value it held at parse time: nothing. `start` was handed
+REM an EMPTY program name, launched no process, and the script went on to print
+REM "Session launched; it is not tied to this window" and exit 0.
+REM
+REM Measured 2026-09-11, the first time this path was used after it was
+REM written: no pythonw process, an empty detach-launch.log, no session log and
+REM no CRASH_REPORTS record. `setlocal enabledelayedexpansion` with !VAR! would
+REM also fix it; a goto has no second expansion mode to forget about.
+call set "TR_ARGS=%%TR_ARGS:--detach=%%"
+call set "TR_PYTHONW=%%TR_PYTHON:python.exe=pythonw.exe%%"
+if not exist "%TR_PYTHONW%" set "TR_PYTHONW=%TR_PYTHON%"
+for %%I in ("%TR_PYTHONW%") do set "TR_IMAGE=%%~nxI"
+
+echo Starting DETACHED - this window can be closed safely.
+echo Python: %TR_PYTHONW%
+echo.
+REM Redirected, and NOT to NUL. pythonw.exe launched with no valid stdout
+REM handle dies on its first print, and because it has no console the
+REM traceback goes nowhere -- the session log gets its header line and
+REM then nothing. Measured 2026-09-10: a detached launch exited inside 8
+REM seconds and left a one-line log. Giving it a file fixes the handle and
+REM catches any startup failure that happens before logging is up.
+start "trade-research session" /B "%TR_PYTHONW%" tools\run_overnight.py %TR_ARGS% > "logs\detach-launch.log" 2>&1
+
+REM PROVE it started before saying so. The bug above printed a success line
+REM over a launch that started nothing, which is the same failure as a session
+REM log that gets its header and then stops: a report of success is not
+REM evidence of one. Six seconds is past run_overnight's own preflight, so a
+REM process still alive here has got as far as its first pass.
+timeout /t 6 /nobreak >nul
+tasklist /FI "IMAGENAME eq %TR_IMAGE%" 2>nul | find /I "%TR_IMAGE%" >nul
+if errorlevel 1 goto :detach_failed
+
+echo Session launched; it is not tied to this window.
+echo     log:    logs\overnight-*.log
+echo     record: CRASH_REPORTS\session-*.json
+echo     stop:   taskkill /IM %TR_IMAGE%
+echo.
+pause
+exit /b 0
+
+:detach_failed
+echo.
+echo   THE SESSION DID NOT START. No %TR_IMAGE% is running, and no order was
+echo   sent. Nothing is holding a position and nothing will flush at 06:00.
+echo.
+echo   Whatever the launch managed to print is in logs\detach-launch.log:
+echo.
+type "logs\detach-launch.log"
+echo.
+pause
+exit /b 1
+
+:attached
 
 echo Closing this window asks the session to wind down rather than killing
 echo it outright. Use --detach to run with no console at all.
