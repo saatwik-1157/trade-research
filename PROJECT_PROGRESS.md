@@ -5489,17 +5489,74 @@ refactor across 45 call sites, not a rename, so both now carry a comment
 pointing at the other rather than being merged carelessly at the end of a long
 session.
 
+## 2026-09-11 -- the night a session finished
+
+The harness had never once reached its own deadline. Eight of eight runs died
+early, which meant the `--flat-by` flush -- the single mechanism that bounds a
+losing tail overnight -- had never executed outside a test. P1b built the crash
+journal, the console guard and `--detach` to make finishing possible; it could
+not prove that finishing happened.
+
+It happened. Session `20260910-224639` started at 22:46 and ran 433 minutes and
+1,298 passes. At 05:59:24 the flush closed all six open positions by name, the
+process exited 0, and the watchdog wrote `the session ended and will NOT be
+restarted: the session finished normally` -- declining to spend a restart, which
+is the branch that matters, because a watchdog that relaunches a completed
+session is worse than no watchdog. `CRASH_REPORTS/session-20260910-224639.json`
+records `status: completed`, `flushed: 6`, `positions_open: 0`.
+
+The night's result: 21 opened, 12 harvested, realised -14.95 on a 100,000
+account. That is not an edge and is not claimed as one.
+
+**One session is evidence that the mechanism works, not a reliability rate.**
+The three artefacts that show it -- the journal record, the log tail, the
+watchdog line -- are what the next long run gets read against, rather than
+assuming the question is now settled.
+
+Two earlier records from the same evening are worth keeping beside it, because
+they are what the journal is for. `20260910-220313` died after 11ms with
+`AttributeError: 'NoneType' object has no attribute 'write'` -- the detached
+launch had no stdout, fixed in `0c0be45`. Without the journal that death would
+have been a log file that simply stopped.
+
+**The ledger was merged again**, on the same terms as before: the harness's own
+tag, and `--exclude` for the nine platform trades that carry it. 247 new trades,
+2 excluded by tag, 9 by id; the ledger stands at **751**. The account split the
+last merge exposed is now printed rather than pooled -- `5055473926` holds 499
+trades at -30.39 from 09-04 to 09-11, and the older 252 at -22.37 remain
+`unrecorded`, because that login is still not knowable from here.
+
+The R-multiple over 741 trades is **-0.014R, t = -0.92**, by date -1.2 and by
+symbol -1.77. 2,599 more trades would be needed to reach a pooled t of 1.96 at
+this effect size. Every read of this sample has said the same thing and this one
+does not differ.
+
 ## Next
 
-**Build the ablation harness.** All three audits reached it independently: it
-is absent (`ablation` matches zero files), unblocked (it needs only
-`app/validation/economics.py`, `app/datasets/splits.py` and
-`app/research/selection.py`, all present), and it answers a question this
-repository has never asked -- do the AI seat, the regime model and the anomaly
-detector improve out-of-sample results at all? Given six searches across six
-universes with nothing clearing its null, the prior is not favourable, which is
-the argument for measuring it. A null result there would apply to all twelve of
-L76's unbuilt engines.
+**P2 -- fence the harness path.** This displaces the ablation item below, and
+the reason is the one the audit gave: `tools/take_profit.py` ->
+`tools/mt5_paper.py` reaches a broker through four `order_send` sites
+(`mt5_paper.py:485, 526, 540, 644`) while importing nothing from `app/` -- no
+RiskEngine, no OMS, no kill switch, no journal. It is still the only path that
+has ever traded this account, so the weekly-loss, consecutive-loss and
+correlation vetoes added at P4 did not see one of last night's 21 trades. Now
+that the harness can finish a night, the thing it finishes outside of is the
+next question.
+
+~~**Build the ablation harness.**~~ **Built, and run once.**
+`app/validation/ablation.py` with `backend/tests/test_ablation.py`, and
+`reports/ablation_features.json` holds its first result: 8 feature components,
+baseline expectancy +6.04 points clearing its null at a date-clustered t of
+3.00, 2 of 8 components clearing 1.96 against 0.2 expected by chance --
+`ABOVE_CHANCE_NOT_SIGNIFICANT`, since searching 8 candidates raises the bar any
+one must clear to 2.734 and neither `rsi_14` nor `hour_utc` reaches it.
+
+**What it has not yet been pointed at is the question it was written for.**
+The docstring names the AI seat, the regime model and the anomaly detector; the
+one report on file ablates features instead, and nothing outside the module and
+its tests imports it. Running it over the three engines is a separate, small
+job, and its null result -- if that is what it returns -- would still apply to
+all twelve of L76's unbuilt engines.
 
 Then L74 phases 1-2: provenance and the eight-kind taxonomy, followed by
 prediction/outcome tracking -- the only component whose value grows with
@@ -5509,7 +5566,9 @@ permanently lost.
 **The ledger decision was taken and the merge was run.** The operator chose the
 harness's own tag plus `--exclude` for the nine platform trades that carry it,
 so the sample now means exactly "every trade this harness opened". 252 trades
-were added, 2 excluded by tag and 9 by id, and the ledger stands at 504.
+were added, 2 excluded by tag and 9 by id, and the ledger stood at 504. *(The
+2026-09-11 merge repeated those exclusions and took it to 751; see the section
+above.)*
 
 That merge immediately exposed the account defect above: the 504 are **two
 different demo accounts** -- 252 at -22.37 from an earlier one and 252 at

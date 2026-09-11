@@ -1,6 +1,6 @@
 # FINAL_SYSTEM_REPORT.md
 
-2026-09-10 · every figure below was measured, not estimated.
+2026-09-10, amended 2026-09-11 · every figure below was measured, not estimated.
 
 ## SYSTEM STATUS: `DEMO_READY`
 
@@ -10,10 +10,12 @@ The **execution pipeline** is demonstrable end to end, right now, with one
 command: 11 of 11 scenarios reach their expected outcome, one fill and eight
 distinct refusals, exit code 0.
 
-The **overnight harness** — the only thing that has actually traded — still
-cannot finish a session. Eight of eight recent runs died before their
-deadline. Until one completes, "paper ready" would be a claim the evidence
-does not support.
+The **overnight harness** — the only thing that has actually traded — now
+finishes a session. Eight of eight runs had died before their deadline when
+this report was written; on the night of 2026-09-10 one ran the full 433
+minutes and flushed at 05:59:24 (§9 amendment). What still holds `PAPER_READY`
+back is finding #1 below, not stability: the path that traded is not the path
+the safety machinery sits on.
 
 ---
 
@@ -39,7 +41,7 @@ frontend; PostgreSQL; Docker Compose; MetaTrader5 via its Python package.
 | 2 | **A dropped MT5 terminal read as a formatting error.** `account_info()` returns `None`; `bal.balance` raised `AttributeError`; caught as "a line of log is not worth a session". Ran 23 blind passes with `--max-daily-loss` unable to evaluate. | CRITICAL | **fixed** |
 | 3 | **Risk limits failed open.** `history_deals_get(...) or []` turned a disconnect into 0.00 P&L, so the daily-loss limit silently stopped being a limit. The docstring had warned of exactly this. | CRITICAL | **fixed** |
 | 4 | **Unguarded startup account read** — a terminal already down produced a stack trace instead of a reason. Found *by writing the test* for #2. | HIGH | **fixed** |
-| 5 | **8/8 sessions die before their deadline**, so the `--flat-by` flush — the one mechanism bounding the losing tail — has never run. | CRITICAL | **mitigated** — see P1b below |
+| 5 | **8/8 sessions die before their deadline**, so the `--flat-by` flush — the one mechanism bounding the losing tail — has never run. | CRITICAL | **closed 2026-09-11** — session `20260910-224639` reached its deadline and flushed 6 |
 | 6 | Foreign keys unenforced across the suite (SQLite pragma off; only `orders.signal_id` covered). | HIGH | **open** — documented in `KNOWN_TEST_LIMITATIONS.md` |
 | 7 | `webhooks/gateway.py` docstring claimed risk/sizing/OMS "are not built"; all three exist, and it also imports `execution.routing` now. | MEDIUM | **fixed** |
 | 8 | Demo MT5 login number in 14 tracked documents. | LOW | **open** |
@@ -216,14 +218,29 @@ Verified end to end: an unfinished record was written, and a new session
 printed `PREVIOUS SESSION DID NOT FINISH: ... positions_open=7` with the
 `--harvest-only` remedy beside it.
 
-**Still open:** no session has yet been observed running to its own deadline.
-The mechanisms are in place and tested; the field evidence is not in.
+**Amended 2026-09-11 — the field evidence is now in.** Session
+`20260910-224639` ran from 22:46 to 05:59, 433 minutes and 1,298 passes, and
+the `--flat-by 06:00` flush closed all 6 open positions at 05:59:24 before the
+process exited 0. `CRASH_REPORTS/session-20260910-224639.json` records
+`"status": "completed"` with `flushed: 6` and `positions_open: 0`, and the
+watchdog logged `the session finished normally` without spending a restart.
+Realised —14.95 over the night, 21 opened and 12 harvested.
+
+One session is evidence that the mechanism works, not a reliability rate. The
+same three artefacts — the journal record, the log tail and the watchdog line
+— are what the next long run gets read against.
 
 ## 10. Next action
 
-**P1b — recoverable flush, console-independent session, `CRASH_REPORTS/`.**
-Small, and it is what stops the losing tail surviving a dead session. Then
-fence Path A.
+*Amended 2026-09-11.* P1b is done and its evidence is in (§9). P4 added the
+weekly-loss, consecutive-loss and correlation vetoes, closing the last HIGH
+finding from the audit.
 
-Three levels of research intelligence now sit above a harness that still
-cannot finish a night. That ordering is the thing to correct.
+**P2 — fence Path A.** Finding #1 is now the only CRITICAL left open, and
+nothing stands in front of it. The harness reached a broker 21 times last night
+through four `order_send` sites that import nothing from `app/`, which means
+the three vetoes added at P4 did not see a single one of those trades.
+
+Three levels of research intelligence sit above a harness that can now finish a
+night but is still outside every control the platform has. That ordering is the
+thing to correct.
