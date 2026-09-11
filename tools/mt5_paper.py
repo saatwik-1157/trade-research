@@ -15,6 +15,13 @@ The fence, in order of execution:
    will never modify or close one a human opened.
 4. Hard caps: lot size, concurrent positions, and a daily loss limit that stops
    trading for the session when breached.
+5. **The platform's Risk Engine rules on every opening order.** `place()` will
+   not send one live without an `Approval` from `app.risk.engine`, obtained
+   through `risk_gate`. Until 2026-09-11 this path imported nothing from
+   `app/` and was the only path that had ever traded -- the audit's first
+   critical finding. A closing order is evaluated and RECORDED but never
+   refused, because a limit that bounds the risk of opening must not be the
+   reason a position cannot be shut.
 
 What to expect from it
 ----------------------
@@ -56,6 +63,8 @@ except (AttributeError, OSError):
     pass
 
 import numpy as np  # noqa: E402
+
+import risk_gate  # noqa: E402
 
 DEFAULT_TERMINAL = r"C:\Program Files\MetaTrader 5\terminal64.exe"
 MAGIC = 770315  # tags orders from this tool so it never touches anything else
@@ -419,7 +428,24 @@ def lot_for_risk(mt5, symbol: str, sl_distance: float, risk_amount: float) -> di
 
 
 def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
-          live: bool, risk_usd: float | None = None, magic: int = MAGIC) -> dict:
+          live: bool, risk_usd: float | None = None, magic: int = MAGIC,
+          *, gate=None) -> dict:
+    """Construct and send ONE opening order, after the Risk Engine agrees.
+
+    `gate` is the fence added at P2 and it has exactly three states:
+
+      * a `risk_gate.Gate` -- the harness path. The engine rules on the order
+        as constructed, with the venue figures the caller observed, and
+        nothing is sent unless it approves.
+      * `risk_gate.APPROVED_UPSTREAM` -- the platform path. `app/brokers/mt5.py`
+        arrives here from the OMS, which creates nothing without an `Approval`
+        that only `RiskEngine` can build. Re-evaluating would assess a
+        different snapshot against the harness's limits and could refuse an
+        order already approved and booked.
+      * `None` -- no risk decision exists. A dry run proceeds and says so; a
+        LIVE order is refused. Unknown is not permission, and the whole finding
+        this parameter closes was an order path with no engine on it.
+    """
     info = mt5.symbol_info(symbol)
     if info is None and not mt5.symbol_select(symbol, True):
         return {"symbol": symbol, "status": "symbol_unavailable"}
@@ -460,6 +486,52 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
                     "gap": sizing["gap"]}
         lot = sizing["lot"]
 
+    # -------------------------------------------------------- the fence
+    # Evaluated on the order as it will actually be sent -- the sized lot, the
+    # real quote, the rounded bracket -- and before the dry-run branch, so a
+    # dry run reports the decision a live run would have got. Deciding on the
+    # requested figures instead would approve one order and send another.
+    bracket_sl = round(sl, info.digits) if bracketed else 0.0
+    bracket_tp = round(tp, info.digits) if bracketed else 0.0
+    point = float(getattr(info, "point", 0.0) or 0.0)
+    spread_points = round((tick.ask - tick.bid) / point, 1) if point else None
+
+    risk_record = None
+    if gate is risk_gate.APPROVED_UPSTREAM:
+        risk_record = {"engine": "RiskEngine", "kind": "open",
+                       "decision": "approved upstream",
+                       "reason": "Path B: the OMS holds the Approval"}
+    elif gate is not None:
+        decision = gate.open(
+            symbol=symbol, side=side, volume=lot,
+            entry_price=price, stop_loss=bracket_sl, take_profit=bracket_tp,
+            risk_amount=(sizing or {}).get("risk_actual"),
+            spread_points=spread_points,
+        )
+        risk_record = decision.record
+        if not decision.approved:
+            # A refusal is logged like an order, because a veto that leaves no
+            # trace is indistinguishable from a check that never ran.
+            refusal = {
+                "symbol": symbol, "side": side, "lot": lot, "price": price,
+                "sl": bracket_sl, "tp": bracket_tp,
+                "status": "RISK_HALT" if decision.halt else "RISK_VETO",
+                "risk_reason": decision.reason[:300],
+                "risk": risk_record,
+            }
+            _log({"time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                  "event": "order", **refusal})
+            return refusal
+    elif live:
+        refusal = {
+            "symbol": symbol, "side": side, "lot": lot, "price": price,
+            "status": "RISK_GATE_MISSING",
+            "risk_reason": "a live order needs a risk decision and none was supplied",
+        }
+        _log({"time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+              "event": "order", **refusal})
+        return refusal
+
     filling = filling_for(mt5, info)
 
     request = {
@@ -468,8 +540,8 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
         "volume": float(lot),
         "type": mt5.ORDER_TYPE_BUY if is_buy else mt5.ORDER_TYPE_SELL,
         "price": price,
-        "sl": round(sl, info.digits) if bracketed else 0.0,
-        "tp": round(tp, info.digits) if bracketed else 0.0,
+        "sl": bracket_sl,
+        "tp": bracket_tp,
         "deviation": 20,
         "magic": magic,
         "comment": "trade-research demo",
@@ -480,7 +552,8 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
     if not live:
         return {"symbol": symbol, "side": side, "status": "DRY_RUN",
                 "price": price, "sl": request["sl"], "tp": request["tp"], "lot": lot,
-                **({"sizing": sizing} if sizing else {})}
+                **({"sizing": sizing} if sizing else {}),
+                **({"risk": risk_record} if risk_record else {})}
 
     res = mt5.order_send(request)
     done = getattr(res, "retcode", None) == mt5.TRADE_RETCODE_DONE
@@ -490,7 +563,6 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
     # bracket inversion for three days: the log said 0.59752 and the server
     # said 0.59473, and only the account report disagreed.
     fill = float(getattr(res, "price", 0.0) or 0.0) if done else 0.0
-    point = getattr(info, "point", 0.0) or 0.0
 
     out = {
         "symbol": symbol, "side": side, "lot": lot, "price": price,
@@ -508,6 +580,7 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
         "deal": int(getattr(res, "deal", 0) or 0) or None,
         "status": "SENT" if done else "REJECTED",
         **({"sizing": sizing} if sizing else {}),
+        **({"risk": risk_record} if risk_record else {}),
     }
 
     # Repair rather than close. Closing only ever fires on adverse slippage, so
@@ -537,6 +610,15 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
         else:
             # Could not fix it and cannot leave it: both exits are against the
             # position, so holding is a guaranteed loss with no upside branch.
+            #
+            # Recorded through the engine as the close it is, and NOT gated:
+            # `record_close` cannot refuse, which is what makes it safe to put
+            # in front of the one order that exists to escape a guaranteed
+            # loss. See risk_gate.record_close.
+            out["risk_close"] = risk_gate.record_close(
+                symbol=symbol, side="sell" if is_buy else "buy", volume=lot,
+                entry_price=fill,
+            ).record
             mt5.order_send({
                 "action": mt5.TRADE_ACTION_DEAL,
                 "symbol": symbol,
@@ -641,6 +723,23 @@ def close_own(mt5, live: bool, where=None, magic: int = MAGIC) -> list[dict]:
         if not live:
             out.append({"ticket": p.ticket, "symbol": p.symbol, "status": "DRY_RUN"})
             continue
+        # Evaluated and recorded, never refused. `record_close` is written so
+        # that nothing it does can stop a close -- an unimportable engine or an
+        # unexpected exception both return an approval whose record says the
+        # evaluation did not happen. The `--flat-by` flush runs through here,
+        # and the flush is the one mechanism bounding a losing tail overnight;
+        # it does not get a new way to fail.
+        #
+        # No `account_id`: `close_own` is given a MAGIC, and a magic is a tag
+        # this tool puts on its own orders, not an account number. Writing one
+        # into the account field would put a wrong identifier into the audit
+        # record, which is a defect this repository has now made three times
+        # under three different names. An absent field is a gap; a plausible
+        # wrong one is worse.
+        risk_close = risk_gate.record_close(
+            symbol=p.symbol, side="sell" if is_long else "buy",
+            volume=float(p.volume), entry_price=req["price"],
+        )
         res = mt5.order_send(req)
         done = getattr(res, "retcode", None) == mt5.TRADE_RETCODE_DONE
         # The FILL, not the quote -- the same rule `place` learned the hard way.
@@ -663,7 +762,8 @@ def close_own(mt5, live: bool, where=None, magic: int = MAGIC) -> list[dict]:
                "fill_price": float(getattr(res, "price", 0.0) or 0.0) if done else None,
                "closed_volume": float(getattr(res, "volume", 0.0) or 0.0) if done else None,
                "requested_volume": float(p.volume),
-               "status": "CLOSED" if done else "FAILED"}
+               "status": "CLOSED" if done else "FAILED",
+               "risk": risk_close.record}
         # What the ACCOUNT received, in account currency, as the server booked
         # it -- not a price difference. A close of 0.01 EURUSD from 1.16319 to
         # 1.16315 is -0.04 USD; the arithmetic `(exit - entry) * lots` gives
@@ -703,6 +803,19 @@ def cycle(mt5, args) -> dict:
     if cap > 0:
         streak = consecutive_losses(closed_outcomes(mt5))
 
+    # The session's risk configuration, told what the venue just said. Both
+    # figures are the ones the checks above already acted on, so the engine and
+    # this function cannot disagree about a threshold -- only about scope: the
+    # checks above decide whether to keep RUNNING, the engine decides about an
+    # ORDER. `consecutive_losses` is None when the cap is off, because it was
+    # not counted, and a count that did not happen is never zero.
+    gate = risk_gate.gate_for(args, getattr(args, "account", None))
+    gate.observe(
+        positions=open_now,
+        realised_today=pnl_today,
+        consecutive_losses=streak if cap > 0 else None,
+    )
+
     actions = []
     if cap > 0 and streak >= cap:
         return {
@@ -732,9 +845,31 @@ def cycle(mt5, args) -> dict:
         if side is None:
             actions.append({"symbol": symbol, "status": "no_signal"})
             continue
-        actions.append(place(mt5, symbol, side, args.lot, args.sl_atr,
-                            args.tp_atr, args.live,
-                            getattr(args, "risk_usd", None)))
+        result = place(mt5, symbol, side, args.lot, args.sl_atr,
+                       args.tp_atr, args.live,
+                       getattr(args, "risk_usd", None), gate=gate)
+        actions.append(result)
+
+        # A halt is the engine saying the SESSION must stop, not just this
+        # order: a breached daily loss, weekly loss or drawdown would be
+        # breached by the next order too. Stop proposing immediately rather
+        # than working through the remaining symbols to collect identical
+        # refusals.
+        if result.get("status") == "RISK_HALT":
+            return {"halted": True,
+                    "reason": f"risk engine: {result.get('risk_reason', '')}"[:300],
+                    "realised_today": round(pnl_today, 2),
+                    "consecutive_losses": streak,
+                    "open_positions": len(open_now), "actions": actions}
+
+        # The gate's view of the book, kept current WITHIN the pass. Without
+        # this, seven symbols evaluated against one start-of-pass snapshot
+        # would each be told the position count was what it was before any of
+        # them opened -- the same accounting the loop above already does for
+        # `max_positions`, applied to the engine's copy of it.
+        if result.get("status") == "SENT":
+            gate.open_positions = (gate.open_positions or 0) + 1
+            gate.open_symbols = tuple(gate.open_symbols) + (symbol,)
 
     return {"halted": False, "paused": False,
             "realised_today": round(pnl_today, 2),
@@ -759,6 +894,14 @@ def main() -> int:
                          "(0 = off). Open positions keep being managed and "
                          "the wind-down still runs; nothing is ever sized up")
     ap.add_argument("--max-daily-loss", type=float, default=500.0)
+    ap.add_argument("--max-risk-per-trade", type=float, default=None,
+                    metavar="USD",
+                    help="refuse an order whose stop would cost more than this. "
+                         "Off by default: it is NOT the same number as "
+                         "--risk-usd, and setting it there would be a check "
+                         "that cannot fail. What it catches is the min-lot "
+                         "floor, where the volume step forces more risk than "
+                         "the budget asked for")
     ap.add_argument("--interval", type=int, default=0, help="seconds between cycles; 0 runs once")
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--live", action="store_true", help="actually send orders (demo only)")
@@ -773,6 +916,8 @@ def main() -> int:
     except RefuseToTrade as exc:
         print(f"\n  REFUSED: {exc}\n")
         return 1
+
+    args.account = acct
 
     print(f"\n  account {acct['login']} @ {acct['server']}  [{acct['mode']}]  "
           f"balance {acct['balance']:,.2f} {acct['currency']}")

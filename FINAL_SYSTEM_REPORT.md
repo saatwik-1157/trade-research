@@ -37,7 +37,7 @@ frontend; PostgreSQL; Docker Compose; MetaTrader5 via its Python package.
 
 | # | Finding | Severity | State |
 |---|---|---|---|
-| 1 | **Two independent paths to a broker order.** The harness (`take_profit.py` → `mt5_paper.py`, 4 × `order_send`) imports nothing from `app/` — no RiskEngine, no OMS, no kill switch, no journal. It is the only path that ever traded. | CRITICAL | **open** — needs a decision, not a patch |
+| 1 | **Two independent paths to a broker order.** The harness (`take_profit.py` → `mt5_paper.py`, 4 × `order_send`) imports nothing from `app/` — no RiskEngine, no OMS, no kill switch, no journal. It is the only path that ever traded. | CRITICAL | **reduced 2026-09-11** — the decision was taken (route through RiskEngine) and built: `place()` sends no live order without an `Approval`. Still no OMS and no `orders` row on this path |
 | 2 | **A dropped MT5 terminal read as a formatting error.** `account_info()` returns `None`; `bal.balance` raised `AttributeError`; caught as "a line of log is not worth a session". Ran 23 blind passes with `--max-daily-loss` unable to evaluate. | CRITICAL | **fixed** |
 | 3 | **Risk limits failed open.** `history_deals_get(...) or []` turned a disconnect into 0.00 P&L, so the daily-loss limit silently stopped being a limit. The docstring had warned of exactly this. | CRITICAL | **fixed** |
 | 4 | **Unguarded startup account read** — a terminal already down produced a stack trace instead of a reason. Found *by writing the test* for #2. | HIGH | **fixed** |
@@ -236,11 +236,17 @@ same three artefacts — the journal record, the log tail and the watchdog line
 weekly-loss, consecutive-loss and correlation vetoes, closing the last HIGH
 finding from the audit.
 
-**P2 — fence Path A.** Finding #1 is now the only CRITICAL left open, and
-nothing stands in front of it. The harness reached a broker 21 times last night
-through four `order_send` sites that import nothing from `app/`, which means
-the three vetoes added at P4 did not see a single one of those trades.
+**P2 is built.** The decision was to route through the Risk Engine rather than
+to mark the harness unattended-only, and it turned out to be cheap:
+`app/risk/engine.py` is pure stdlib and synchronous, so `tools/risk_gate.py`
+reaches it with `backend/` on `sys.path` and no database, event loop or running
+platform. `place()` now refuses a live order that carries no decision.
 
-Three levels of research intelligence sit above a harness that can now finish a
-night but is still outside every control the platform has. That ordering is the
-thing to correct.
+**Next is evidence, not code.** One overnight session behind the fence, read
+afterwards for the `risk` block every order now carries. Then P5 — foreign
+keys and a Postgres integration job — which is the last CRITICAL that has had
+nothing done to it.
+
+Three levels of research intelligence still sit above a harness that has traded
+for three weeks without an edge. The ordering is better than it was; it is not
+yet right.

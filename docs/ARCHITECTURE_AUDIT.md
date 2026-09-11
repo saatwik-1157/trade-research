@@ -44,6 +44,12 @@ run_overnight.py                           TradingView alert
 Every §46 invariant is satisfied on Path B and violated on Path A. **The
 programme is therefore to fence or retire Path A, not to build Path B.**
 
+*Amended 2026-09-11.* Path A was fenced rather than retired: it now reaches
+`RiskEngine` through `tools/risk_gate.py` and cannot send an opening order
+without an `Approval`. The diagram above is otherwise unchanged and still
+accurate — Path A has no signal, no OMS and no `orders` row, and those are
+what remain of this finding.
+
 ---
 
 ## A. Architecture map
@@ -208,10 +214,10 @@ specifics, log redaction under load. Deferred to its own level.
 |---|---|---|---|
 | **P0** | Stop uncontrolled trading | — | **Already satisfied.** Nothing running, account flat, paper mode, 12 live blockers, `assert_demo` |
 | **P1** | Crash root causes | done | Identified; disconnect defect fixed and tested |
-| **P1b** | Recoverable flush + console-independent session + `CRASH_REPORTS/` | S | **next** |
-| **P2** | Fence Path A — route through RiskEngine, or mark harness-only and refuse unattended runs | M | **the key change** |
+| **P1b** | Recoverable flush + console-independent session + `CRASH_REPORTS/` | S | **done** — proven by session `20260910-224639`, which reached its deadline and flushed |
+| **P2** | Fence Path A — route through RiskEngine, or mark harness-only and refuse unattended runs | M | **done 2026-09-11**, by the first option. `tools/risk_gate.py`; `place()` refuses a live order with no `Approval`; closes recorded, never refused. Not yet exercised on a live session |
 | **P3** | Fix stale gateway docstring; decide whether `SIGNAL_CREATED` gets a consumer | S | |
-| **P4** | Add weekly-loss, consecutive-loss and correlation vetoes to RiskEngine | M | |
+| **P4** | Add weekly-loss, consecutive-loss and correlation vetoes to RiskEngine | M | **done** — all three fail closed on a MISSING input. Weekly loss and correlation have no data source on the harness path and are reported `not_enforced` there |
 | **P5** | Postgres-backed integration job in CI; widen FK coverage | M | highest test-integrity win |
 | **P6** | Register a broker account and exercise Path B end to end on demo | M | never yet done |
 | **P7** | Watchdog + restart-loop limiting | M | |

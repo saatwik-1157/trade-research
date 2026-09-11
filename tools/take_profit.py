@@ -44,6 +44,7 @@ except (AttributeError, OSError):
 
 import kill_switch
 import mt5_paper
+import risk_gate
 from mt5_paper import RefuseToTrade
 
 
@@ -546,6 +547,13 @@ def main() -> int:
     ap.add_argument("--tp-atr", type=float, default=1.5)
     ap.add_argument("--max-positions", type=int, default=5)
     ap.add_argument("--max-daily-loss", type=float, default=50.0)
+    ap.add_argument("--max-risk-per-trade", type=float, default=None,
+                    metavar="USD",
+                    help="refuse an entry whose stop would cost more than this. "
+                         "Off by default, and deliberately NOT --risk-usd: the "
+                         "same number on both sides is a check that cannot "
+                         "fail. It catches the min-lot floor, where the volume "
+                         "step forces more risk than the budget asked for")
     ap.add_argument("--live", action="store_true", help="actually send orders (demo only)")
     ap.add_argument("--max-consecutive-losses", type=int, default=0,
                     metavar="N",
@@ -562,6 +570,10 @@ def main() -> int:
         print(f"\n  REFUSED: {exc}\n")
         return 1
 
+    # The gate reads its account and mode from here. `cycle()` builds it once
+    # per pass from `args`, so this is the whole of the wiring.
+    args.account = acct
+
     print(f"\n  account {acct['login']} @ {acct['server']}  [{acct['mode']}]  "
           f"balance {acct['balance']:,.2f} {acct['currency']}")
     print(f"  harvest at >= {args.min_profit} {acct['currency']}  "
@@ -574,6 +586,16 @@ def main() -> int:
     )
     print(f"  size: {sizing}")
     print(f"  mode: {'LIVE ORDERS (demo account)' if args.live else 'DRY RUN - no orders sent'}")
+
+    # Say whether the fence is up, at the top, before anything is sent. An
+    # engine that could not be imported refuses every opening order, and an
+    # operator should learn that from the banner rather than from 200 refusals.
+    if risk_gate.ENGINE_IMPORT_ERROR is None:
+        print("  risk: RiskEngine rules on every entry; closes are recorded, never refused")
+    else:
+        print(f"  risk: THE ENGINE COULD NOT BE LOADED -- {risk_gate.ENGINE_IMPORT_ERROR}")
+        print("        no entry will be sent. Closes and the flush still run.")
+
     print(f"  running {args.minutes:g} minutes, one pass every {args.interval}s")
     if args.flat_by:
         mins = seconds_until(args.flat_by) / 60.0

@@ -2,12 +2,15 @@
 
 Generated 2026-09-11 from the repository, the venue and the Windows power log.
 
-**Current Status:** `STABILITY_PROVEN` → `HARNESS_FENCE_REQUIRED (P2)`
+**Current Status:** `HARNESS_FENCED` → `SOAK_REQUIRED`
 
-The audit is done, the stability defects are fixed, and one full-length session
-has now run to its own deadline and flushed. What blocks `PAPER_READY` is no
-longer stability: it is the one remaining critical finding, that the path which
-has traded this account is not the path the safety machinery sits on.
+The audit is done, the stability defects are fixed, one full-length session has
+run to its own deadline and flushed, and as of 2026-09-11 the harness cannot
+send an opening order without an `Approval` from the platform's Risk Engine.
+
+What is left before `PAPER_READY` is evidence rather than construction: the
+fence has been proven on a dry run against the live terminal and in nine CI
+gates, and has not yet ruled on a live overnight session.
 
 | | |
 |---|---|
@@ -15,11 +18,11 @@ has traded this account is not the path the safety machinery sits on.
 | **Account** | `5055473926 @ MetaQuotes-Demo` **[DEMO]** · flat: 0 positions, 0 pending · 99,970.28 USD |
 | **Running processes** | none. MT5 terminal open and idle |
 | **TradingView Status** | gateway built (hmac, age check, idempotency, body cap). **Never exercised end to end** — no broker account registered |
-| **MT5 Status** | one adapter, one `order_send` on the platform path; 4 on the harness path |
-| **Risk Status** | 33+ veto codes — weekly loss, consecutive losses and correlation added at P4. RiskEngine is the final veto on the platform path. **Bypassed entirely by the harness path** |
+| **MT5 Status** | one adapter, one `order_send` on the platform path; 4 on the harness path, all four now behind the Risk Engine — the opening order needs an `Approval`, the three closing ones are recorded and never refused |
+| **Risk Status** | 33+ veto codes — weekly loss, consecutive losses and correlation added at P4. RiskEngine is the final veto on **both** paths as of P2. 29 checks ruled on each proposal in the live dry run, 22 of them reported `not_enforced` by name |
 | **Windows Build Status** | **none.** No PyInstaller/Inno/NSIS/electron-builder anywhere |
 | **Stability** | **one full-length session has reached its deadline.** `20260910-224639`: 433 minutes, 1,298 passes, `flat-by 06:00` closed 6 at 05:59:24, exit 0, watchdog correctly declined to restart. One session is evidence, not a rate |
-| **Tests** | 8 toolkit gates pass (py3.14) · **full backend suite 2,976 passed / 0 failed** (21m33s) · `ruff` + `mypy` clean, 411 files |
+| **Tests** | 9 toolkit gates pass (py3.14) · **full backend suite 2,976 passed / 0 failed** (21m33s) · `ruff` + `mypy` clean, 411 files |
 
 ## Completed
 
@@ -48,8 +51,8 @@ has traded this account is not the path the safety machinery sits on.
 
 ## In Progress
 
-Nothing. P1b is complete and its evidence now exists. P2 is next, and not
-started.
+Nothing. P1b is complete with its evidence; P2 is complete and proven against
+the live terminal, but has not yet ruled on a live session.
 
 ## Blocked
 
@@ -60,11 +63,20 @@ started.
 
 ## Critical Issues
 
-1. **Two independent paths to a broker order.** The harness
-   (`take_profit.py` → `mt5_paper.py`, 4 × `order_send`) imports nothing from
-   `app` — no RiskEngine, no OMS, no kill switch, no journal. It is the only
-   path that has ever traded this account. Every §46 invariant holds on the
-   platform path and is violated on this one.
+1. **Two independent paths to a broker order.** *Reduced 2026-09-11, not
+   closed.* The harness now imports `app.risk.engine` through
+   `tools/risk_gate.py`, and `place()` refuses a live order that carries no
+   risk decision — `RISK_GATE_MISSING`, nothing sent. Closes are evaluated
+   and recorded but never refused, because the `--flat-by` flush runs through
+   the same code.
+
+   **What still differs from Path B**, and is what keeps this open: no OMS, so
+   no `orders` row, no `intent_id` and no reconciliation; the platform's kill
+   switches are not read (deliberately — see `risk_gate`, where feeding the
+   harness's own stop file into the engine would turn a wind-down that flushes
+   into a halt that abandons open positions); and weekly loss and correlated
+   exposure have no data source on this path, so they are reported
+   `not_enforced` rather than enforced.
 2. ~~**No session reaches its deadline.**~~ **Closed 2026-09-11.** Session
    `20260910-224639` ran 433 minutes, made 1,298 passes, and the
    `--flat-by 06:00` flush closed all 6 open positions at 05:59:24 before
@@ -95,14 +107,18 @@ max drawdown −65.50 on 100,000 (−0.065%).
 
 ## Next Recommended Action
 
-**P2 — fence the harness path.** Nothing stands in front of it now: P1b is
-done and its overnight evidence is banked, and P4 closed the last HIGH finding
-from the audit. What remains is the critical one. `tools/take_profit.py` →
-`tools/mt5_paper.py` reaches a broker through four `order_send` sites
-(`mt5_paper.py:485, 526, 540, 644`) while importing nothing from `app/` — no
-RiskEngine, no OMS, no kill switch, no journal. It is the only path that has
-ever traded this account, so the three vetoes added at P4 could not see one of
-the 21 trades opened last night.
+**Run one live session behind the fence.** P2 is built and proven on a dry run
+against the live terminal — 29 checks per proposal, three approvals, and the
+session halt firing when the daily limit was set below what the account had
+already realised. It has not yet ruled on an order that was actually sent.
+
+That is the same shape of gap P1b had yesterday, and it closes the same way:
+one overnight session, read afterwards for the `risk` block now carried by
+every order in `data/paper_trades.jsonl`. The decision id on each one is what
+ties an order to the verdict that allowed it.
+
+Then P5 — foreign keys and a Postgres-backed integration job — which is
+Critical #3 and the highest test-integrity win left.
 
 Do not train a model. `ModelTrainingNeedAssessment` = **DO_NOT_TRAIN**: six
 search families across five universes have already failed to clear their own

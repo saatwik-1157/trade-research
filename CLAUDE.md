@@ -612,8 +612,18 @@ The bracket-sanity and fill-recording checks are in `test_rule_backtest.py`
 too, since they are order construction.
 Run `python tests/test_crash_report.py` after touching
 `tools/crash_report.py`, `tools/console_guard.py`, or the PASS_HOOK and
-STOP_REQUESTED wiring in `tools/take_profit.py` and `tools/run_overnight.py`.
-All eight run in CI on every push, against Python 3.10, 3.12 and 3.14.
+STOP_REQUESTED wiring in `tools/take_profit.py` and `tools/run_overnight.py`,
+and `python tests/test_risk_gate.py` after touching `tools/risk_gate.py`, the
+`gate` parameter on `mt5_paper.place`, the close recorder in
+`mt5_paper.close_own`, or `APPROVED_UPSTREAM` in `app/brokers/mt5.py`.
+All nine run in CI on every push, against Python 3.10, 3.12 and 3.14.
+
+On 3.10 the risk engine cannot be imported at all -- `app/risk/engine.py` uses
+`StrEnum` and `datetime.UTC`, both 3.11 -- so `risk_gate` reports itself
+unavailable there and **refuses every opening order**. That is the intended
+behaviour and the reason the test runs on 3.10 rather than skipping it: a fence
+that disappears on the interpreter that cannot load it is not a fence. A close
+is never refused on any interpreter.
 
 `PROJECT_STATE.json` is **generated, not hand-written**. Run
 `python tools/project_state.py --write` rather than editing it, and

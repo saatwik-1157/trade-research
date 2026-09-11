@@ -5531,17 +5531,108 @@ symbol -1.77. 2,599 more trades would be needed to reach a pooled t of 1.96 at
 this effect size. Every read of this sample has said the same thing and this one
 does not differ.
 
+## P2 -- the harness reaches the Risk Engine (2026-09-11)
+
+The audit's first critical finding, and the one its author called "the key
+change": two independent paths to a broker order, with every safety mechanism
+on the path that had never traded. The choice it framed was to fence Path A or
+to retire it. Fencing it, by routing through `RiskEngine`, is what was chosen.
+
+**It was cheap for a reason worth recording.** `app/risk/engine.py` is *pure*:
+stdlib only, synchronous, no SQLAlchemy, no settings object, no session. It
+takes four frozen dataclasses and returns a verdict. So the harness does not
+need the platform running, a database, an event loop or a migration -- it needs
+`backend/` on `sys.path`. `tools/risk_gate.py` is that seam and nothing more:
+it carries the venue's figures in and the verdict back out, and defines no
+limit, threshold or veto code of its own. If the two ever disagree the engine
+is right and the seam has a bug.
+
+Four `order_send` sites, three of which are closes:
+
+| site | what it is | what changed |
+|---|---|---|
+| `mt5_paper.py:485` | the opening order | needs an `Approval`, or nothing is sent |
+| `mt5_paper.py:526` | the bracket repair | an SLTP modify, not an order; unchanged |
+| `mt5_paper.py:540` | the emergency close after a failed repair | recorded, never refused |
+| `mt5_paper.py:644` | `close_own`, including the flush | recorded, never refused |
+
+**The asymmetry between the two is the whole design.** An opening order with no
+risk decision behind it is REFUSED -- including when the engine cannot be
+imported at all, which is the real case on Python 3.10, where `StrEnum` and
+`datetime.UTC` do not exist and CI runs these gates anyway. A fence that
+disappears on the interpreter that cannot load it is not a fence.
+
+A close is the mirror. It is evaluated, recorded, and sent regardless -- by
+`RiskEngine.approve_close`, which says so at length, and by `record_close`,
+which is written so that an unimportable engine, an unreadable volume or an
+unexpected exception all return an approval whose record says the evaluation
+did not happen. Every limit here bounds the risk of TAKING a position, so
+letting one block a close would refuse to reduce exposure at the moment
+exposure is highest. Concretely: the `--flat-by` flush runs through this code,
+and the flush is the one mechanism bounding a losing tail overnight. It does
+not get a new way to fail.
+
+**The platform path is not judged twice.** `app/brokers/mt5.py` calls the same
+`place()`, and it arrives from `app/oms/service.py`, whose `create()` takes an
+`Approval` that only `RiskEngine` can build. A second verdict there would be
+computed from the harness's limits against a different snapshot, and could
+refuse an order the platform had already approved, booked and recorded. So the
+adapter passes `risk_gate.APPROVED_UPSTREAM`, a named exemption rather than a
+hidden one: `place()` refuses when the gate is `None`, proceeds for the
+sentinel, and there is no third way through.
+
+**One thing was deliberately NOT wired, and it looked like free value.**
+`tools/kill_switch.py` exists and the engine has three kill-switch scopes that
+are checked first and cannot be argued with. Feeding the stop file into
+`KillSwitches` would have been two lines. It would also have been a serious
+regression: the harness honours the stop file as a WIND-DOWN -- `run()` breaks
+to the flush with `halted` false -- while the engine's kill switch is a HALT,
+and `run()` skips the flush after a halt, on the reasoning that a daily-loss
+limit firing at 22:00 is not a reason to close hours before the operator asked.
+So the two-line version would have converted an operator stop that flushes into
+one that abandons every open position. The switch stays where it already works.
+
+**What is honestly new here, and what is not.** The engine ruled on 29 checks
+per proposal in a dry run against the live terminal, approving three and
+reporting 22 limits `not_enforced` by name. Of those checks, the daily loss,
+the position cap and one-position-per-symbol were already enforced by `cycle()`
+and are now enforced twice from the same measured inputs -- which cannot
+disagree about a threshold, only about scope: `cycle()` decides whether to keep
+RUNNING, the engine decides about an ORDER. What is genuinely new on this path
+is a required stop loss, a positive-size check, the trading-mode fence, an
+optional `--max-risk-per-trade` that catches the min-lot floor, a decision id
+on every order, and the structural fact that an order can no longer be
+constructed here without a verdict. The rest is defence in depth, which is
+worth having and is not worth overclaiming.
+
+**Weekly loss and correlated exposure are configured nowhere on this path**,
+because neither has a data source here: there is no weekly realised figure and
+`market_bars` holds 705 bars across 2 symbols. They are reported as
+`not_enforced` and named, rather than passed quietly. An unfed limit that
+approved would read in an audit as one that was checked.
+
+Proven three ways: `tests/test_risk_gate.py`, 46 checks, added to CI as the
+ninth toolkit gate and running on 3.10 as well as 3.12 and 3.14; a dry run
+against the live terminal, where the session halt also fired when the daily
+limit was set below what the account had already realised; and the backend's
+own 231 risk, OMS and broker tests, unchanged and still green.
+
+**What P2 does not have is the same thing P1b did not have yesterday.** The
+fence has never ruled on an order that was actually sent. One overnight session
+fixes that, and every order in `data/paper_trades.jsonl` now carries a `risk`
+block to read it by.
+
 ## Next
 
-**P2 -- fence the harness path.** This displaces the ablation item below, and
-the reason is the one the audit gave: `tools/take_profit.py` ->
-`tools/mt5_paper.py` reaches a broker through four `order_send` sites
-(`mt5_paper.py:485, 526, 540, 644`) while importing nothing from `app/` -- no
-RiskEngine, no OMS, no kill switch, no journal. It is still the only path that
-has ever traded this account, so the weekly-loss, consecutive-loss and
-correlation vetoes added at P4 did not see one of last night's 21 trades. Now
-that the harness can finish a night, the thing it finishes outside of is the
-next question.
+~~**P2 -- fence the harness path.**~~ **Done**, by routing through the Risk
+Engine; the section above is the record. What it still lacks is a live session
+behind it, which is the next thing to run and the same gap P1b closed
+yesterday.
+
+**Then P5: foreign keys and a Postgres integration job.** It is Critical #3,
+nothing has been done to it, and it is the finding that makes every other test
+result weaker than its count suggests -- SQLite runs with the pragma off and
+only `orders.signal_id` is covered.
 
 ~~**Build the ablation harness.**~~ **Built, and run once.**
 `app/validation/ablation.py` with `backend/tests/test_ablation.py`, and
