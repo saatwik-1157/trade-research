@@ -284,6 +284,60 @@ def test_the_watchdog_never_imports_a_venue():
     check("no take_profit", "take_profit" in names, False)
 
 
+def test_a_stuck_record_can_be_resolved_and_only_a_stuck_one():
+    print()
+    print("A warning that never clears stops being read")
+    with TempDir():
+        killed = crash_report.new_session_id()
+        crash_report.start(killed)
+        crash_report.beat(killed, 84, {"positions_open": 7})
+        check("it warns to begin with", len(crash_report.unfinished()), 1)
+
+        ok = crash_report.resolve(killed, "tail closed by hand")
+        check("resolving it reports success", ok, True)
+        check("and it stops warning", len(crash_report.unfinished()), 0)
+
+        # Stamped, not deleted. The record is the only evidence the session
+        # existed, and `abandoned` is true where `running` is a lie about a
+        # process that is gone.
+        import json
+        import os
+        path = os.path.join(crash_report.directory(), f"session-{killed}.json")
+        with open(path, encoding="utf-8") as fh:
+            record = json.load(fh)
+        check("the record still exists", os.path.exists(path), True)
+        check("stamped abandoned, not running", record["status"], "abandoned")
+        check("with the operator's reason kept",
+              record["resolved_note"], "tail closed by hand")
+        check("and what it last saw is untouched",
+              record["state"]["positions_open"], 7)
+
+        # A finished session must not be rewritable by a typo in an id.
+        clean = killed + "-b"
+        crash_report.start(clean)
+        crash_report.finish(clean, status="completed", reason="exit 0")
+        check("a completed record refuses to be resolved",
+              crash_report.resolve(clean), False)
+        check("an unknown id refuses too",
+              crash_report.resolve("20200101-000000"), False)
+
+
+def test_liveness_is_unknown_rather_than_dead():
+    print()
+    print("A pid that cannot be checked is not a pid that is gone")
+    with TempDir():
+        sid = crash_report.new_session_id()
+        crash_report.start(sid)
+        record = crash_report.unfinished()[0]
+        # start() records this process, which is by definition alive.
+        check("this process reads as alive",
+              crash_report.process_alive(record), True)
+        check("a record with no pid is UNKNOWN, not dead",
+              crash_report.process_alive({"session_id": sid}), None)
+        check("and neither is a pid that is not a number",
+              crash_report.process_alive({"pid": "24824"}), None)
+
+
 def main():
     print("crash journal and console guard checks")
     test_a_record_is_written_and_readable()
@@ -298,6 +352,8 @@ def main():
     test_the_watchdog_refuses_the_restarts_that_matter()
     test_a_fast_exit_costs_more_of_the_budget()
     test_the_watchdog_never_imports_a_venue()
+    test_a_stuck_record_can_be_resolved_and_only_a_stuck_one()
+    test_liveness_is_unknown_rather_than_dead()
 
     if FAILED:
         print(f"\n{len(FAILED)} check(s) failed")

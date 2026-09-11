@@ -125,9 +125,28 @@ REM over a launch that started nothing, which is the same failure as a session
 REM log that gets its header and then stops: a report of success is not
 REM evidence of one. Six seconds is past run_overnight's own preflight, so a
 REM process still alive here has got as far as its first pass.
-timeout /t 6 /nobreak >nul
-tasklist /FI "IMAGENAME eq %TR_IMAGE%" 2>nul | find /I "%TR_IMAGE%" >nul
+REM FULL PATHS, and that is not belt-and-braces. Launched from Git Bash --
+REM which is what the `!` prefix in a Claude Code session does -- cmd inherits
+REM a PATH with Git's bin on it, and `timeout` and `find` resolve to the GNU
+REM tools, which reject /t and /I. The check then fails on its own arguments
+REM and reports a session that started fine as one that did not start at all.
+REM Measured 2026-09-11, minutes after the check was written. A false alarm on
+REM every launch is worse than no check, because it teaches the operator to
+REM ignore the one line that matters.
+REM --dry-run resolves the command, prints it and exits without connecting.
+REM It is SUPPOSED to leave nothing running, so checking would report a
+REM failure that is the documented behaviour of the flag.
+if not "%TR_ARGS%"=="%TR_ARGS:--dry-run=%" goto :detach_launched
+
+REM `ping`, not `timeout`. timeout.exe refuses to run when stdin is not a
+REM console -- "ERROR: Input redirection is not supported" -- and returns
+REM immediately, so the wait silently did not happen and the check ran against
+REM a process that had not had time to fail yet. ping needs no console.
+"%SystemRoot%\System32\ping.exe" -n 7 127.0.0.1 >nul 2>&1
+"%SystemRoot%\System32\tasklist.exe" /FI "IMAGENAME eq %TR_IMAGE%" 2>nul | "%SystemRoot%\System32\find.exe" /I "%TR_IMAGE%" >nul
 if errorlevel 1 goto :detach_failed
+
+:detach_launched
 
 echo Session launched; it is not tied to this window.
 echo     log:    logs\overnight-*.log
