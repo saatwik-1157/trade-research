@@ -86,6 +86,16 @@ REM The session log holds everything the window would have shown.
 set "TR_ARGS=%*"
 set "TR_DETACH="
 if not "%TR_ARGS%"=="%TR_ARGS:--detach=%" set "TR_DETACH=1"
+REM Both flags are read HERE, while TR_ARGS still holds the raw argument
+REM string. Reading --dry-run later, after --detach has been stripped out,
+REM asks cmd to do substring replacement on a variable that is by then
+REM UNDEFINED -- and `%VAR:x=y%` on an undefined variable is not an empty
+REM string, it is a parse failure. `start-trading.bat --detach` with no other
+REM argument printed "The syntax of the command is incorrect" and exited 255
+REM AFTER launching the session correctly, so the operator got an error over a
+REM working launch. Measured 2026-09-11 on the first real use.
+set "TR_DRYRUN="
+if not "%TR_ARGS%"=="%TR_ARGS:--dry-run=%" set "TR_DRYRUN=1"
 
 if not defined TR_DETACH goto :attached
 
@@ -136,7 +146,7 @@ REM ignore the one line that matters.
 REM --dry-run resolves the command, prints it and exits without connecting.
 REM It is SUPPOSED to leave nothing running, so checking would report a
 REM failure that is the documented behaviour of the flag.
-if not "%TR_ARGS%"=="%TR_ARGS:--dry-run=%" goto :detach_launched
+if defined TR_DRYRUN goto :detach_launched
 
 REM `ping`, not `timeout`. timeout.exe refuses to run when stdin is not a
 REM console -- "ERROR: Input redirection is not supported" -- and returns
