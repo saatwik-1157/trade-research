@@ -38,7 +38,8 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
-import mt5_paper  # noqa: E402
+import mt5_paper
+import risk_gate  # noqa: E402
 import rule_backtest as rb  # noqa: E402
 import take_profit  # noqa: E402
 import rule_search  # noqa: E402
@@ -665,13 +666,21 @@ class FakeMT5:
 
 
 def _place(fake, side="sell", risk_usd=None):
-    """Run place() against the fake with the trade log stubbed out."""
+    """Run place() against the fake with the trade log stubbed out.
+
+    `APPROVED_UPSTREAM` rather than a real gate, because these tests are about
+    ORDER CONSTRUCTION -- the filling mode, the fill price, the bracket repair
+    -- and a risk verdict on top of that would test the engine twice and would
+    need an engine at all, which Python 3.10 in CI does not have. The fence
+    itself is tested in `tests/test_risk_gate.py`.
+    """
     logged = []
     real_log = mt5_paper._log
     mt5_paper._log = logged.append
     try:
         out = mt5_paper.place(fake, "NZDUSD", side, 0.01, 1.5, 1.5, live=True,
-                              risk_usd=risk_usd)
+                              risk_usd=risk_usd,
+                              gate=risk_gate.APPROVED_UPSTREAM)
     finally:
         mt5_paper._log = real_log
     return out, logged

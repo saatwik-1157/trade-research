@@ -59,6 +59,15 @@ jobs:
       - name: Crash journal and console guard
         run: python tests/test_crash_report.py
 
+      # The audit's first critical finding: two paths to a broker, and the
+      # safety machinery on the one that had never traded. The properties
+      # asserted are what CANNOT happen -- a live entry with no risk decision
+      # is not sent, and a close is never refused by anything. On 3.10 the
+      # risk engine genuinely cannot be imported, which is the interpreter
+      # where "refuses rather than waves through" most needs proving.
+      - name: The risk fence on the harness path
+        run: python tests/test_risk_gate.py
+
       # PROJECT_STATE.json drifted from the database on six counts while it was
       # hand-written. This checks that it still says where its figures came
       # from, and that the generator reports an unreachable database as absent
