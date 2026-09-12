@@ -4,7 +4,8 @@
 data/
 reports/*
 
-# ...except the rule searches. The exclusion above is about ACCOUNT details,
+# ...except the H4 and D1 rule searches. The exclusion above is about
+# ACCOUNT details,
 # and these carry none: candidates, t-statistics, ATR by symbol, era
 # boundaries. They are the evidence behind the claims in CLAUDE.md, and a
 # negative result nobody can check is a claim rather than a finding.
@@ -12,7 +13,8 @@ reports/*
 # `reports/*` rather than `reports/`, because git cannot re-include a file
 # whose parent DIRECTORY is excluded -- the negation below is silently dead
 # against the directory form.
-!reports/rule_search*.json
+!reports/rule_search_h4.json
+!reports/rule_search_d1.json
 
 # Local environment
 __pycache__/
