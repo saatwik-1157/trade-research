@@ -75,6 +75,9 @@ jobs:
       - name: Project state is measured, not remembered
         run: python tests/test_project_state.py
 
+      - name: The single entry point dispatches where it says
+        run: python tests/test_cli.py
+
   # Platform backend (L02+). Unit tests only: nothing here needs Postgres,
   # Redis or an MT5 terminal, and readiness checks are proven honest against
   # a closed port rather than a running service.

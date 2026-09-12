@@ -15,8 +15,9 @@ import time
 from datetime import datetime, timezone
 
 import pandas as pd
+from paths import data_path
 
-CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "cache")
+CACHE_DIR = data_path("cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 PROVIDER = "yfinance (Yahoo Finance)"
