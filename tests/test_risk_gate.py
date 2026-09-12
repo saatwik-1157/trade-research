@@ -122,24 +122,55 @@ class NoLog:
         return False
 
 
+class _Stand_in:
+    """Stands in for an engine type that did not import.
+
+    Accepts anything and does nothing, so a test can REACH the code it is
+    about rather than dying on the first constructor it meets.
+    """
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+
 class EngineAs:
     """Run a block with `risk_gate.RiskEngine` replaced.
 
     The unavailable path has to be testable on the interpreters where the
     engine DOES import, or it would only ever be exercised by the one CI job
     that cannot exercise anything else.
+
+    The collaborators are stood in for as well, and that is not tidiness. On
+    3.10 the engine does not import at all, so `RiskLimits`, `KillSwitches`,
+    `OrderProposal` and `PortfolioState` are all None -- and `risk_gate`
+    constructs them as ARGUMENTS to `RiskEngine(...)`, which Python evaluates
+    first. So the first of them raised `TypeError: 'NoneType' object is not
+    callable` before the replacement was ever called, and the record said that
+    instead of what the replacement raised. Patching only `RiskEngine` tested
+    nothing on the one interpreter this file exists to cover.
+
+    Only None values are replaced. Where the engine really did import, the
+    real types are used, so the test still runs against the real thing.
     """
+
+    COLLABORATORS = ("RiskLimits", "KillSwitches", "OrderProposal", "PortfolioState")
 
     def __init__(self, replacement):
         self.replacement = replacement
 
     def __enter__(self):
-        self._real = risk_gate.RiskEngine
+        self._real = {"RiskEngine": risk_gate.RiskEngine}
         risk_gate.RiskEngine = self.replacement
+        for name in self.COLLABORATORS:
+            current = getattr(risk_gate, name, None)
+            self._real[name] = current
+            if current is None:
+                setattr(risk_gate, name, _Stand_in)
         return self
 
     def __exit__(self, *exc):
-        risk_gate.RiskEngine = self._real
+        for name, value in self._real.items():
+            setattr(risk_gate, name, value)
         return False
 
 
