@@ -1,6 +1,6 @@
 # PROJECT_STATUS.md
 
-Generated 2026-09-11 from the repository, the venue and the Windows power log.
+Generated 2026-09-12 from the repository, the venue and the Windows power log.
 
 **Current Status:** `HARNESS_FENCED` → `SOAK_REQUIRED`
 
@@ -15,14 +15,14 @@ gates, and has not yet ruled on a live overnight session.
 | | |
 |---|---|
 | **Trading Mode** | `paper` — `live_trading: false`, 12 live blockers, `assert_demo` in code |
-| **Account** | `5055473926 @ MetaQuotes-Demo` **[DEMO]** · flat: 0 positions, 0 pending · 99,970.28 USD |
+| **Account** | `5055473926 @ MetaQuotes-Demo` **[DEMO]** · **NOT FLAT: 7 positions held over the weekend** · 99,978.88 USD balance, −7.45 floating at the close |
 | **Running processes** | none. MT5 terminal open and idle |
 | **TradingView Status** | gateway built (hmac, age check, idempotency, body cap). **Never exercised end to end** — no broker account registered |
 | **MT5 Status** | one adapter, one `order_send` on the platform path; 4 on the harness path, all four now behind the Risk Engine — the opening order needs an `Approval`, the three closing ones are recorded and never refused |
 | **Risk Status** | 33+ veto codes — weekly loss, consecutive losses and correlation added at P4. RiskEngine is the final veto on **both** paths as of P2. 29 checks ruled on each proposal in the live dry run, 22 of them reported `not_enforced` by name |
 | **Windows Build Status** | **none.** No PyInstaller/Inno/NSIS/electron-builder anywhere |
-| **Stability** | **one full-length session has reached its deadline.** `20260910-224639`: 433 minutes, 1,298 passes, `flat-by 06:00` closed 6 at 05:59:24, exit 0, watchdog correctly declined to restart. One session is evidence, not a rate |
-| **Tests** | 9 toolkit gates pass (py3.14) · **full backend suite 2,976 passed / 0 failed** (21m33s) · `ruff` + `mypy` clean, 411 files |
+| **Stability** | **two full-length sessions have reached their deadlines.** 09-12 ran 1,288 passes to 06:00 and exited 0, but its flush was refused (market closed) — recorded `ended_not_flat`, not `completed`. Earlier: | `20260910-224639`: 433 minutes, 1,298 passes, `flat-by 06:00` closed 6 at 05:59:24, exit 0, watchdog correctly declined to restart. One session is evidence, not a rate |
+| **Tests** | 9 toolkit gates pass (py3.14, 3 extended 09-12) · **full backend suite 2,976 passed / 0 failed** (21m33s) · `ruff` + `mypy` clean, 411 files |
 
 ## Completed
 
@@ -51,8 +51,13 @@ gates, and has not yet ruled on a live overnight session.
 
 ## In Progress
 
-Nothing. P1b is complete with its evidence; P2 is complete and proven against
-the live terminal, but has not yet ruled on a live session.
+Nothing. P2 is complete and **proven on a live session**: 23 orders sent, 23
+risk decisions, 0 refusals; 51 closes recorded and approved, 35 of which the
+venue refused. The engine approved every close the market would not take,
+which is the asymmetry the design turns on and could only be shown by a night
+where closes failed.
+
+Open: 7 positions carried over the weekend. `--harvest-only` at Monday's open.
 
 ## Blocked
 
@@ -105,19 +110,42 @@ ten deliberate code changes; **no AI in the path that traded** (`--rule random`,
 no model consulted); no martingale or size escalation; **loss control held** —
 max drawdown −65.50 on 100,000 (−0.065%).
 
+## The weekend night (2026-09-12)
+
+A Friday session reached its 06:00 deadline after the FX week had closed. The
+flush was refused on all seven positions with retcode 10018, six times. Nothing
+was wrong with the session; it was asked for something the calendar would not
+allow. Three fixes came out of it:
+
+1. **A weekend deadline is refused before anything is opened.** The check is
+   made in the VENUE's week, not the operator's — a deadline can be Friday on
+   one clock and Saturday on the other, and the venue is the one that settles.
+   `--harvest-only` is exempt, because it opens nothing and is the remedy.
+   `--force` overrides.
+2. **A closed market is no longer retried.** 10031 is a trade server that may
+   return in seconds; 10018 is a calendar. The flush now stops after one round
+   and says what it means.
+3. **A session that fails its flush is no longer recorded `completed`.** It is
+   `ended_not_flat`, and an account that could not be COUNTED gets the same
+   status — unknown is not the good case.
+
+Still open and **not** fixed: nothing starts `tools/watchdog.py`. It exists, is
+tested, and neither `start-trading.bat` nor `run_overnight.py` mentions it, so
+P1b's "watchdog + restart-loop limiting" is a component nobody launches. The
+09-12 session ran without one.
+
 ## Next Recommended Action
 
-**Run one live session behind the fence.** P2 is built and proven on a dry run
-against the live terminal — 29 checks per proposal, three approvals, and the
-session halt firing when the daily limit was set below what the account had
-already realised. It has not yet ruled on an order that was actually sent.
+**Close the weekend book at Monday's open**, watching rather than scheduling:
+`start-trading.bat --harvest-only`. Seven positions are carrying financing and
+the Monday gap.
 
-That is the same shape of gap P1b had yesterday, and it closes the same way:
-one overnight session, read afterwards for the `risk` block now carried by
-every order in `data/paper_trades.jsonl`. The decision id on each one is what
-ties an order to the verdict that allowed it.
+**Then decide whether the launcher should start a watchdog.** It is the last
+loose end from P1b and the only one of the three 09-12 findings left unfixed,
+because it is a design question rather than a defect: does the launcher own a
+supervisor, or is supervision the operator's job?
 
-Then P5 — foreign keys and a Postgres-backed integration job — which is
+**Then P5** — foreign keys and a Postgres-backed integration job — which is
 Critical #3 and the highest test-integrity win left.
 
 Do not train a model. `ModelTrainingNeedAssessment` = **DO_NOT_TRAIN**: six

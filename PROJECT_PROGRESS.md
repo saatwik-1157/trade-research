@@ -5622,6 +5622,82 @@ fence has never ruled on an order that was actually sent. One overnight session
 fixes that, and every order in `data/paper_trades.jsonl` now carries a `risk`
 block to read it by.
 
+## The weekend the flush could not run (2026-09-12)
+
+The first live session behind the P2 fence did two things at once: it proved
+the fence, and it broke a promise nobody had noticed was conditional.
+
+**The fence, proven on orders that were actually sent.** 23 orders reached the
+venue and all 23 carried a RiskEngine decision -- 23 distinct decision ids, 29
+checks each, 23 limits reported `not_enforced` by name, 0 refusals. 51 closes
+were attempted and all 51 were recorded and approved.
+
+**35 of those closes were refused by the venue.** That pair is the strongest
+evidence the design has produced, and the night produced it by accident. Risk
+approved every close; the market took none of them. The asymmetry the whole
+gate turns on -- an entry needs permission, a close is recorded and never
+blocked -- can only be demonstrated by a night where closes fail, and the log
+now names which side said no. Had `record_close` been able to refuse, a failed
+flush would be indistinguishable from a fence that trapped the book.
+
+**What broke.** The session started Friday 22:50 and its deadline was 06:00
+Saturday. The FX week closed at 02:21 local, four hours before. The flush fired
+on seven positions and was refused with 10018 six times, ten seconds apart: 42
+identical refusals, then `POSITIONS ARE STILL OPEN AT THE VENUE`.
+
+Nothing malfunctioned. `--flat-by` promises the account is flat at the
+deadline, and that promise was never conditional in the code even though it has
+always been conditional in fact. Thursday's session proved the mechanism; this
+one proved the mechanism is not the whole story.
+
+### Three fixes, and one deliberate non-fix
+
+**The deadline is checked in the venue's week, not the operator's.** A deadline
+can be Friday on one clock and Saturday on the other, and the venue is the one
+that settles the trade -- so the guard applies the server offset before asking
+what day it is. The test that matters is the Friday-here/Saturday-there case,
+which a local-clock check would wave through.
+
+`--harvest-only` is exempt, and that is not a loophole: it opens nothing, and
+it is the exact command an operator runs to clean up the book the weekend
+caught. Refusing it would block the remedy with a warning about the problem.
+`--force` overrides, for an operator who means it.
+
+**Two assumptions are stated rather than buried.** MetaTrader's Python API
+exposes no session schedule, so "the week runs Sunday evening to Friday night"
+is the calendar rather than a reading. And `server_now()` is the last TICK's
+stamp, not a live clock -- valid at launch, when quotes are arriving. When the
+market is already shut the offset it yields is wrong, but wrong in the
+direction that makes a weekend deadline look like one, so the guard errs toward
+refusing.
+
+That second point produced a bug in the fix itself. The first version printed
+"server is -5.6h from this clock" on a Saturday -- a plausible figure computed
+from a tick seven hours dead. It now samples tick stamps twice, a second and a
+half apart, and when quotes are not arriving it says so instead of quoting an
+offset it cannot stand behind.
+
+**A closed market is no longer retried.** 10031 is a trade server that may come
+back within seconds, which is why the retry loop exists. 10018 is a calendar.
+The flush now stops after one round when every refusal is 10018 and says what
+that means for the positions. A round with a MIXED refusal still uses every
+attempt, because one position refusing with 10031 means a retry can still help.
+
+**A session that fails its flush is not `completed`.** It is `ended_not_flat`,
+and so is one whose open book could not be counted -- unknown is never the good
+case. The 09-12 run recorded `completed, exit code 0` while seven positions sat
+at the venue, which is the same family as the stale `running` record fixed the
+night before, pointing the other way.
+
+**The non-fix: nothing starts the watchdog.** `tools/watchdog.py` exists and is
+tested, and neither `start-trading.bat` nor `run_overnight.py` mentions it.
+Thursday's session had one because it was launched by a hand-typed command that
+included it; this one did not, and I nearly reported Thursday's watchdog line
+as this session's evidence -- the file is still on disk and reads plausibly
+until you check its date. P1b's "watchdog + restart-loop limiting" is a
+component nobody launches. Left alone deliberately: whether the launcher owns a
+supervisor is a design decision, not a defect to patch at the end of a session.
+
 ## Next
 
 ~~**P2 -- fence the harness path.**~~ **Done**, by routing through the Risk

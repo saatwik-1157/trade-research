@@ -611,8 +611,10 @@ unit conversion, the night count or the plausibility fence in `tools/swap.py`.
 The bracket-sanity and fill-recording checks are in `test_rule_backtest.py`
 too, since they are order construction.
 Run `python tests/test_crash_report.py` after touching
-`tools/crash_report.py`, `tools/console_guard.py`, or the PASS_HOOK and
+`tools/crash_report.py`, `tools/console_guard.py`, the PASS_HOOK and
 STOP_REQUESTED wiring in `tools/take_profit.py` and `tools/run_overnight.py`,
+or `run_overnight.weekend_deadline` and `run_overnight.finishing_status` --
+the venue-week guard and the status a finished session records,
 and `python tests/test_risk_gate.py` after touching `tools/risk_gate.py`, the
 `gate` parameter on `mt5_paper.place`, the close recorder in
 `mt5_paper.close_own`, or `APPROVED_UPSTREAM` in `app/brokers/mt5.py`.

@@ -141,6 +141,18 @@ def harvest(mt5, min_profit: float, live: bool) -> list[dict]:
 FLUSH_ATTEMPTS = 6
 FLUSH_WAIT_SECONDS = 10.0
 
+#: TRADE_RETCODE_MARKET_CLOSED. The one refusal that retrying cannot fix.
+#:
+#: 10031 (no connection) is why the retry loop exists: a machine resuming from
+#: sleep answers `positions_get` while `order_send` refuses, and ten seconds
+#: later it works. 10018 is the opposite -- the venue is not open and will not
+#: be for hours or days, so six attempts over a minute is a minute spent
+#: proving what the first answer already said.
+#:
+#: Measured 2026-09-12: a Friday-night session reached its 06:00 deadline after
+#: the FX week had closed, and printed 42 identical refusals across six rounds.
+MARKET_CLOSED = 10018
+
 
 def flush_until_flat(mt5, live: bool, attempts: int = FLUSH_ATTEMPTS,
                      wait: float = FLUSH_WAIT_SECONDS) -> tuple[int, list[dict]]:
@@ -173,6 +185,11 @@ def flush_until_flat(mt5, live: bool, attempts: int = FLUSH_ATTEMPTS,
             print(f"  [{stamp}] FLAT    {r.get('symbol', '?'):<8} #{r['ticket']}")
         failures = [r for r in results
                     if r.get("status") not in ("CLOSED", "DRY_RUN")]
+        # Every refusal is "the market is shut". Say so once and stop, rather
+        # than proving it five more times -- and say what it means, because
+        # "still open" after a flush reads like a bug when it is a calendar.
+        market_closed = bool(failures) and all(
+            r.get("retcode") == MARKET_CLOSED for r in failures)
         for r in failures:
             # The retcode is the whole point. 10031 is "no connection with the
             # trade server" and means try again; 10018 is a closed market and
@@ -184,6 +201,14 @@ def flush_until_flat(mt5, live: bool, attempts: int = FLUSH_ATTEMPTS,
                   f"retcode={r.get('retcode')}", flush=True)
         if not failures:
             return closed, []
+        if market_closed:
+            print(f"  [{stamp}] THE MARKET IS CLOSED (retcode {MARKET_CLOSED} on "
+                  f"all {len(failures)}). Retrying cannot change that, so the "
+                  f"flush stops here.", flush=True)
+            print(f"  [{stamp}] {len(failures)} position(s) stay open until the "
+                  "venue reopens. They carry financing and the opening gap.",
+                  flush=True)
+            return closed, failures
         if attempt < attempts:
             print(f"  [{stamp}] {len(failures)} still open; retrying in "
                   f"{wait:.0f}s (attempt {attempt}/{attempts})", flush=True)
@@ -500,8 +525,14 @@ def run(mt5, args) -> dict:
     # terminal still died with a traceback on its way out and reported nothing
     # about what it had done. Found by the test written for the loop guard,
     # which is the argument for writing the test.
+    # `flat_by` is recorded because "7 positions are open" means two different
+    # things depending on whether being flat was ever asked for, and the
+    # session record could not tell them apart. A run with no --flat-by that
+    # ends holding 7 is working as instructed; one WITH it has failed its last
+    # obligation, and only this field separates them.
     summary = {"passes": passes, "harvested": harvested, "opened": opened,
                "flushed": flushed, "halted": halted, "halt_kind": halt_kind,
+               "flat_by": args.flat_by,
                "start_balance": start_balance,
                "end_balance": None, "realised": None, "still_open": None}
     try:
