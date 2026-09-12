@@ -38,7 +38,8 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
-import mt5_paper  # noqa: E402
+import mt5_paper
+import risk_gate  # noqa: E402
 import rule_backtest as rb  # noqa: E402
 import take_profit  # noqa: E402
 import rule_search  # noqa: E402
@@ -664,14 +665,22 @@ class FakeMT5:
             deal=self.deal, price=self.fill)
 
 
-def _place(fake, side="sell", risk_usd=None):
-    """Run place() against the fake with the trade log stubbed out."""
+def _place(fake, side="sell", risk_usd=None, sl_atr=1.5, tp_atr=1.5):
+    """Run place() against the fake with the trade log stubbed out.
+
+    `APPROVED_UPSTREAM` rather than a real gate, because these tests are about
+    ORDER CONSTRUCTION -- the filling mode, the fill price, the bracket repair
+    -- and a risk verdict on top of that would test the engine twice and would
+    need an engine at all, which Python 3.10 in CI does not have. The fence
+    itself is tested in `tests/test_risk_gate.py`.
+    """
     logged = []
     real_log = mt5_paper._log
     mt5_paper._log = logged.append
     try:
-        out = mt5_paper.place(fake, "NZDUSD", side, 0.01, 1.5, 1.5, live=True,
-                              risk_usd=risk_usd)
+        out = mt5_paper.place(fake, "NZDUSD", side, 0.01, sl_atr, tp_atr, live=True,
+                              risk_usd=risk_usd,
+                              gate=risk_gate.APPROVED_UPSTREAM)
     finally:
         mt5_paper._log = real_log
     return out, logged
@@ -682,6 +691,12 @@ def test_bracket_must_straddle_the_fill():
 
     check("a normal long is sane", mt5_paper.bracket_is_sane(True, 1.0, 0.9, 1.1), True)
     check("a normal short is sane", mt5_paper.bracket_is_sane(False, 1.0, 1.1, 0.9), True)
+    # The shape that actually reached the server on 2026-09-07: a bracket of
+    # zero width, every exit sitting on the entry.
+    check("a zero-width bracket is not sane",
+          mt5_paper.bracket_is_sane(True, 1.0, 1.0, 1.0), False)
+    check("nor is it sane for a short",
+          mt5_paper.bracket_is_sane(False, 1.0, 1.0, 1.0), False)
 
     # Position 10200315596: sell quoted 0.59752 with tp 0.59638, filled 0.59473.
     check("the live NZDUSD fill is caught",
@@ -704,6 +719,36 @@ def test_place_records_the_fill_not_the_quote():
     check("a sane bracket is left alone", out.get("bracket_repaired"), None)
     check("only the entry order was sent", len(fake.sent), 1)
     close_to("the log carries the fill", logged[0]["fill_price"], 0.59750, 1e-9)
+
+
+def test_a_zero_multiple_means_no_bracket_not_a_zero_width_one():
+    """2026-09-07 04:52 UTC, EURUSD: sl == tp == entry reached the server.
+
+    `price - 0.0 * atr` is `price`, so computing the levels unconditionally
+    sends a bracket of zero width -- both exits on the entry, every outcome a
+    loss. It happened once, live, when the platform adapter passed 0.0/0.0
+    meaning "I will set the levels myself". `bracket_is_sane` caught it, the
+    repair recomputed the same zero width, the modify came back 10025
+    NO_CHANGES, and the fallback closed the position. The fail-safe worked and
+    the order should never have been built.
+
+    Asserted on what reaches the server, because that is what was wrong: the
+    levels are transmitted as absolute prices, and 0.0 is how MT5 spells
+    "not set".
+    """
+    print("\nZero ATR multiple - 0.0 means no bracket, never a bracket of zero width")
+
+    fake = FakeMT5(fill=0.59752)          # filled exactly at the quote
+    out, _ = _place(fake, sl_atr=0.0, tp_atr=0.0)
+
+    sent = fake.sent[0]
+    check("the stop is sent as not-set", sent["sl"], 0.0)
+    check("the target is sent as not-set", sent["tp"], 0.0)
+    check("no level equals the entry", sent["sl"] == sent["price"], False)
+    check("nothing was repaired, because nothing was wrong",
+          out.get("bracket_repaired"), None)
+    check("and nothing was closed out", out.get("bracket_repair_failed_closed"), None)
+    check("only the entry order was sent", len(fake.sent), 1)
 
 
 def test_inverted_bracket_is_repaired_from_the_fill():
@@ -1132,6 +1177,109 @@ def test_the_flush_fires_when_flat_by_equals_the_stop_hour():
     check("and they are not counted as harvests", out["harvested"], 0)
 
 
+def test_a_refused_flush_is_retried_and_named():
+    """The 2026-09-08 defect, both halves.
+
+    The machine woke at the deadline and the flush fired into a terminal that
+    was awake but had no trade server yet: `order_send` returned 10031, the one
+    attempt was spent, and the position stayed open all day carrying swap. What
+    the operator saw was `flat-by 06:00: closed 0 at the deadline`, which is
+    exactly what an already-flat account prints. The retcode was in the record
+    and never left it.
+    """
+    print()
+    print("Wind-down - a refused close is not a closed position")
+
+    class Refusing(HarvestMT5):
+        """Refuses with 10031 until `fails` attempts have been spent."""
+
+        def __init__(self, positions, fails):
+            super().__init__(positions)
+            self.fails = fails
+            self.attempts = 0
+
+        def order_send(self, request):
+            self.attempts += 1
+            if self.attempts <= self.fails:
+                return types.SimpleNamespace(retcode=10031, order=0, deal=0,
+                                             price=0.0, volume=0.0)
+            self._positions = []
+            return super().order_send(request)
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        # Refuses once, then succeeds: the retry is what makes the account flat.
+        c = Refusing([pos(1, profit=-2.25)], fails=1)
+        closed, still = take_profit.flush_until_flat(c, live=True, attempts=4, wait=0)
+        check("the retry closed what one attempt could not", closed, 1)
+        check("and nothing is left failing", still, [])
+        check("it took a second attempt to do it", c.attempts, 2)
+
+        # Refuses throughout: the caller must be told, with the retcode.
+        c = Refusing([pos(2, profit=-2.25)], fails=99)
+        closed, still = take_profit.flush_until_flat(c, live=True, attempts=3, wait=0)
+        check("a flush that never succeeded closed nothing", closed, 0)
+        check("and says so rather than reporting a flat account", len(still), 1)
+        check("naming the retcode the venue gave", still[0]["retcode"], 10031)
+        check("after every attempt it was given", c.attempts, 3)
+    finally:
+        mt5_paper._log = real_log
+
+
+def test_a_closed_market_is_not_retried():
+    """The 2026-09-12 session, and the distinction 10031 vs 10018.
+
+    A Friday-night run reached its 06:00 deadline after the FX week had closed.
+    Seven positions, six attempts, ten seconds apart: 42 identical refusals and
+    a minute spent proving what the first answer already said. 10031 is worth
+    retrying because a trade server can come back within seconds; 10018 is a
+    calendar, and no number of attempts moves it.
+    """
+    print()
+    print("Wind-down - the market being shut is not a transient")
+
+    class Closed(HarvestMT5):
+        """Refuses everything with 10018, the way a weekend does."""
+
+        def __init__(self, positions):
+            super().__init__(positions)
+            self.attempts = 0
+
+        def order_send(self, request):
+            self.attempts += 1
+            return types.SimpleNamespace(retcode=take_profit.MARKET_CLOSED,
+                                         order=0, deal=0, price=0.0, volume=0.0)
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        c = Closed([pos(1, profit=-2.25), pos(2, profit=-1.10)])
+        closed, still = take_profit.flush_until_flat(c, live=True, attempts=6, wait=0)
+        check("nothing was closed", closed, 0)
+        check("both are reported still open", len(still), 2)
+        check("naming the retcode", still[0]["retcode"], 10018)
+        # The point: ONE round of two, not six rounds of two.
+        check("it stopped after the first round", c.attempts, 2)
+
+        # A MIXED round is not a closed market. One position refusing with
+        # 10031 means a retry can still help, and stopping early would spend
+        # the tail the flush exists to close.
+        class Mixed(Closed):
+            def order_send(self, request):
+                self.attempts += 1
+                code = 10018 if self.attempts % 2 else 10031
+                return types.SimpleNamespace(retcode=code, order=0, deal=0,
+                                             price=0.0, volume=0.0)
+
+        c = Mixed([pos(3, profit=-2.25), pos(4, profit=-1.10)])
+        closed, still = take_profit.flush_until_flat(c, live=True, attempts=3, wait=0)
+        check("a mixed refusal still uses every attempt", c.attempts, 6)
+        check("and still reports what stayed open", len(still), 2)
+    finally:
+        mt5_paper._log = real_log
+
+
 def test_a_halt_does_not_flush_hours_early():
     """`--max-daily-loss` firing at 22:00 stops trading; it does not mean close
     everything six hours before the operator asked."""
@@ -1162,6 +1310,46 @@ def test_a_halt_does_not_flush_hours_early():
 
     check("a halted session closes nothing", out["flushed"], 0)
     check("and says it halted", out["halted"], True)
+
+
+def test_the_two_halts_are_told_apart_by_value():
+    """A risk halt and a dead terminal call for opposite responses from
+    anything supervising the session: one must not be restarted, the other
+    exists to be. `run_overnight --continuous` acts on this, so the two have to
+    be separable by a value rather than by matching the printed line -- the
+    same rule the MT5 registration route follows when it tells a fence refusal
+    from a missing package.
+    """
+    print()
+    print("Halts - which one, not just that there was one")
+
+    args = types.SimpleNamespace(
+        minutes=0.001, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by=None, harvest_only=False, live=True,
+        rule="random", symbols="EURUSD", lot=0.01, risk_usd=None,
+        sl_atr=1.5, tp_atr=1.5, max_positions=7, max_daily_loss=0.01)
+
+    real_cycle, real_log = mt5_paper.cycle, mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        mt5_paper.cycle = lambda mt5, a: {"halted": True, "reason": "daily loss",
+                                          "actions": []}
+        risk = take_profit.run(HarvestMT5([pos(1, profit=-2.25)]), args)
+    finally:
+        mt5_paper.cycle = real_cycle
+        mt5_paper._log = real_log
+
+    check("the risk limit names itself", risk["halt_kind"], "risk")
+
+    class Dead(HarvestMT5):
+        def positions_get(self, **kw):
+            raise RuntimeError("terminal not answering")
+
+    terminal = take_profit.run(Dead([]), args)
+    check("a terminal that stopped answering is a different halt",
+          terminal["halt_kind"], "terminal")
+    check("and a session that simply ran out of time halted at all", False,
+          bool(risk["halt_kind"] == terminal["halt_kind"]))
 
 
 def test_the_machine_is_released_even_when_the_session_raises():
@@ -1325,6 +1513,373 @@ def test_a_terminal_that_never_answers_is_given_up_on():
           take_profit.MAX_CONSECUTIVE_MISSES, 10)
 
 
+def test_a_partial_disconnect_is_not_a_cosmetic_failure():
+    """The 2026-09-10 shape: positions_get answers, account_info does not.
+
+    This is the case the old handler could not see. `account_info()` returns
+    None on a dropped terminal, `bal.balance` on None raises AttributeError,
+    and that was caught as though a log line had failed to format -- printing
+    "the session continues" and doing exactly that, 23 times, harvesting
+    nothing and with --max-daily-loss unable to evaluate.
+
+    It also needs its OWN budget. `misses` is reset by the next good harvest,
+    and here every harvest succeeds, so a shared counter would be spent and
+    refilled forever and the session would never give up.
+    """
+    print()
+    print("A partial disconnect stops the session rather than blinding it")
+
+    class HalfDead(HarvestMT5):
+        """Answers the position query. Stops answering the account query.
+
+        Readable at startup and None afterwards, which is the real sequence:
+        the session began fine at 09:05 and the terminal dropped at 10:25.
+        A mock that is dead from the first call would be stopped by the
+        startup guard and would never exercise the loop.
+        """
+
+        def __init__(self, *a, **kw):
+            super().__init__(*a, **kw)
+            self._reads = 0
+
+        def account_info(self):
+            self._reads += 1
+            if self._reads == 1:
+                return super().account_info()
+            return None
+
+    c = HalfDead([])
+    args = types.SimpleNamespace(
+        minutes=5.0, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by="06:00", harvest_only=True, live=True)
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        out = take_profit.run(c, args)
+    finally:
+        mt5_paper._log = real_log
+
+    check("a blind session halts instead of spinning", out["halted"], True)
+    check("and names the terminal as the reason", out["halt_kind"], "terminal")
+    # The budget is spent on consecutive blind passes, not reset by the
+    # harvest that keeps succeeding beside them.
+    check("after the stated number of unreadable passes",
+          out["passes"] <= take_profit.MAX_CONSECUTIVE_MISSES, True)
+
+
+def test_an_unreadable_venue_never_reports_a_limit_as_satisfied():
+    """A risk limit computed from a read that did not answer is not a limit.
+
+    `history_deals_get` and `positions_get` both return None on a dropped
+    terminal, and `x or []` turned that into an empty result -- a daily P&L of
+    0.00 that passes any loss limit, and an open book of 0 that invites the
+    full position count to be re-opened.
+    """
+    print()
+    print("An unreadable venue fails closed, not open")
+
+    class NoHistory:
+        def positions_get(self):
+            return None
+
+        def history_deals_get(self, *a):
+            return None
+
+        def symbol_info_tick(self, s):
+            return None
+
+    v = NoHistory()
+
+    raised = None
+    try:
+        mt5_paper.own_positions(v)
+    except mt5_paper.VenueUnreadable as exc:
+        raised = type(exc).__name__
+    check("an unreadable open book raises rather than reading empty",
+          raised, "VenueUnreadable")
+
+    # An EMPTY tuple is a real answer and must still work: the distinction
+    # between "nothing is open" and "we could not ask" is the whole point.
+    class Empty(NoHistory):
+        def positions_get(self):
+            return ()
+
+    check("but a genuinely empty book is still empty",
+          mt5_paper.own_positions(Empty()), [])
+
+
+def test_a_stop_request_still_runs_the_flush():
+    """P1b. The whole point of catching a console close.
+
+    Eight sessions were killed mid-pass and none ran `--flat-by`, so each left
+    its losing tail open -- the harvest floor books winners and holds losers,
+    so whatever is open when a session dies IS the tail. Converting the kill
+    into a stop request is only worth doing if the flush still happens, so
+    that is what this asserts rather than that the loop exited.
+    """
+    print()
+    print("A stop request winds down rather than abandoning the book")
+
+    c = HarvestMT5([pos(1, profit=-2.25)])
+    # 0.02 minutes, not 5: this test must be bounded by the stop request it is
+    # testing, and a 5-minute deadline would hide a stop that never fired
+    # behind five minutes of spinning.
+    args = types.SimpleNamespace(
+        minutes=0.02, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by="06:00", harvest_only=True, live=True)
+
+    # Ask for a stop on the second pass, the way a console close would.
+    calls = {"n": 0}
+
+    def hook(_passes, _state):
+        calls["n"] += 1
+        if calls["n"] >= 2:
+            take_profit.STOP_REQUESTED = True
+
+    real_log, real_hook = mt5_paper._log, take_profit.PASS_HOOK
+    mt5_paper._log = lambda r: None
+    take_profit.PASS_HOOK = hook
+    try:
+        out = take_profit.run(c, args)
+    finally:
+        mt5_paper._log = real_log
+        take_profit.PASS_HOOK = real_hook
+        take_profit.STOP_REQUESTED = False
+
+    check("it stopped early", out["passes"] <= 3, True)
+    # NOT halted: a halt suppresses the flush, and a stop must not.
+    check("and did not mark itself halted", out["halted"], False)
+    check("so the deadline flush still ran", out["flushed"], 1)
+    # NOT `still_open == 0`: this mock re-serves the same position after every
+    # close, so a 1 there is the fixture rather than a leak. `flushed` above is
+    # what proves the wind-down closed what it found.
+    check("and recorded why it stopped", out["halt_kind"], "stopped")
+
+
+def test_a_failing_heartbeat_cannot_end_a_session():
+    """A crash journal that can end a trading session is worse than none."""
+    print()
+    print("A journal that throws is swallowed by the loop")
+
+    def explode(_passes, _state):
+        raise OSError("disk full")
+
+    # A LOSING position: one above the harvest floor is closed and re-served
+    # by this mock every pass, which spins the loop until its deadline. The
+    # hook here raises, so it cannot be used to stop the loop either -- the
+    # bound has to be the clock.
+    c = HarvestMT5([pos(1, profit=-2.25)])
+    args = types.SimpleNamespace(
+        minutes=0.02, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by="06:00", harvest_only=True, live=True)
+
+    real_log, real_hook = mt5_paper._log, take_profit.PASS_HOOK
+    mt5_paper._log = lambda r: None
+    take_profit.PASS_HOOK = explode
+    try:
+        out = take_profit.run(c, args)
+        raised = None
+    except BaseException as exc:  # pragma: no cover - the failure being guarded
+        out, raised = None, type(exc).__name__
+    finally:
+        mt5_paper._log = real_log
+        take_profit.PASS_HOOK = real_hook
+        take_profit.STOP_REQUESTED = False
+
+    check("the session did not raise", raised, None)
+    check("it ran to its own end", out is not None and out["halted"], False)
+    check("and still flushed", out is not None and out["flushed"], 1)
+
+
+def test_the_heartbeat_reports_unknown_rather_than_zero_when_blind():
+    """A record claiming 0 open would send a recovery run away empty."""
+    print()
+    print("A blind pass records UNKNOWN, not an empty book")
+
+    class HalfDead(HarvestMT5):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, **kw)
+            self._reads = 0
+
+        def account_info(self):
+            self._reads += 1
+            return super().account_info() if self._reads == 1 else None
+
+    seen = []
+    c = HalfDead([])
+    args = types.SimpleNamespace(
+        minutes=0.02, interval=0, min_profit=0.50, relax_over=45.0,
+        flat_by="06:00", harvest_only=True, live=True)
+
+    real_log, real_hook = mt5_paper._log, take_profit.PASS_HOOK
+    mt5_paper._log = lambda r: None
+    take_profit.PASS_HOOK = lambda n, st: seen.append(st)
+    try:
+        take_profit.run(c, args)
+    finally:
+        mt5_paper._log = real_log
+        take_profit.PASS_HOOK = real_hook
+        take_profit.STOP_REQUESTED = False
+
+    blind = [s for s in seen if s["blind"] > 0]
+    check("some passes were blind", len(blind) > 0, True)
+    check("and each recorded an UNKNOWN book",
+          all(s["positions_open"] is None for s in blind), True)
+
+
+def test_a_streak_is_counted_per_position_not_per_deal():
+    """One position makes two deals. Counting deals scores every trade twice.
+
+    And an OPEN position already has an entry deal sitting in history at
+    profit 0, so admitting anything without a closing deal would put an
+    unfinished trade into a record of how the finished ones went.
+    """
+    print()
+    print("A streak counts closed positions, not deals")
+
+    class Deal:
+        def __init__(self, pid, profit, entry, t):
+            self.position_id = pid
+            self.profit = profit
+            self.commission = 0.0
+            self.swap = 0.0
+            self.entry = entry
+            self.time = t
+            self.magic = mt5_paper.MAGIC
+
+    class Venue:
+        DEAL_ENTRY_OUT = 1
+
+        def __init__(self, deals):
+            self._deals = deals
+
+        def history_deals_get(self, *a):
+            return self._deals
+
+    # Position 1 won, 2 and 3 lost, 4 is still open (entry deal only).
+    deals = [
+        Deal(1, 0.0, 0, 10), Deal(1, 2.50, 1, 11),
+        Deal(2, 0.0, 0, 12), Deal(2, -1.20, 1, 13),
+        Deal(3, 0.0, 0, 14), Deal(3, -0.80, 1, 15),
+        Deal(4, 0.0, 0, 16),
+    ]
+    real = mt5_paper.server_day_start
+    real_end = mt5_paper.history_end
+    mt5_paper.server_day_start = lambda _m: 0
+    mt5_paper.history_end = lambda _m: 99
+    try:
+        got = mt5_paper.closed_outcomes(Venue(deals))
+    finally:
+        mt5_paper.server_day_start = real
+        mt5_paper.history_end = real_end
+    check("three closed positions, not seven deals", len(got), 3)
+    check("in the order they closed", [round(x, 2) for x in got],
+          [2.50, -1.20, -0.80])
+    check("the open position is absent", 4 in [1, 2, 3], False)
+    check("and the trailing streak is two", mt5_paper.consecutive_losses(got), 2)
+
+
+def test_a_break_even_breaks_the_streak():
+    """A trade that cost nothing is not evidence the rule is failing."""
+    print()
+    print("A scratch is not a loss")
+    check("a zero ends the run", mt5_paper.consecutive_losses([-1, -1, 0.0]), 0)
+    check("a win ends it too", mt5_paper.consecutive_losses([-1, -1, 5.0]), 0)
+    check("losses after it still count",
+          mt5_paper.consecutive_losses([-1, 0.0, -1, -1]), 2)
+    check("an empty record is not a streak", mt5_paper.consecutive_losses([]), 0)
+
+
+def test_the_streak_pauses_entries_without_halting_the_session():
+    """The distinction that matters. A halt skips the wind-down; a pause does
+    not, so the positions the streak produced are still managed and still
+    flushed. Reaching the same abandoned book by a different road would be no
+    better than the crash."""
+    print()
+    print("A losing streak pauses entries; it does not halt the session")
+
+    class Venue:
+        DEAL_ENTRY_OUT = 1
+
+        def positions_get(self):
+            return ()
+
+        def history_deals_get(self, *a):
+            class D:
+                magic = mt5_paper.MAGIC
+                commission = swap = 0.0
+                entry = 1
+
+            out = []
+            for i in range(4):
+                d = D()
+                d.position_id = i
+                d.profit = -1.0
+                d.time = i
+                out.append(d)
+            return out
+
+    args = types.SimpleNamespace(
+        symbols=["EURUSD", "GBPUSD"], max_daily_loss=200.0, max_positions=7,
+        max_consecutive_losses=3, rule="random", lot=0.01, sl_atr=1.5,
+        tp_atr=1.5, live=False, risk_usd=None)
+
+    real = mt5_paper.server_day_start
+    mt5_paper.server_day_start = lambda _m: 0
+    real_end = mt5_paper.history_end
+    mt5_paper.history_end = lambda _m: 1
+    try:
+        res = mt5_paper.cycle(Venue(), args)
+    finally:
+        mt5_paper.server_day_start = real
+        mt5_paper.history_end = real_end
+
+    check("four losses trips a cap of three", res["consecutive_losses"], 4)
+    check("entries are paused", res["paused"], True)
+    # NOT halted. A halt suppresses the flush.
+    check("but the session is NOT halted", res["halted"], False)
+    check("and every symbol is skipped for that reason",
+          sorted({a["status"] for a in res["actions"]}),
+          ["skipped_consecutive_losses"])
+
+
+def test_the_cap_is_off_unless_asked_for():
+    """0 means off, and off must not read the history at all."""
+    print()
+    print("The cap is opt-in")
+
+    class Venue:
+        TIMEFRAME_H1 = 16385
+
+        def positions_get(self):
+            return ()
+
+        def history_deals_get(self, *a):
+            return []
+
+        def copy_rates_from_pos(self, *a):
+            return None
+
+    args = types.SimpleNamespace(
+        symbols=["EURUSD"], max_daily_loss=200.0, max_positions=7,
+        max_consecutive_losses=0, rule="random", lot=0.01, sl_atr=1.5,
+        tp_atr=1.5, live=False, risk_usd=None)
+
+    real = mt5_paper.server_day_start
+    mt5_paper.server_day_start = lambda _m: 0
+    real_end = mt5_paper.history_end
+    mt5_paper.history_end = lambda _m: 1
+    try:
+        res = mt5_paper.cycle(Venue(), args)
+    finally:
+        mt5_paper.server_day_start = real
+        mt5_paper.history_end = real_end
+
+    check("not paused", res["paused"], False)
+    check("and the streak is not counted", res["consecutive_losses"], 0)
+
+
 def main():
     print("rule_backtest / mt5_paper checks")
     test_filling_mode()
@@ -1350,10 +1905,20 @@ def main():
     test_walk_forward_cannot_see_its_test_era()
     test_bracket_must_straddle_the_fill()
     test_place_records_the_fill_not_the_quote()
+    test_a_zero_multiple_means_no_bracket_not_a_zero_width_one()
     test_inverted_bracket_is_repaired_from_the_fill()
     test_unrepairable_bracket_is_closed_not_held()
     test_lot_is_sized_off_the_stop_distance()
     test_rounding_never_risks_more_than_the_budget()
+    test_a_partial_disconnect_is_not_a_cosmetic_failure()
+    test_an_unreadable_venue_never_reports_a_limit_as_satisfied()
+    test_a_stop_request_still_runs_the_flush()
+    test_a_failing_heartbeat_cannot_end_a_session()
+    test_the_heartbeat_reports_unknown_rather_than_zero_when_blind()
+    test_a_streak_is_counted_per_position_not_per_deal()
+    test_a_break_even_breaks_the_streak()
+    test_the_streak_pauses_entries_without_halting_the_session()
+    test_the_cap_is_off_unless_asked_for()
     test_min_lot_floor_is_reported_not_hidden()
     test_missing_tick_value_refuses_to_size()
     test_place_sends_the_derived_volume()
@@ -1368,7 +1933,10 @@ def main():
     test_the_flush_closes_losers_and_the_harvest_never_does()
     test_a_deadline_is_the_wall_clock_and_rolls_to_tomorrow()
     test_the_flush_fires_when_flat_by_equals_the_stop_hour()
+    test_a_refused_flush_is_retried_and_named()
+    test_a_closed_market_is_not_retried()
     test_a_halt_does_not_flush_hours_early()
+    test_the_two_halts_are_told_apart_by_value()
     test_the_machine_is_released_even_when_the_session_raises()
     test_a_platform_that_cannot_hold_says_so_and_still_runs()
     test_a_setting_can_be_overridden_but_not_invented()

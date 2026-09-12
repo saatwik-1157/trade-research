@@ -52,6 +52,9 @@ class LimitKind(StrEnum):
     one_position_per_symbol = "one_position_per_symbol"
     max_trades_per_day = "max_trades_per_day"
     max_daily_loss = "max_daily_loss"
+    max_weekly_loss = "max_weekly_loss"
+    max_consecutive_losses = "max_consecutive_losses"
+    max_correlated_exposure = "max_correlated_exposure"
     max_drawdown = "max_drawdown"
     max_exposure = "max_exposure"
     max_leverage = "max_leverage"
@@ -84,6 +87,18 @@ class RiskLimits:
 
     max_risk_per_trade: Decimal | None = None  # account currency
     max_daily_loss: Decimal | None = None
+    #: Account currency, over the broker's trading week. Halts like the
+    #: daily limit: the next order would breach it too.
+    max_weekly_loss: Decimal | None = None
+    #: Losing trades in a row before new orders are refused. A VETO and
+    #: not a halt -- a halt would stop the session managing what is
+    #: already open, and a streak is a reason to stop OPENING, never a
+    #: reason to stop watching. It clears itself on the next win.
+    max_consecutive_losses: int | None = None
+    #: Account currency held in instruments that move together. The one
+    #: of the three with no data source yet, and it fails closed when
+    #: configured without one rather than passing quietly.
+    max_correlated_exposure: Decimal | None = None
     max_drawdown_pct: Decimal | None = None
     max_exposure_per_currency: Decimal | None = None
     max_open_positions: int | None = None
@@ -142,6 +157,14 @@ class PortfolioState:
     open_positions: int | None = None
     open_symbols: frozenset[str] = frozenset()
     realised_today: Decimal | None = None
+    realised_week: Decimal | None = None
+    #: Losing trades in a row, counted per CLOSED position. None means
+    #: it could not be counted, which is never the same as zero.
+    consecutive_losses: int | None = None
+    #: Exposure in instruments correlated above the portfolio's own
+    #: threshold. Requires a common window across two or more
+    #: instruments; None until there is one.
+    correlated_exposure: Decimal | None = None
     trades_today: int | None = None
     peak_equity: Decimal | None = None
     exposure_by_currency: dict[str, Decimal] = field(default_factory=dict)
@@ -429,6 +452,67 @@ class RiskEngine:
                     LimitKind.max_daily_loss,
                     not breached,
                     f"realised {portfolio.realised_today}, limit -{abs(limits.max_daily_loss)}",
+                )
+
+        # Weekly loss. Same shape as the daily limit and the same reason for
+        # halting: a week that has breached its limit does not un-breach it
+        # before the next order.
+        if limits.max_weekly_loss is not None:
+            if portfolio.realised_week is None:
+                add(
+                    LimitKind.max_weekly_loss,
+                    False,
+                    "this week's realised P&L is unknown",
+                )
+            else:
+                breached = portfolio.realised_week <= -abs(limits.max_weekly_loss)
+                add(
+                    LimitKind.max_weekly_loss,
+                    not breached,
+                    f"realised {portfolio.realised_week}, limit -{abs(limits.max_weekly_loss)}",
+                )
+
+        # Consecutive losses. A veto rather than a halt, deliberately: the
+        # response to a losing streak is to stop OPENING, and a halt would
+        # also stop managing what is already open. Nothing here ever
+        # increases size in response to a loss; that is martingale.
+        if limits.max_consecutive_losses is not None:
+            if portfolio.consecutive_losses is None:
+                add(
+                    LimitKind.max_consecutive_losses,
+                    False,
+                    "the recent outcomes could not be counted",
+                )
+            else:
+                breached = portfolio.consecutive_losses >= limits.max_consecutive_losses
+                add(
+                    LimitKind.max_consecutive_losses,
+                    not breached,
+                    f"{portfolio.consecutive_losses} in a row, "
+                    f"limit {limits.max_consecutive_losses}",
+                )
+
+        # Correlated exposure. This repository has no correlation figure yet:
+        # it needs a common window across two or more instruments, and
+        # `market_bars` holds 705 bars across 2 symbols. So the check exists
+        # and FAILS when a limit is set without the data to evaluate it,
+        # rather than passing quietly -- an unmeasurable limit that approves
+        # is worse than no limit, because it reads as one that was checked.
+        if limits.max_correlated_exposure is not None:
+            if portfolio.correlated_exposure is None:
+                add(
+                    LimitKind.max_correlated_exposure,
+                    False,
+                    "correlated exposure is unknown; a correlation needs a "
+                    "common window across two or more instruments",
+                )
+            else:
+                breached = portfolio.correlated_exposure > limits.max_correlated_exposure
+                add(
+                    LimitKind.max_correlated_exposure,
+                    not breached,
+                    f"{portfolio.correlated_exposure} correlated, "
+                    f"limit {limits.max_correlated_exposure}",
                 )
 
         # Drawdown.
@@ -731,7 +815,15 @@ class RiskEngine:
 
         # A breached daily loss or drawdown stops the session, not just this
         # order: the next order would breach it too.
-        halting = {LimitKind.max_daily_loss, LimitKind.max_drawdown}
+        # A breached daily loss, weekly loss or drawdown stops the session:
+        # the next order would breach it too. A losing STREAK does not --
+        # it clears on the next win, and halting would stop the session
+        # managing the positions the streak just produced.
+        halting = {
+            LimitKind.max_daily_loss,
+            LimitKind.max_weekly_loss,
+            LimitKind.max_drawdown,
+        }
         decision = (
             RiskDecision.halt if any(c.limit in halting for c in failed) else RiskDecision.veto
         )

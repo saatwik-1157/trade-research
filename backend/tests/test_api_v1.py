@@ -71,6 +71,10 @@ async def _seed(db) -> None:  # noqa: ANN001 - AsyncSession, kept loose for brev
     )
     de40 = Symbol(id="sym-de40", code="DE40", asset_class="index", unit_class="points")
     db.add_all([eur, de40])
+    # Everything below references these symbols. SQLAlchemy sorts unrelated
+    # mappers by its own key, not by the foreign key, so `orders` and the
+    # mappings would otherwise be written before `symbols` exists.
+    await db.flush()
     # A complete spec on EURUSD, a deliberately incomplete one on DE40: the
     # refusal path needs a row that exists and is missing fields, which is
     # exactly what an unsynced mapping looks like.
@@ -123,6 +127,11 @@ async def _seed(db) -> None:  # noqa: ANN001 - AsyncSession, kept loose for brev
                 updated_at=BASE + timedelta(minutes=i),
             )
         )
+    # `executions` and `order_events` both sort ahead of `orders` for
+    # SQLAlchemy, which has no relationship() telling it they depend on the
+    # order -- so without this the children are written first. Invisible while
+    # SQLite ignored foreign keys; 169 errors once it stopped.
+    await db.flush()
     db.add(
         OrderEvent(
             id="oev-0", order_id="ord-0", event_type="filled", occurred_at=BASE, retcode=10009

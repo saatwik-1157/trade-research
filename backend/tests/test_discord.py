@@ -525,15 +525,32 @@ async def test_a_network_failure_is_retryable(monkeypatch: pytest.MonkeyPatch) -
 async def test_the_rate_gate_spaces_consecutive_sends(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Section 24. Client-side, so a burst does not reach the 429 path at all."""
-    import time
+    """Section 24. Client-side, so a burst does not reach the 429 path at all.
+
+    Asserted on the delay the gate ASKS for, not on elapsed wall clock. The
+    wall-clock form failed at 0.047s against a 0.05s interval: `asyncio.sleep`
+    can return a few milliseconds early at Windows timer granularity, so the
+    test was measuring the OS rather than the gate. Whether the loop honours a
+    sleep to the millisecond is not this adapter's contract; asking for the
+    right delay is.
+    """
+    import asyncio
 
     _capture(monkeypatch)
+    slept: list[float] = []
+
+    async def _record(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", _record)
     adapter = channel(min_interval=0.05)
-    started = time.monotonic()
     await adapter.send(envelope())
     await adapter.send(envelope())
-    assert time.monotonic() - started >= 0.05
+
+    # The first send has nothing to wait behind; the second is held for what
+    # remains of the interval, which is at most the interval itself.
+    assert len(slept) == 1, f"expected one wait, got {slept}"
+    assert 0 < slept[0] <= 0.05
 
 
 def test_counters_are_counts_and_never_payloads() -> None:

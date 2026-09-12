@@ -88,6 +88,17 @@ class DuplicateValidationJob(ValidationError):
     """The same candidate is already being validated under the same thresholds."""
 
 
+class UnknownCandidate(ValidationError):
+    """The model version to validate does not exist.
+
+    A refusal rather than a failed run, because there is no run to record:
+    `validation_runs.model_version_id` is NOT NULL and a foreign key, so a row
+    naming a version that does not exist cannot be written at all. The database
+    refuses it, and the caller is told which id was not found rather than being
+    handed an IntegrityError from two layers down.
+    """
+
+
 @dataclass
 class _Cancellation:
     """The stop flag, owned by the job rather than looked up by id.
@@ -171,6 +182,15 @@ class ValidationService:
                     f"the limit of {MAX_QUEUED_PER_USER}. A queue that grows without a "
                     "bound is a denial of service with extra steps."
                 )
+
+        # The candidate has to exist before a run can name it. Checked here so
+        # the caller gets a named refusal; the foreign key is what actually
+        # guarantees it, and would otherwise surface as an IntegrityError.
+        if await db.get(ModelVersion, config.model_version_id) is None:
+            raise UnknownCandidate(
+                f"no model version {config.model_version_id!r} exists, so there is "
+                "nothing to validate and no run to record against it."
+            )
 
         row = ValidationRun(
             model_version_id=config.model_version_id,

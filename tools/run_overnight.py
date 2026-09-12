@@ -59,6 +59,13 @@ Usage:
     python tools/run_overnight.py --dry-run        # show the command only
     python tools/run_overnight.py --paper          # no orders sent
     python tools/run_overnight.py --force          # a second session, meant
+    python tools/run_overnight.py --continuous     # NO stop hour, NO wind-down
+
+The last one is not a longer session, it is a different one. Every other mode
+here is flat by its stop hour because the harvest floor books winners and holds
+losers, so what is open at the end IS the losing tail; --continuous keeps that
+tail and carries it across legs. It exists because it was asked for. Read
+run_continuous before using it.
 """
 from __future__ import annotations
 
@@ -72,7 +79,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Imported for the rule NAMES only, so `--rule` refuses a typo at the command
 # line instead of at the first pass. `mt5_paper` imports MetaTrader5 inside
 # `connect()` rather than at module scope, so this costs no terminal.
-import mt5_paper  # noqa: E402
+import console_guard
+import crash_report
+import mt5_paper
+import paths as _paths
 
 SETTINGS = [
     "--rule", "random",
@@ -83,10 +93,40 @@ SETTINGS = [
     "--min-profit", "0.50",
     "--max-positions", "7",
     "--max-daily-loss", "200",
+    # OFF by default, deliberately, for the same reason --risk-usd and
+    # --cost-swap are off: every figure in the live record was taken without
+    # it, and a default that silently restated them would make the history
+    # unreadable.
+    #
+    # Choose N from the arithmetic, not from a round number. The venue record
+    # over 476 trades runs an 80.5% win rate, so a loss is p=0.195 and three
+    # in a row is p=0.0074 -- about 3.5 occurrences in six days, a real pause
+    # several times a week. Five is p=0.00028, roughly one per 3,500 trades,
+    # against a longest observed run of 7. So 3 reacts to ordinary variance
+    # and 5 reacts to an outlier.
+    "--max-consecutive-losses", "0",
     "--interval", "20",
 ]
 
 SESSION_SCRIPTS = ("run_overnight.py", "take_profit.py")
+
+#: A leg that ends in far less time than it was ASKED to run did not trade, it
+#: failed to start. The usual cause is the terminal's Algo Trading toggle being
+#: off, which refuses every order and exits 1 at once. Restarting on that spins.
+#: Compared against half the requested leg as well as this ceiling, because a
+#: short --leg-minutes otherwise makes every healthy leg look like a failure --
+#: which it did, on the first run of this supervisor at --leg-minutes 0.3.
+FAST_EXIT_SECONDS = 90.0
+#: How many of those in a row before the supervisor stops rather than spins.
+MAX_FAST_EXITS = 5
+#: Pause between legs. Long enough that a terminal restarting has a moment,
+#: short enough that no position sits unmanaged for meaningfully longer than
+#: one harvest interval.
+RESTART_DELAY_SECONDS = 10.0
+#: `take_profit` exit codes the supervisor acts on. A risk halt must not be
+#: restarted; a terminal that stopped answering is the thing legs exist for.
+RISK_HALT = 2
+TERMINAL_HALT = 3
 
 
 def override(argv: list[str], flag: str, value: str | None) -> list[str]:
@@ -201,7 +241,7 @@ def start_logging():
     The file matches the *.log rule already in .gitignore, which it needs to:
     a session log names the account and its balance.
     """
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root = _paths.project_root()
     log_dir = os.path.join(root, "logs")
     os.makedirs(log_dir, exist_ok=True)
     path = os.path.join(log_dir,
@@ -240,6 +280,318 @@ def minutes_until(hour: int) -> tuple[float, datetime]:
     return (target - now).total_seconds() / 60.0, target
 
 
+def weekend_deadline(target, server_now, local_now):
+    """Does `target` (local) fall on a venue weekend? The decision, with no I/O.
+
+    Separated from the venue read so it can be tested against a Friday night in
+    Tokyo and a Friday night in Chicago without a terminal, which is the only
+    way to know the offset is applied in the right direction.
+
+    Returns (target_in_server_time, offset) or None.
+    """
+    offset = server_now - local_now
+    target_server = target + offset
+    if target_server.weekday() >= 5:  # Saturday, Sunday
+        return target_server, offset
+    return None
+
+
+def finishing_status(summary, code):
+    """How a session that returned should be recorded. (status, reason).
+
+    `completed` is not the same as `finished as it was asked to`. A session
+    that requested --flat-by and ended holding positions failed its last
+    obligation, and the record could not say so: the 2026-09-12 run reported
+    `completed, exit code 0` with seven positions still at the venue.
+
+    An account that could not be COUNTED is not flat either. It is unknown, and
+    unknown is never the good case -- the whole journal exists because a figure
+    nobody could read must not be written down as a zero.
+    """
+    summary = summary or {}
+    still = summary.get("still_open")
+    flat_by = summary.get("flat_by")
+    if flat_by is None:
+        return "completed", f"exit code {code}"
+    if still is None:
+        return "ended_not_flat", (
+            f"exit code {code}; --flat-by {flat_by} ran but the open book "
+            "could not be counted")
+    if still > 0:
+        return "ended_not_flat", (
+            f"exit code {code}; --flat-by {flat_by} left {still} position(s) "
+            "open at the venue")
+    return "completed", f"exit code {code}"
+
+
+def deadline_in_the_weekend(target):
+    """The venue's weekday at the deadline, when the deadline is a weekend one.
+
+    Returns `(target_in_server_time, offset)` for a deadline that falls on a
+    Saturday or Sunday at the VENUE, and None otherwise -- including when the
+    question could not be answered, because refusing a session over a clock we
+    could not read would be its own failure.
+
+    **Why this exists.** `--flat-by` promises the account is flat at the
+    deadline, and on a Friday-night session that promise cannot be kept: the FX
+    week closes before the deadline arrives and every close is refused with
+    10018. Measured 2026-09-12 -- a session ran to 06:00 on a Saturday, tried
+    seven positions six times, closed none, and left the book to the weekend
+    carrying financing and the Monday gap. Nothing was wrong with the session;
+    it was asked for something the calendar would not allow.
+
+    **Two assumptions, both stated rather than buried.**
+
+    The venue's week runs from Sunday evening to Friday night in SERVER time,
+    so a deadline landing on a Saturday or a Sunday cannot be met. MetaTrader's
+    Python API exposes no session schedule, so this is the calendar rather than
+    a reading from the venue.
+
+    `server_now()` is the last TICK's timestamp, not a live clock, so the
+    offset it yields is the server's only while quotes are arriving. That holds
+    at launch, which is when this runs -- a session started into a closed
+    market has nothing to trade anyway. When the market IS already shut the
+    tick is stale and the offset is wrong, but wrong in the direction that
+    makes a weekend deadline look like a weekend deadline, so the guard errs
+    toward refusing. That is the right direction to be wrong in.
+    """
+    import time as _time
+    from datetime import datetime as _dt
+
+    PROBES = ("EURUSD", "GBPUSD", "USDJPY", "XAUUSD")
+
+    def _stamps(mt5):
+        out = {}
+        for sym in PROBES:
+            tick = mt5.symbol_info_tick(sym)
+            if tick and getattr(tick, "time_msc", 0):
+                out[sym] = tick.time_msc
+        return out
+
+    try:
+        mt5 = mt5_paper.connect(None)
+        server = mt5_paper.server_now(mt5)
+        # Are quotes actually ARRIVING? Sampled twice rather than assumed,
+        # because `server_now` is the last tick's stamp and a stale one looks
+        # exactly like a live one. Without this the guard printed "server is
+        # -5.6h from this clock" on a Saturday -- a plausible figure, measured
+        # from a tick seven hours dead, and quoting it as the venue's offset
+        # would be inventing a number rather than reporting a gap.
+        first = _stamps(mt5)
+        _time.sleep(1.5)
+        live = _stamps(mt5) != first or not first
+    except Exception:
+        return None
+    decided = weekend_deadline(target, server, _dt.now())
+    if decided is None:
+        return None
+    target_server, offset = decided
+    return target_server, offset, live, server
+
+
+def leg_argv(args) -> list[str]:
+    """The take_profit arguments for one continuous leg.
+
+    Deliberately WITHOUT `--flat-by` and `--relax-over`. That pair is what the
+    dated session appends, and appending it here would close every position at
+    the end of each leg, which is the opposite of what continuous means.
+    """
+    argv = override(SETTINGS, "--rule", args.rule)
+    argv = override(argv, "--max-positions", args.max_positions)
+    argv = override(argv, "--max-consecutive-losses",
+                    args.max_consecutive_losses)
+    argv = argv + ["--minutes", f"{args.leg_minutes:g}"]
+    if args.harvest_only:
+        argv = argv + ["--harvest-only"]
+    if not args.paper:
+        argv = argv + ["--live"]
+    return argv
+
+
+def run_leg(command: list[str]) -> int:
+    """Run one leg as a CHILD PROCESS and forward its output.
+
+    A child rather than the in-process call the dated session makes, because
+    the point of a leg is to survive what kills it. The MetaTrader5 package is
+    a DLL wrapper: a fault inside it takes the interpreter down, and in-process
+    that ends the run rather than the leg.
+
+    Output is pumped line by line rather than inherited so it passes through
+    `start_logging`'s tee. A child writing to the real file descriptor would
+    reach the console and never the session log.
+    """
+    import subprocess
+
+    proc = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
+    )
+    try:
+        if proc.stdout is not None:
+            for line in proc.stdout:
+                print(line.rstrip())
+        return proc.wait()
+    except KeyboardInterrupt:
+        proc.terminate()
+        try:
+            proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        raise
+
+
+def merge_ledger() -> None:
+    """Fold the closed trades into `data/track_record.jsonl`.
+
+    Between legs rather than during one: the merge reads the account, and a
+    read taken while the harvest loop is mid-pass is a read of a moment that
+    has already gone. It is keyed by position_id and idempotent, so running it
+    every leg costs nothing and is what keeps the record accumulating past the
+    broker's history window instead of expiring with it.
+
+    A merge that fails does NOT stop the run. It is bookkeeping, and the trades
+    are already MetaTrader's to be merged later.
+    """
+    import subprocess
+
+    tools = os.path.dirname(os.path.abspath(__file__))
+    print("\n  merging the ledger ...")
+    try:
+        done = subprocess.run(
+            [sys.executable, os.path.join(tools, "track_record.py"), "--merge"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace", timeout=300,
+        )
+    except Exception as exc:
+        print(f"  ledger merge failed ({type(exc).__name__}: {exc}); the trades "
+              f"are still MetaTrader's and can be merged later")
+        return
+    for line in (done.stdout or "").splitlines():
+        print("    " + line)
+    if done.returncode != 0:
+        print(f"  ledger merge exited {done.returncode}; continuing")
+
+
+def run_continuous(args) -> int:
+    """Legs back to back, with no stop hour and no wind-down between them.
+
+    **What this gives up.** The dated session is flat by its stop hour, and
+    that is not tidiness: the harvest loop closes at the first sign of profit,
+    so it books winners and holds losers, and whatever is open when a leg ends
+    IS the losing tail. The deadline is what stopped that tail carrying into
+    the next session, the weekend and another night of swap -- on 2026-09-07 it
+    was 7 positions at -9.25 floating. Nothing here closes them. Requested
+    deliberately; `--until-hour` and `--relax-over` are ignored, and the banner
+    says so on every start.
+
+    Note what running longer costs in the one direction this repository has
+    measured. Frequency is the only lever with a proven sign and it points
+    down, at -1.50 to -6.54 points per trade in spread alone. More hours is
+    more trades.
+
+    **A leg is a crash boundary, not a deadline.** Nothing is closed when one
+    ends; the next leg adopts whatever is open, exactly as a restart does now.
+    Legs exist so a terminal that stops answering costs one leg, not the run.
+
+    **A leg that exits at once is not restarted forever.** `take_profit`
+    already retries a failed pass and halts after ten consecutive failures, so
+    a leg lasting seconds did not trade, it failed to start -- and the usual
+    cause is the Algo Trading toggle being off. Five of those in a row stops
+    the supervisor and says what to check, rather than filling the log with a
+    restart loop that places nothing.
+    """
+    import time
+
+    command = [sys.executable,
+               os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "take_profit.py")]
+    argv = leg_argv(args)
+
+    if args.dry_run:
+        print(f"\n  continuous: legs of {args.leg_minutes:g} minutes, "
+              f"no stop hour, NOTHING force-closed")
+        print("  take_profit.py " + " ".join(argv) + "\n")
+        return 0
+
+    log_path, restore = start_logging()
+    leg = 0
+    fast_exits = 0
+    try:
+        print("\n  " + "=" * 68)
+        print("  CONTINUOUS SESSION. There is no stop hour and no wind-down.")
+        print("  Nothing is force-closed: what a leg leaves open the next leg")
+        print("  adopts, and the harvest floor books winners and holds losers,")
+        print("  so what accumulates is the losing tail. Ctrl+C to stop -- and")
+        print("  stopping does NOT close anything either. To go flat, run:")
+        print("      python tools/run_overnight.py --harvest-only --relax-over 0")
+        print("  " + "=" * 68)
+        print(f"\n  log {log_path}")
+        print(f"  legs of {args.leg_minutes:g} minutes; ledger merge between "
+              f"legs: {'off' if args.no_merge else 'on'}")
+
+        while True:
+            leg += 1
+            started = datetime.now()
+            print(f"\n  === leg {leg} starting {started:%Y-%m-%d %H:%M:%S} ===")
+            code = run_leg(command + argv)
+            ran = (datetime.now() - started).total_seconds()
+            print(f"\n  === leg {leg} ended after {ran / 60:.1f} min, "
+                  f"exit {code} ===")
+
+            if not args.no_merge:
+                merge_ledger()
+
+            if code == RISK_HALT:
+                print("\n  STOPPED: the session hit its --max-daily-loss limit.")
+                print("  Not restarted, deliberately. A supervisor that starts a")
+                print("  fresh session after a risk limit fires has not respected")
+                print("  the limit, it has renamed it -- the loss carries and only")
+                print("  the counter resets. Positions are NOT closed.")
+                print("\n  To go flat:")
+                print("      python tools/run_overnight.py --harvest-only --relax-over 0")
+                print("  To resume anyway, start this again.")
+                return 2
+
+            if code == TERMINAL_HALT:
+                print("  that leg gave up on a terminal that stopped answering,")
+                print("  which is the case legs exist for. Restarting.")
+
+            if ran < min(FAST_EXIT_SECONDS, args.leg_minutes * 30.0):
+                fast_exits += 1
+                print(f"  that leg lasted {ran:.0f}s, which is not a session "
+                      f"that traded ({fast_exits} in a row)")
+                if fast_exits >= MAX_FAST_EXITS:
+                    print(f"\n  STOPPED: {fast_exits} legs in a row exited at "
+                          f"once.")
+                    print("  Nothing is being placed, so restarting again would")
+                    print("  only fill the log. Check, in this order:")
+                    print("    1. MetaTrader 5 is running and LOGGED IN.")
+                    print("    2. Its Algo Trading toggle is ON -- off refuses")
+                    print("       every order and exits 1 at once, like this.")
+                    print("    3. The last leg's output above, for the refusal.")
+                    return 1
+            else:
+                fast_exits = 0
+
+            delay = RESTART_DELAY_SECONDS * (1 + fast_exits)
+            print(f"  next leg in {delay:.0f}s (Ctrl+C to stop)")
+            time.sleep(delay)
+    except KeyboardInterrupt:
+        print(f"\n\n  stopped by Ctrl+C after {leg} leg(s). NOTHING was "
+              f"closed -- positions are still open.")
+        print("  To go flat: python tools/run_overnight.py --harvest-only "
+              "--relax-over 0")
+        return 0
+    finally:
+        print(f"\n  session log: {log_path}")
+        restore()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -252,6 +604,11 @@ def main() -> int:
                     help="override how many positions may be open at once. Fewer means "
                          "less spread paid, and frequency is the one lever with a "
                          "measured sign")
+    ap.add_argument("--max-consecutive-losses", default=None, metavar="N",
+                    help="pause new entries after N losing trades in a row. "
+                         "Open positions are still managed and the wind-down "
+                         "still runs. 5 reacts to an outlier at this win rate, "
+                         "3 to ordinary variance -- see SETTINGS")
     ap.add_argument("--relax-over", type=float, default=45.0, metavar="MINUTES",
                     help="minutes before the stop hour over which the profit floor "
                          "decays to zero, and inside which nothing new is opened "
@@ -264,7 +621,24 @@ def main() -> int:
     ap.add_argument("--paper", action="store_true",
                     help="run without sending orders")
     ap.add_argument("--force", action="store_true",
-                    help="start even though another session is running")
+                    help="start anyway: overrides both the running-session "
+                         "guard and the refusal to take a deadline that falls "
+                         "in the venue's weekend, when holding the book across "
+                         "the close is what you meant")
+    ap.add_argument("--continuous", action="store_true",
+                    help="run with NO stop hour and NO flat-by wind-down: legs "
+                         "restart back to back and nothing is ever force-closed. "
+                         "This gives up the guard added after a session ended "
+                         "holding 7 positions at -9.25 float; read the banner it "
+                         "prints before using it")
+    ap.add_argument("--leg-minutes", type=float, default=240.0, metavar="MINUTES",
+                    help="with --continuous, minutes per leg before a fresh one "
+                         "starts (default 240). A leg is a CRASH BOUNDARY, not a "
+                         "deadline: nothing is closed when one ends")
+    ap.add_argument("--no-merge", action="store_true",
+                    help="with --continuous, skip the ledger merge between legs. "
+                         "The merge is what keeps data/track_record.jsonl "
+                         "accumulating past the broker's history window")
     args = ap.parse_args()
 
     if not 0 <= args.until_hour <= 23:
@@ -283,9 +657,79 @@ def main() -> int:
             print("  you meant.\n")
             return 1
 
+    # What a previous session left open, when it never got to say goodbye.
+    # Printed BEFORE anything starts, because an abandoned tail is counted
+    # against this session's --max-positions and pays another night of swap.
+    for record in crash_report.unfinished()[:3]:
+        print("\n  PREVIOUS SESSION DID NOT FINISH:")
+        print(f"    {crash_report.summarise(record)}")
+        # Whether the process is still alive changes what this means, and the
+        # banner used to say nothing about it: a session killed on Tuesday read
+        # exactly like one trading right now. It also never cleared, so it
+        # printed on every launch from then on -- and a warning that never
+        # clears stops being read, which is expensive when the next one is real.
+        alive = crash_report.process_alive(record)
+        if alive is True:
+            print(f"    Its process (pid {record.get('pid')}) is STILL RUNNING.")
+        elif alive is False:
+            print(f"    Its process (pid {record.get('pid')}) is gone; this is a "
+                  "notice about its tail, not a live session.")
+        else:
+            print(f"    Whether pid {record.get('pid')} is still running could "
+                  "not be determined.")
+        print("  If positions are still open, close them first:")
+        print("      start-trading.bat --harvest-only")
+        if alive is not True:
+            print("  Once they are closed, clear this notice:")
+            print("      python tools/crash_report.py --resolve "
+                  f"{record.get('session_id')}")
+        print()
+
+    if args.continuous:
+        return run_continuous(args)
+
     minutes, target = minutes_until(args.until_hour)
+
+    # A wind-down is EXEMPT, and that is not a loophole. The guard exists so a
+    # session does not take positions it will not be able to close;
+    # --harvest-only takes none, and it is the exact command an operator runs
+    # to clean up a book the weekend caught. Refusing it would block the remedy
+    # with a warning about the problem.
+    weekend = None if args.harvest_only else deadline_in_the_weekend(target)
+    if weekend is not None and not args.force:
+        target_server, offset, live, last_tick = weekend
+        sign = "+" if offset.total_seconds() >= 0 else "-"
+        hours = abs(offset.total_seconds()) / 3600.0
+        print(f"\n  REFUSED: the {args.until_hour:02d}:00 deadline lands on a "
+              f"{target_server:%A} at the venue.")
+        if live:
+            print(f"    your {target:%a %H:%M} is {target_server:%a %H:%M} there "
+                  f"(server is {sign}{hours:.1f}h from this clock)")
+        else:
+            print("    QUOTES ARE NOT ARRIVING, so the venue's clock could not be")
+            print(f"    read live. Its last tick is stamped {last_tick:%a %H:%M} and "
+                  "the market")
+            print("    is already shut -- which is the same answer, reached without")
+            print("    quoting an offset measured from a dead tick.")
+        print()
+        print("    --flat-by cannot be honoured across the weekend close. Every")
+        print("    close is refused with retcode 10018 and the positions stay")
+        print("    open until the venue reopens, carrying financing and the")
+        print("    Monday gap. That happened on 2026-09-12: seven positions,")
+        print("    six attempts, none closed.")
+        print()
+        print("    Nothing was started and no order was sent. Options:")
+        print("      - run it on a night whose deadline is inside the week")
+        print("      - --until-hour N, with a deadline before the close")
+        print("      - --force, if holding the book over the weekend is what")
+        print("        you actually want")
+        print()
+        return 1
+
     argv = override(SETTINGS, "--rule", args.rule)
     argv = override(argv, "--max-positions", args.max_positions)
+    argv = override(argv, "--max-consecutive-losses",
+                    args.max_consecutive_losses)
     argv = argv + ["--minutes", f"{minutes:.0f}"]
     # Flat by the same hour the session stops at. A session that stops while
     # holding positions leaves them to the weekend, the next session's
@@ -303,6 +747,16 @@ def main() -> int:
 
     log_path, restore = (None, None) if args.dry_run else start_logging()
 
+    session_id = crash_report.new_session_id()
+    if not args.dry_run:
+        crash_report.start(
+            session_id,
+            command=["take_profit.py"] + argv,
+            log_path=log_path,
+            deadline=f"{target:%Y-%m-%d %H:%M}",
+            live=not args.paper,
+        )
+
     try:
         print(f"\n  now {datetime.now():%H:%M} -> stop {target:%H:%M} "
               f"({minutes:.0f} minutes)")
@@ -314,9 +768,52 @@ def main() -> int:
             return 0
 
         import take_profit
+
+        # The heartbeat. Every pass rewrites the record with the session's
+        # last known state, so a kill that reaches no handler still leaves a
+        # file saying when it was alive and what it was holding.
+        take_profit.PASS_HOOK = lambda n, st: crash_report.beat(session_id, n, st)
+
+        def _stop(reason: str) -> None:
+            # Record FIRST, wind down second. On a console close the OS is
+            # already counting down, and the evidence has to survive even
+            # when the flush does not.
+            crash_report.finish(
+                session_id, status=reason, reason="stop requested from the console"
+            )
+            take_profit.STOP_REQUESTED = True
+
+        print(f"  stop handling: {console_guard.install(_stop)}")
+
         sys.argv = ["take_profit.py"] + argv
-        return take_profit.main()
+        code = take_profit.main()
+        if not console_guard.stopping():
+            # The post-flush state, not the last heartbeat. A record that
+            # closed `completed` while still reporting the positions the
+            # final pass saw would read as an abandoned tail.
+            done = getattr(take_profit, "LAST_SUMMARY", None) or {}
+            status, detail = finishing_status(done, code)
+            crash_report.finish(
+                session_id, status=status, reason=detail,
+                state={
+                    "positions_open": done.get("still_open"),
+                    "flushed": done.get("flushed"),
+                    "passes": done.get("passes"),
+                    "harvested": done.get("harvested"),
+                    "opened": done.get("opened"),
+                    "realised": done.get("realised"),
+                } if done else None,
+            )
+        return code
+    except BaseException as exc:
+        crash_report.finish(
+            session_id, status="error", reason=f"{type(exc).__name__}: {exc}"
+        )
+        raise
     finally:
+        mod = sys.modules.get("take_profit")
+        if mod is not None:
+            mod.PASS_HOOK = None
         if log_path:
             print(f"\n  session log: {log_path}")
         if restore is not None:

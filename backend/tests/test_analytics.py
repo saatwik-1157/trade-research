@@ -93,6 +93,14 @@ async def sessions() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
         )
         session.add(Symbol(id="sym1", code="EURUSD", asset_class="fx"))
         session.add(Symbol(id="sym2", code="GBPUSD", asset_class="fx"))
+        # Trades below are grouped by strategy version `sv-a`, and the tests
+        # read that key back out of the grouping, so the row has to be real.
+        from app.models.strategies import Strategy, StrategyVersion
+
+        session.add(Strategy(id="st-a", key="breakout", name="breakout"))
+        await session.flush()
+        session.add(StrategyVersion(id="sv-a", strategy_id="st-a", version=1, code_ref="mod:fn"))
+        session.add(StrategyVersion(id="sv-b", strategy_id="st-a", version=2, code_ref="mod:fn"))
         await session.commit()
     yield factory
     await engine.dispose()
@@ -737,6 +745,10 @@ async def test_slippage_is_kept_in_points_and_not_summed_into_currency(
                 updated_at=NOW,
             )
         )
+        # `executions` sorts before `orders` for SQLAlchemy, which has no
+        # relationship() to tell it the execution depends on the order -- so
+        # the child would be written first. Flush the orders first.
+        await db.flush()
         db.add(
             Execution(
                 order_id="o1",
@@ -1000,7 +1012,41 @@ async def app(settings: Any) -> Any:
         await conn.run_sync(Base.metadata.create_all)
     application = create_app(settings, checks={}, engine=engine)
     async with application.state.session_factory() as db:
+        # This fixture builds its own engine, so it needs the same parents the
+        # `sessions` fixture seeds -- `add_trade` attributes every row to
+        # `paper1`/`sym1`, and the route tests group by strategy version.
+        from app.auth.models import User
+        from app.models.strategies import Strategy, StrategyVersion
+
+        db.add(User(id="u1", email="a@b.io", password_hash="x", role="admin"))
+        db.add(
+            PaperAccount(
+                id="paper1",
+                user_id="u1",
+                name="paper",
+                currency="USD",
+                starting_balance=Decimal("100000"),
+                balance=Decimal("100000"),
+                equity=Decimal("100000"),
+                status="active",
+            )
+        )
+        db.add(
+            BrokerAccount(
+                id="broker1",
+                user_id="u1",
+                name="demo",
+                broker="mt5",
+                account_mode="demo",
+                currency="USD",
+            )
+        )
         db.add(Symbol(id="sym1", code="EURUSD", asset_class="fx"))
+        db.add(Symbol(id="sym2", code="GBPUSD", asset_class="fx"))
+        db.add(Strategy(id="st-a", key="breakout", name="breakout"))
+        await db.flush()
+        db.add(StrategyVersion(id="sv-a", strategy_id="st-a", version=1, code_ref="mod:fn"))
+        db.add(StrategyVersion(id="sv-b", strategy_id="st-a", version=2, code_ref="mod:fn"))
         await db.commit()
     yield application
     await engine.dispose()

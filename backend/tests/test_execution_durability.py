@@ -126,16 +126,14 @@ async def sessions() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     from app.auth.models import Role, User
-    from app.models.accounts import PaperAccount, RoleRow
+    from app.models.accounts import PaperAccount
     from app.models.market import Symbol
 
     async with factory() as db:
-        # `users.role` references `roles.name`. Other suites never insert it
-        # because SQLite ignores foreign keys by default; this one enforces
-        # them, so the parent rows have to be real.
-        for rank, role in enumerate(Role):
-            db.add(RoleRow(name=str(role), rank=rank, description=str(role)))
-        await db.flush()  # the parent rows exist before the child references them
+        # `users.role` references `roles.name`. Every suite enforces foreign
+        # keys now, and conftest seeds `roles` once on the table's own
+        # `after_create` -- so the parent rows are real here without this
+        # fixture restating them.
         db.add(User(id="u1", email="a@b.io", password_hash="x", role=str(Role.admin)))
         db.add(Symbol(id="sym-eurusd", code="EURUSD", asset_class="fx"))
         db.add(

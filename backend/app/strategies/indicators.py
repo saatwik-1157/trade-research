@@ -24,12 +24,13 @@ it checks anything else.
 
 from __future__ import annotations
 
-import os
-import sys
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
+from types import ModuleType
 from typing import Any
+
+from app.core import toolkit
 
 
 class Unit(StrEnum):
@@ -190,17 +191,15 @@ def spec_for(key: str) -> IndicatorSpec:
         ) from exc
 
 
-def _toolkit(module: str):  # noqa: ANN202
-    """Import a toolkit module without copying it."""
-    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    tools = os.path.join(root, "tools")
-    if os.path.isdir(tools) and tools not in sys.path:
-        sys.path.insert(0, tools)
-    import importlib
+def _toolkit(module: str) -> ModuleType:
+    """Import a toolkit module without copying it.
 
-    # A fixed module name from this file's own constants, never from user
-    # input. The two callers below pass literals.
-    return importlib.import_module(module)
+    Delegates to `app.core.toolkit`, which prefers an installed `tr_toolkit`
+    and falls back to the sibling directory. A fixed module name from this
+    file's own constants, never from user input -- the callers below pass
+    literals.
+    """
+    return toolkit.load(module)
 
 
 def compute(

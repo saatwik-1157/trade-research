@@ -42,7 +42,9 @@ try:
 except (AttributeError, OSError):
     pass
 
+import kill_switch
 import mt5_paper
+import risk_gate
 from mt5_paper import RefuseToTrade
 
 
@@ -50,6 +52,24 @@ from mt5_paper import RefuseToTrade
 #: interval this is about three minutes of a terminal not answering -- long
 #: enough to ride out a reconnect, short enough not to spin all night.
 MAX_CONSECUTIVE_MISSES = 10
+
+#: Called once per pass with (passes, state) when a wrapper sets it, so a
+#: session's last known state survives a kill. `run_overnight.py` points this
+#: at `crash_report.beat`. Left None here because take_profit.py is also run
+#: directly, and a heartbeat is the wrapper's concern rather than the loop's.
+#: Failures are swallowed at the call site: a crash journal that can end a
+#: session is worse than no crash journal.
+PASS_HOOK = None
+
+#: The last completed session's summary, including the post-flush
+#: `still_open`. Read by run_overnight.py when it closes the crash record.
+LAST_SUMMARY = None
+
+#: Set by a console control handler to ask the loop to wind down at the next
+#: opportunity. Checked once per pass. Polled rather than acted on from the
+#: handler thread, because closing a position from a handler while the loop is
+#: mid-order is how one intention becomes two.
+STOP_REQUESTED = False
 
 
 ES_CONTINUOUS = 0x80000000
@@ -110,6 +130,90 @@ def net_floating(position) -> float:
 def harvest(mt5, min_profit: float, live: bool) -> list[dict]:
     """Close every own position whose net floating P&L has reached min_profit."""
     return mt5_paper.close_own(mt5, live, where=lambda p: net_floating(p) >= min_profit)
+
+
+#: A flush gets more than one attempt. The terminal can be awake and still have
+#: no trade server behind it: a machine resuming from sleep answers
+#: `positions_get` while `order_send` returns 10031, no connection, for the
+#: seconds it takes the session to come back. Measured on 2026-09-08 -- one
+#: attempt at 06:36:18, retcode 10031, and the position was still open that
+#: evening carrying swap, because nothing tried again and nothing said why.
+FLUSH_ATTEMPTS = 6
+FLUSH_WAIT_SECONDS = 10.0
+
+#: TRADE_RETCODE_MARKET_CLOSED. The one refusal that retrying cannot fix.
+#:
+#: 10031 (no connection) is why the retry loop exists: a machine resuming from
+#: sleep answers `positions_get` while `order_send` refuses, and ten seconds
+#: later it works. 10018 is the opposite -- the venue is not open and will not
+#: be for hours or days, so six attempts over a minute is a minute spent
+#: proving what the first answer already said.
+#:
+#: Measured 2026-09-12: a Friday-night session reached its 06:00 deadline after
+#: the FX week had closed, and printed 42 identical refusals across six rounds.
+MARKET_CLOSED = 10018
+
+
+def flush_until_flat(mt5, live: bool, attempts: int = FLUSH_ATTEMPTS,
+                     wait: float = FLUSH_WAIT_SECONDS) -> tuple[int, list[dict]]:
+    """Close every own position, retrying while any refuse, and SAY which.
+
+    Two failures this replaces, both from the same night. The flush counted
+    only the closes that worked and printed `closed 0` for the ones that did
+    not, so a refusal read exactly like an account that was already flat --
+    the retcode was in the record and never reached the operator. And it made
+    exactly one attempt, at the worst possible moment: the deadline fires the
+    instant the machine wakes, which is when the trade server is least likely
+    to be there.
+
+    Returns (closed, still_failing). A dry run reports every position as gone
+    on the first pass, so it never loops.
+    """
+    closed = 0
+    failures: list[dict] = []
+    for attempt in range(1, attempts + 1):
+        stamp = datetime.now().strftime("%H:%M:%S")
+        try:
+            results = flatten(mt5, live)
+        except Exception as exc:  # noqa: BLE001 - the one failure that must SHOUT
+            print(f"  [{stamp}] THE FLUSH RAISED: {type(exc).__name__}: {exc}",
+                  flush=True)
+            results = []
+        gone = [r for r in results if r.get("status") in ("CLOSED", "DRY_RUN")]
+        closed += len(gone)
+        for r in gone:
+            print(f"  [{stamp}] FLAT    {r.get('symbol', '?'):<8} #{r['ticket']}")
+        failures = [r for r in results
+                    if r.get("status") not in ("CLOSED", "DRY_RUN")]
+        # Every refusal is "the market is shut". Say so once and stop, rather
+        # than proving it five more times -- and say what it means, because
+        # "still open" after a flush reads like a bug when it is a calendar.
+        market_closed = bool(failures) and all(
+            r.get("retcode") == MARKET_CLOSED for r in failures)
+        for r in failures:
+            # The retcode is the whole point. 10031 is "no connection with the
+            # trade server" and means try again; 10018 is a closed market and
+            # means the session cannot be flat until it opens. Printing the
+            # number rather than a guess at what it means keeps the operator
+            # able to look it up.
+            print(f"  [{stamp}] FLUSH REFUSED {r.get('symbol', '?'):<8} "
+                  f"#{r.get('ticket')} status={r.get('status')} "
+                  f"retcode={r.get('retcode')}", flush=True)
+        if not failures:
+            return closed, []
+        if market_closed:
+            print(f"  [{stamp}] THE MARKET IS CLOSED (retcode {MARKET_CLOSED} on "
+                  f"all {len(failures)}). Retrying cannot change that, so the "
+                  f"flush stops here.", flush=True)
+            print(f"  [{stamp}] {len(failures)} position(s) stay open until the "
+                  "venue reopens. They carry financing and the opening gap.",
+                  flush=True)
+            return closed, failures
+        if attempt < attempts:
+            print(f"  [{stamp}] {len(failures)} still open; retrying in "
+                  f"{wait:.0f}s (attempt {attempt}/{attempts})", flush=True)
+            time.sleep(wait)
+    return closed, failures
 
 
 def flatten(mt5, live: bool) -> list[dict]:
@@ -173,11 +277,34 @@ def run(mt5, args) -> dict:
         time.monotonic() + seconds_until(args.flat_by))
     harvested, opened, passes, flushed = 0, 0, 0, 0
     halted = False
+    blind = 0  # consecutive passes whose venue reads did not answer
+    # Last values the venue actually confirmed. None means "not read this
+    # pass", never zero -- the heartbeat has to be able to say UNKNOWN, since
+    # a record claiming 0 positions open would send a recovery run away empty.
+    open_count: int | None = None
+    balance_seen: float | None = None
+    equity_seen: float | None = None
+    # WHICH halt, not just that there was one. A risk halt and a dead
+    # terminal call for opposite responses from anything supervising this
+    # process: one must not be restarted, the other exists to be. Reported
+    # as a value rather than left to be matched out of the printed line.
+    halt_kind: str | None = None
     # Consecutive failed passes. A terminal that blinks once should not end a
     # session that has hours left to run; one that is genuinely gone should not
     # be retried all night.
     misses = 0
-    start_balance = mt5.account_info().balance
+    # The third place `account_info()` was dereferenced without checking it.
+    # A terminal that is already down when the session starts produced a raw
+    # AttributeError here -- a stack trace instead of a reason, before a
+    # single pass had run. Refuse to start rather than start blind: every
+    # limit below is measured against this opening balance.
+    opening = mt5.account_info()
+    if opening is None:
+        raise mt5_paper.VenueUnreadable(
+            "account_info() returned None at startup; the terminal is not "
+            "answering, so the session has no balance to measure against"
+        )
+    start_balance = opening.balance
 
     while time.monotonic() < deadline:
         passes += 1
@@ -221,6 +348,7 @@ def run(mt5, args) -> dict:
                       "the terminal is not answering and a flush would fail too",
                       flush=True)
                 halted = True
+                halt_kind = "terminal"
                 break
             time.sleep(args.interval)
             continue
@@ -234,9 +362,35 @@ def run(mt5, args) -> dict:
         # Nothing new inside the wind-down window. Opening a trade that the
         # flush will close minutes later pays the spread for no observation.
         winding_down = args.flat_by is not None and remaining <= args.relax_over * 60.0
+        # Why a pass opened nothing. `cycle` already decides this per symbol and
+        # returns it -- no_signal, no_history, skipped_already_open,
+        # skipped_max_positions -- and none of it was ever printed, so a session
+        # that opened twice in 1201 passes looked identical whether the rule was
+        # being selective or the terminal was returning no bars. With
+        # rsi_reversion, which signals rarely by design, that is the difference
+        # between working and broken, and it was not observable.
+        why = ""
         if not args.harvest_only and not winding_down:
             try:
                 res = mt5_paper.cycle(mt5, args)
+            except mt5_paper.VenueUnreadable as exc:
+                # NOT an entry failure. cycle() computes the daily-loss limit
+                # and the position cap from reads that did not answer, so
+                # continuing would run both limits against no data. Counted
+                # toward the same budget as a failed harvest so the tested
+                # give-up path below fires.
+                blind += 1
+                print(f"  [{stamp}] VENUE UNREADABLE ({blind}/{MAX_CONSECUTIVE_MISSES}): "
+                      f"{exc}", flush=True)
+                if blind >= MAX_CONSECUTIVE_MISSES:
+                    print(f"  [{stamp}] giving up after {blind} consecutive unreadable "
+                          "passes; the terminal is not answering and a flush would "
+                          "fail too", flush=True)
+                    halted = True
+                    halt_kind = "terminal"
+                    break
+                time.sleep(args.interval)
+                continue
             except Exception as exc:  # noqa: BLE001 - an entry that failed is
                 # not a reason to stop MANAGING what is already open. Skip the
                 # entry, keep harvesting, keep the deadline.
@@ -246,20 +400,93 @@ def run(mt5, args) -> dict:
             if res["halted"]:
                 print(f"  [{stamp}] HALTED: {res['reason']}")
                 halted = True
+                halt_kind = "risk"
                 break
             sent = [a for a in res["actions"] if a.get("status") in ("SENT", "DRY_RUN")]
             opened += len(sent)
+            if not sent:
+                tally: dict[str, int] = {}
+                for a in res["actions"]:
+                    key = str(a.get("status", "?"))
+                    tally[key] = tally.get(key, 0) + 1
+                why = "  why=" + ",".join(f"{k}:{v}" for k, v in sorted(tally.items()))
             for a in sent:
                 print(f"  [{stamp}] OPEN    {a['symbol']:<8} {a['side']:<5} @ {a.get('price')}")
 
-        try:
-            bal = mt5.account_info()
-            print(f"  [{stamp}] pass {passes}: harvested={harvested} opened={opened} "
-                  f"balance={bal.balance:,.2f} equity={bal.equity:,.2f} "
-                  f"open={len(mt5_paper.own_positions(mt5))}", flush=True)
-        except Exception as exc:  # noqa: BLE001 - a line of log is not worth a session
-            print(f"  [{stamp}] pass {passes}: could not read the account "
-                  f"({type(exc).__name__}); the session continues", flush=True)
+        bal = mt5.account_info()
+        if bal is None:
+            # `account_info()` returns None when the terminal drops, and the
+            # old handler here caught the resulting AttributeError as though a
+            # log line had failed to format -- "the session continues".
+            # Observed 2026-09-10: 23 consecutive passes, harvesting nothing,
+            # opening nothing, halting nothing, with --max-daily-loss unable
+            # to evaluate. A disconnect is not a cosmetic failure.
+            blind += 1
+            open_count = balance_seen = equity_seen = None
+            print(f"  [{stamp}] pass {passes}: ACCOUNT UNREADABLE "
+                  f"({blind}/{MAX_CONSECUTIVE_MISSES}); account_info() returned None",
+                  flush=True)
+            if blind >= MAX_CONSECUTIVE_MISSES:
+                print(f"  [{stamp}] giving up after {blind} consecutive unreadable "
+                      "passes; the terminal is not answering and a flush would fail too",
+                      flush=True)
+                halted = True
+                halt_kind = "terminal"
+                break
+        else:
+            try:
+                open_count = len(mt5_paper.own_positions(mt5))
+                balance_seen, equity_seen = float(bal.balance), float(bal.equity)
+                print(f"  [{stamp}] pass {passes}: harvested={harvested} opened={opened} "
+                      f"balance={bal.balance:,.2f} equity={bal.equity:,.2f} "
+                      f"open={open_count}{why}", flush=True)
+                blind = 0
+            except mt5_paper.VenueUnreadable as exc:
+                blind += 1
+                print(f"  [{stamp}] pass {passes}: ACCOUNT UNREADABLE "
+                      f"({blind}/{MAX_CONSECUTIVE_MISSES}); {exc}", flush=True)
+                if blind >= MAX_CONSECUTIVE_MISSES:
+                    print(f"  [{stamp}] giving up after {blind} consecutive unreadable "
+                          "passes; the terminal is not answering and a flush would "
+                          "fail too", flush=True)
+                    halted = True
+                    halt_kind = "terminal"
+                    break
+            except Exception as exc:  # noqa: BLE001 - a formatting fault is not a session
+                print(f"  [{stamp}] pass {passes}: could not format the status line "
+                      f"({type(exc).__name__}); the session continues", flush=True)
+
+        if PASS_HOOK is not None:
+            try:
+                PASS_HOOK(passes, {
+                    "harvested": harvested,
+                    "opened": opened,
+                    "positions_open": open_count,
+                    "balance": balance_seen,
+                    "equity": equity_seen,
+                    "blind": blind,
+                    "misses": misses,
+                })
+            except Exception:  # noqa: BLE001 - a journal never ends a session
+                pass
+
+        # The operator's stop. Checked every pass rather than once at start,
+        # because the point is to reach a session that is ALREADY running --
+        # and, when detached, one with no console to signal. Breaking here
+        # runs the flush below; killing the process would not.
+        if kill_switch.engaged():
+            print(f"  [{stamp}] KILL SWITCH: {kill_switch.reason()}", flush=True)
+            print(f"  [{stamp}] winding down; the flush below still runs",
+                  flush=True)
+            halt_kind = "kill_switch"
+            break
+
+        if STOP_REQUESTED:
+            # A console close or Ctrl-C. Break to the flush below rather than
+            # exiting here: the whole point is that the wind-down still runs.
+            print(f"  [{stamp}] stop requested; winding down", flush=True)
+            halt_kind = "stopped"
+            break
 
         if time.monotonic() + args.interval >= deadline:
             break
@@ -279,28 +506,33 @@ def run(mt5, args) -> dict:
     # asked; the deadline is the deadline.
     if args.flat_by is not None and not halted:
         stamp = datetime.now().strftime("%H:%M:%S")
-        try:
-            left = flatten(mt5, args.live)
-        except Exception as exc:  # noqa: BLE001 - the one failure that must SHOUT
-            print(f"  [{stamp}] THE FLUSH FAILED: {type(exc).__name__}: {exc}")
-            print(f"  [{stamp}] POSITIONS ARE STILL OPEN AT THE VENUE. "
-                  "Close them by hand or start a --harvest-only session.",
-                  flush=True)
-            left = []
-        gone = [r for r in left if r.get("status") in ("CLOSED", "DRY_RUN")]
-        flushed += len(gone)
-        for r in gone:
-            print(f"  [{stamp}] FLAT    {r.get('symbol', '?'):<8} #{r['ticket']}")
-        print(f"  [{stamp}] flat-by {args.flat_by}: closed {len(gone)} at the deadline",
+        gone_count, still = flush_until_flat(mt5, args.live)
+        flushed += gone_count
+        stamp = datetime.now().strftime("%H:%M:%S")
+        print(f"  [{stamp}] flat-by {args.flat_by}: closed {gone_count} at the deadline",
               flush=True)
+        if still:
+            print(f"  [{stamp}] POSITIONS ARE STILL OPEN AT THE VENUE after "
+                  f"{FLUSH_ATTEMPTS} attempts: "
+                  + ", ".join(f"{r.get('symbol', '?')} retcode={r.get('retcode')}"
+                              for r in still))
+            print(f"  [{stamp}] Close them by hand, or start a wind-down session: "
+                  "python tools/run_overnight.py --harvest-only --relax-over 0",
+                  flush=True)
 
     # The SUMMARY must not be able to kill the session either. This block read
     # the terminal twice, unguarded, so a session that gave up cleanly on a dead
     # terminal still died with a traceback on its way out and reported nothing
     # about what it had done. Found by the test written for the loop guard,
     # which is the argument for writing the test.
+    # `flat_by` is recorded because "7 positions are open" means two different
+    # things depending on whether being flat was ever asked for, and the
+    # session record could not tell them apart. A run with no --flat-by that
+    # ends holding 7 is working as instructed; one WITH it has failed its last
+    # obligation, and only this field separates them.
     summary = {"passes": passes, "harvested": harvested, "opened": opened,
-               "flushed": flushed, "halted": halted,
+               "flushed": flushed, "halted": halted, "halt_kind": halt_kind,
+               "flat_by": args.flat_by,
                "start_balance": start_balance,
                "end_balance": None, "realised": None, "still_open": None}
     try:
@@ -346,7 +578,18 @@ def main() -> int:
     ap.add_argument("--tp-atr", type=float, default=1.5)
     ap.add_argument("--max-positions", type=int, default=5)
     ap.add_argument("--max-daily-loss", type=float, default=50.0)
+    ap.add_argument("--max-risk-per-trade", type=float, default=None,
+                    metavar="USD",
+                    help="refuse an entry whose stop would cost more than this. "
+                         "Off by default, and deliberately NOT --risk-usd: the "
+                         "same number on both sides is a check that cannot "
+                         "fail. It catches the min-lot floor, where the volume "
+                         "step forces more risk than the budget asked for")
     ap.add_argument("--live", action="store_true", help="actually send orders (demo only)")
+    ap.add_argument("--max-consecutive-losses", type=int, default=0,
+                    metavar="N",
+                    help="pause new entries after N losing trades in a row "
+                         "(0 = off); open positions are still managed")
     ap.add_argument("--path", default=None)
     args = ap.parse_args()
     args.symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
@@ -357,6 +600,10 @@ def main() -> int:
     except RefuseToTrade as exc:
         print(f"\n  REFUSED: {exc}\n")
         return 1
+
+    # The gate reads its account and mode from here. `cycle()` builds it once
+    # per pass from `args`, so this is the whole of the wiring.
+    args.account = acct
 
     print(f"\n  account {acct['login']} @ {acct['server']}  [{acct['mode']}]  "
           f"balance {acct['balance']:,.2f} {acct['currency']}")
@@ -370,6 +617,16 @@ def main() -> int:
     )
     print(f"  size: {sizing}")
     print(f"  mode: {'LIVE ORDERS (demo account)' if args.live else 'DRY RUN - no orders sent'}")
+
+    # Say whether the fence is up, at the top, before anything is sent. An
+    # engine that could not be imported refuses every opening order, and an
+    # operator should learn that from the banner rather than from 200 refusals.
+    if risk_gate.ENGINE_IMPORT_ERROR is None:
+        print("  risk: RiskEngine rules on every entry; closes are recorded, never refused")
+    else:
+        print(f"  risk: THE ENGINE COULD NOT BE LOADED -- {risk_gate.ENGINE_IMPORT_ERROR}")
+        print("        no entry will be sent. Closes and the flush still run.")
+
     print(f"  running {args.minutes:g} minutes, one pass every {args.interval}s")
     if args.flat_by:
         mins = seconds_until(args.flat_by) / 60.0
@@ -386,6 +643,12 @@ def main() -> int:
                 print("  holding the machine awake until the session ends "
                       "(the display may still sleep)\n")
             out = run(mt5, args)
+            # The heartbeat's last state is the last PASS, taken before the
+            # flush. A completed session whose record still says 7 open is
+            # the confusion the journal exists to prevent, so the wrapper
+            # reads the post-flush summary from here.
+            global LAST_SUMMARY
+            LAST_SUMMARY = out
     finally:
         mt5.shutdown()
 
@@ -415,6 +678,20 @@ def main() -> int:
               f"({out['realised']:+.2f})")
     print("\n  A harvest count is not a win rate and this balance is not an edge.")
     print("  Read the R-multiple: python tools/track_record.py --merge\n")
+
+    # A halt is not a clean finish, and the two halts are not each other.
+    # 2 is the risk limit: whatever supervises this must NOT start another
+    # session, because restarting through a daily loss limit is how a limit
+    # becomes a speed bump. 3 is a terminal that stopped answering, which is
+    # exactly what a supervisor is for. This DOES change the dated session:
+    # a run that hit its daily loss limit used to exit 0 like any other, and
+    # now exits 2. That is the point -- 'the session ended' and 'the session
+    # was stopped by a risk limit' were the same answer, and the launcher
+    # printed the same line for both.
+    if out["halt_kind"] == "risk":
+        return 2
+    if out["halt_kind"] == "terminal":
+        return 3
     return 0
 
 

@@ -28,8 +28,9 @@ import time
 from datetime import date, datetime, timezone
 
 import requests
+from paths import data_path
 
-CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "cache")
+CACHE_DIR = data_path("cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 USER_AGENT = os.environ.get("SEC_USER_AGENT", "trade-research/1.0 (set SEC_USER_AGENT to identify yourself)")

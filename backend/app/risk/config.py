@@ -84,6 +84,9 @@ COMBINE: dict[str, Callable[[Any, Any], Any]] = {
     # Caps: the smallest binds.
     "max_risk_per_trade": _min,
     "max_daily_loss": _min,
+    "max_weekly_loss": _min,
+    "max_consecutive_losses": _min,
+    "max_correlated_exposure": _min,
     "max_drawdown_pct": _min,
     "max_exposure_per_currency": _min,
     "max_open_positions": _min,

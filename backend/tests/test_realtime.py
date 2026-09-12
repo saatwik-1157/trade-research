@@ -36,7 +36,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 ALICE = {"email": "alice@tr-platform.io", "password": "correct horse battery"}
 BOB = {"email": "bob@tr-platform.io", "password": "another strong one"}
@@ -92,6 +92,18 @@ async def app(settings: Settings, tmp_path: Path) -> AsyncIterator[FastAPI]:
 async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as c:
         yield c
+
+
+async def another_user(db: AsyncSession, user_id: str) -> None:
+    """A real second owner.
+
+    These tests prove one user cannot reach another's account, so the other
+    owner has to exist -- `*_accounts.user_id` is a foreign key. A dangling id
+    tested nothing except that SQLite was not checking.
+    """
+    if await db.get(User, user_id) is None:
+        db.add(User(id=user_id, email=f"{user_id}@example.com", password_hash="x", role="user"))
+        await db.flush()
 
 
 async def _register(client: AsyncClient, who: dict) -> str:
@@ -283,6 +295,7 @@ async def test_a_user_cannot_subscribe_to_another_users_account(
     async with app.state.session_factory() as db:
         alice = await db.scalar(select(User).where(User.email == ALICE["email"]))
         assert alice is not None
+        await another_user(db, "a-different-user")
         db.add(
             PaperAccount(
                 id="acct-someone-else",
@@ -345,6 +358,7 @@ async def test_a_missing_account_and_an_unowned_one_read_the_same(
     async with app.state.session_factory() as db:
         alice = await db.scalar(select(User).where(User.email == ALICE["email"]))
         assert alice is not None
+        await another_user(db, "someone-else")
         db.add(
             PaperAccount(
                 id="acct-real",
@@ -633,6 +647,7 @@ async def test_channels_route_lists_only_this_users_channels(
                 id="acct-mine", user_id=alice.id, name="mine", broker="mt5", account_mode="demo"
             )
         )
+        await another_user(db, "someone-else")
         db.add(
             BrokerAccount(
                 id="acct-theirs",

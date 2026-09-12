@@ -23,11 +23,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import sys
 from datetime import UTC, datetime
 from decimal import Decimal
+from types import ModuleType
 
+from app.core import toolkit
 from app.marketdata.base import HistoricalProvider, ProviderStatus, ProviderUnavailable
 from app.marketdata.types import Availability, Bar, Provider, Timeframe
 
@@ -48,14 +48,9 @@ INTERVALS: dict[Timeframe, str] = {
 SUPPORTED: tuple[Timeframe, ...] = tuple(INTERVALS)
 
 
-def _toolkit():  # noqa: ANN202 - the toolkit module, imported lazily
-    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    tools = os.path.join(os.path.dirname(root), "tools")
-    if os.path.isdir(tools) and tools not in sys.path:
-        sys.path.insert(0, tools)
-    import market
-
-    return market
+def _toolkit() -> ModuleType:
+    """The market-data helpers, from tr_toolkit or the sibling tools/."""
+    return toolkit.load("market")
 
 
 class YFinanceMarketData(HistoricalProvider):

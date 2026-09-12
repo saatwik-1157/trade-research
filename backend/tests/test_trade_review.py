@@ -834,6 +834,9 @@ async def test_the_full_chain_attributes_every_context(
             filled_at=NOW - timedelta(hours=3) + timedelta(seconds=2),
         )
         db.add(order)
+        # `executions` sorts ahead of `orders` for SQLAlchemy, which has no
+        # relationship() telling it the execution depends on the order.
+        await db.flush()
         db.add(
             Execution(
                 order_id="o1",
@@ -856,6 +859,16 @@ async def test_the_full_chain_attributes_every_context(
                 mode="paper",
             )
         )
+        # The decision names the exact weights that decided; `model_version_id`
+        # is a foreign key, so that version has to be a real row.
+        from app.models.ai import AIModel, ModelVersion
+
+        db.add(
+            AIModel(id="m-1", key="trade_probability", name="trade probability", kind="classifier")
+        )
+        await db.flush()
+        db.add(ModelVersion(id="mv1", model_id="m-1", version=3, status="draft"))
+        await db.flush()
         db.add(
             AiDecisionRecord(
                 id="ai1",

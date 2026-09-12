@@ -91,6 +91,9 @@ CODE_FOR: dict[LimitKind, RejectionCode] = {
     LimitKind.one_position_per_symbol: RejectionCode.position_already_open,
     LimitKind.max_trades_per_day: RejectionCode.trade_frequency_exceeded,
     LimitKind.max_daily_loss: RejectionCode.max_daily_loss_exceeded,
+    LimitKind.max_weekly_loss: RejectionCode.max_weekly_loss_exceeded,
+    LimitKind.max_consecutive_losses: RejectionCode.max_consecutive_losses_reached,
+    LimitKind.max_correlated_exposure: RejectionCode.max_correlated_exposure_exceeded,
     LimitKind.max_drawdown: RejectionCode.max_drawdown_exceeded,
     LimitKind.max_exposure: RejectionCode.max_exposure_exceeded,
     LimitKind.max_leverage: RejectionCode.max_leverage_exceeded,
@@ -114,7 +117,14 @@ CODE_FOR: dict[LimitKind, RejectionCode] = {
 # state each one latches into.
 LATCHING: dict[LimitKind, RiskState] = {
     LimitKind.max_daily_loss: RiskState.daily_loss_locked,
+    # Its own state, not the daily one. `refresh()` clears a daily lock when
+    # the day ends, so a week latched there would release itself overnight
+    # while the week was still breached.
+    LimitKind.max_weekly_loss: RiskState.weekly_loss_locked,
     LimitKind.max_drawdown: RiskState.drawdown_locked,
+    # max_consecutive_losses is deliberately ABSENT. A streak clears
+    # itself on the next win, so latching it would turn a pause that
+    # ends by itself into a lock that needs a human.
 }
 
 # A signal is at most one bar old by construction. Two bars of slack covers
