@@ -99,6 +99,22 @@ def day_start(now: datetime, *, boundary_hour: int = 0) -> datetime:
     return start
 
 
+def week_start(now: datetime, *, boundary_hour: int = 0) -> datetime:
+    """The start of the current trading week, in UTC.
+
+    Monday, because this project already treats Saturday and Sunday as the
+    venue weekend (`run_overnight.weekend_deadline`), so a week that began on
+    any other day would cut a trading week in half. `boundary_hour` shifts it
+    for the same reason `day_start` takes one -- the broker's rollover -- and
+    is a configured number, never read from the machine.
+
+    One definition, used from both sides of the tz-awareness line (§21), the
+    same rule `day_start` follows.
+    """
+    start = day_start(now, boundary_hour=boundary_hour)
+    return start - timedelta(days=start.weekday())
+
+
 @dataclass
 class AccountRiskState:
     """One account's latched risk state. Persisted; never rebuilt by guessing."""
