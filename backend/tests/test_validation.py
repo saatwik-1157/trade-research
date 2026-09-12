@@ -52,12 +52,11 @@ from app.validation.report import MEANS, ValidationReport, markdown
 from app.validation.service import (
     CANCELLED,
     COMPLETED,
-    FAILED,
     DuplicateValidationJob,
     ValidationService,
     summarise,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -138,8 +137,14 @@ async def sessions() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         from app.auth.models import User
+        from app.models.ai import AIModel
 
         session.add(User(id="u1", email="a@b.io", password_hash="x", role="trader"))
+        # Every ModelVersion below is a version OF this model; `model_id` is a
+        # foreign key, so the parent has to exist.
+        session.add(
+            AIModel(id="m1", key="trade_probability", name="trade probability", kind="classifier")
+        )
         await session.commit()
     yield factory
     await engine.dispose()
@@ -850,20 +855,30 @@ async def test_a_dataset_that_moves_under_a_running_job_blocks_the_report(  # no
     )
 
 
-async def test_a_missing_candidate_fails_the_run_and_leaves_no_verdict(  # noqa: ANN001
+async def test_a_missing_candidate_is_refused_and_no_run_is_recorded(  # noqa: ANN001
     sessions, bars, dataset
 ) -> None:
+    """A run cannot name a candidate that does not exist.
+
+    This asserted a persisted FAILED run until the suite began enforcing
+    foreign keys. It could never have happened: `model_version_id` is NOT NULL
+    and a foreign key, so the row was unwritable against the real schema and
+    against PostgreSQL -- SQLite was simply not checking. The refusal belongs
+    at the door, where the caller learns which id was not found.
+    """
+    from app.validation.service import UnknownCandidate
+
     service = ValidationService(sessions)
     config = ValidationConfig(model_version_id="does-not-exist")
     async with sessions() as db:
-        row = await service.queue(db, config, loader=loader_for(bars, dataset), user_id="u1")
-    assert await service.wait_for(row.id)
+        with pytest.raises(UnknownCandidate) as refused:
+            await service.queue(db, config, loader=loader_for(bars, dataset), user_id="u1")
+    assert "does-not-exist" in str(refused.value)
     await service.shutdown()
+
+    # And nothing was left behind to be read as a real attempt.
     async with sessions() as db:
-        done = await db.get(ValidationRun, row.id)
-    assert done.status == FAILED
-    assert done.verdict is None
-    assert done.report is None
+        assert await db.scalar(select(func.count()).select_from(ValidationRun)) == 0
 
 
 async def test_an_unloadable_artifact_blocks_and_reports_nothing_else(  # noqa: ANN001

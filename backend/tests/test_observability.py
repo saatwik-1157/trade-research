@@ -467,6 +467,11 @@ async def test_stale_market_data_is_measured_not_assumed(app: FastAPI) -> None:
 
     async with app.state.session_factory() as db:
         db.add(Symbol(id="sym-eur", code="EURUSD", asset_class="fx", unit_class="points"))
+        # The rows below reference this symbol. SQLAlchemy has no
+        # relationship() to tell it they depend on it, so without this
+        # flush the children can be written first -- an IntegrityError
+        # now that SQLite enforces foreign keys.
+        await db.flush()
         db.add(
             MarketBar(
                 provider="mt5",
@@ -496,6 +501,11 @@ async def test_an_unresolved_order_is_reconciliation_required_not_failed(
     """Section 17. The wording is the point."""
     async with app.state.session_factory() as db:
         db.add(Symbol(id="sym-eur", code="EURUSD", asset_class="fx", unit_class="points"))
+        # The rows below reference this symbol. SQLAlchemy has no
+        # relationship() to tell it they depend on it, so without this
+        # flush the children can be written first -- an IntegrityError
+        # now that SQLite enforces foreign keys.
+        await db.flush()
         db.add(
             Order(
                 id="o-1",

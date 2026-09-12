@@ -87,6 +87,12 @@ NOT_SUPPLIED: dict[str, str] = {
     "last_trade_at": "the trade journal (L19).",
     "margin_required": "position sizing (L18) and the broker. It is what a PROPOSED "
     "trade would need; the portfolio holds what current positions already use.",
+    "consecutive_losses": "the trade journal (L19). It is a property of a SEQUENCE of "
+    "closed trades, not of what is held now -- `tools/risk_gate.py` counts it from "
+    "closed outcomes, and a second count here would be a second answer.",
+    "correlated_exposure": "market data (L08). Grouping exposure by correlation needs a "
+    "common return window across two or more instruments; the portfolio knows what is "
+    "held, not how those instruments move together.",
 }
 
 
@@ -166,6 +172,7 @@ class PortfolioView:
             "open_positions": len(self.positions),
             "open_symbols": frozenset(p.symbol for p in self.positions),
             "realised_today": self.pnl.realized_today if self.pnl else None,
+            "realised_week": self.pnl.realized_week if self.pnl else None,
             "trades_today": self.pnl.trades_today if self.pnl else None,
             "peak_equity": self.drawdown.peak_equity if self.drawdown else None,
             "exposure_by_currency": (
@@ -334,7 +341,7 @@ class PortfolioService:
         now: datetime,
     ) -> pnl_engine.PnL:
         """Realized from the journal, unrealized from the marks. Sections 20, 21."""
-        from app.risk.state import day_start
+        from app.risk.state import day_start, week_start
 
         # `day_start` is L17's boundary and it works in AWARE UTC -- the risk
         # engine hands it `datetime.now(UTC)`. The database stores NAIVE UTC,
@@ -366,6 +373,12 @@ class PortfolioService:
         realized = sum((row.net_profit for row in closed), ZERO)
         today = [row for row in closed if row.closed_at and row.closed_at >= boundary]
         realized_today = sum((row.net_profit for row in today), ZERO)
+        # The weekly veto reads this. Same closed set, same tz-naive frame,
+        # one week boundary defined beside the daily one rather than a second
+        # rule invented here.
+        week_boundary = week_start(aware).replace(tzinfo=None)
+        this_week = [row for row in closed if row.closed_at and row.closed_at >= week_boundary]
+        realized_week = sum((row.net_profit for row in this_week), ZERO)
 
         marks = [p.unrealized_pnl for p in positions]
         unrealized, missing = pnl_engine.unrealized_of(marks)
@@ -375,8 +388,10 @@ class PortfolioService:
             realized=realized,
             unrealized=unrealized,
             realized_today=realized_today,
+            realized_week=realized_week,
             trades_today=len(today),
             day_start=boundary,
+            week_start=week_boundary,
             realized_trades=len(closed),
             open_positions=len(positions),
             unrealized_unavailable=unavailable if missing else (),
