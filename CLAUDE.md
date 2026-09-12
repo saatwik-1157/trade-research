@@ -97,6 +97,15 @@ search produced the only candidate ever to beat its null in-sample, at t=3.10,
 and it went to -1.83 out of sample; three combinations cleared 1.96 out of
 sample against 4.9 expected by chance.
 
+Re-run 2026-09-12 on the current toolkit, and the verdict reproduces on numbers
+of its own: H4 best 1.65 against a null reaching 1.98, D1 best 2.18 against a
+null reaching 2.87. Both still fail all three gates. A replication matters here
+because a single search that finds nothing can always be dismissed as one
+unlucky draw; two, on different code and a different window, cannot. Note D1
+judged only 31 of 41 candidates -- the rest had too few trades -- so its
+"nothing" is thinner evidence than H1's, and its null reaching 2.87 is the
+sample size talking rather than the market.
+
 Those two searches left one cell empty, and it was the cell the argument
 pointed at: the exit search ran at H1 only, so no run had ever let a winner
 run at the timeframe where `cost_profile.py` puts the spread hurdle lowest.
