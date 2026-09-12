@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 
 import console_guard  # noqa: E402
 import crash_report  # noqa: E402
+import run_overnight  # noqa: E402
 import watchdog  # noqa: E402
 
 FAILED = []
@@ -338,6 +339,81 @@ def test_liveness_is_unknown_rather_than_dead():
               crash_report.process_alive({"pid": "24824"}), None)
 
 
+def test_a_weekend_deadline_is_refused_in_the_venues_week_not_ours():
+    print()
+    print("--flat-by cannot be honoured across the weekend close")
+    from datetime import datetime, timedelta
+
+    # The venue an hour and a half ahead, which is what MetaQuotes-Demo was on
+    # 2026-09-11: a Friday-night session whose 06:00 deadline was Saturday
+    # 07:30 there. It ran, opened 23, and closed none of the 7 it was holding.
+    ahead = timedelta(hours=1, minutes=30)
+    local = datetime(2026, 9, 11, 22, 50)          # Friday night, local
+    got = run_overnight.weekend_deadline(
+        datetime(2026, 9, 12, 6, 0), local + ahead, local)
+    check("the Saturday deadline is caught", got is not None, True)
+    check("and it is named in the VENUE's week", got[0].strftime("%A"), "Saturday")
+
+    # Mid-week, the same shape must NOT be refused.
+    local = datetime(2026, 9, 9, 22, 50)           # Wednesday night
+    got = run_overnight.weekend_deadline(
+        datetime(2026, 9, 10, 6, 0), local + ahead, local)
+    check("a Thursday deadline is allowed", got, None)
+
+    # Sunday evening, after the venue reopens: the deadline is Monday there.
+    local = datetime(2026, 9, 13, 23, 30)          # Sunday night
+    got = run_overnight.weekend_deadline(
+        datetime(2026, 9, 14, 6, 0), local + ahead, local)
+    check("a Monday deadline is allowed", got, None)
+
+    # THE CASE THE OFFSET EXISTS FOR. A deadline that is Friday on the
+    # operator's clock and Saturday on the venue's. Using local time would
+    # allow it; using the venue's refuses it, and the venue is the one that
+    # settles the trade.
+    behind = timedelta(hours=7)
+    local = datetime(2026, 9, 11, 18, 0)           # Friday evening, local
+    got = run_overnight.weekend_deadline(
+        datetime(2026, 9, 11, 23, 0), local + behind, local)
+    check("a Friday-here, Saturday-there deadline is refused",
+          got is not None and got[0].strftime("%A"), "Saturday")
+
+    # ...and the mirror: Saturday here, still Friday there. Refusing this one
+    # would block a legitimate session on the operator's calendar alone.
+    local = datetime(2026, 9, 12, 4, 0)            # Saturday, local
+    got = run_overnight.weekend_deadline(
+        datetime(2026, 9, 12, 6, 0), local - behind, local)
+    check("a Saturday-here, Friday-there deadline is allowed", got, None)
+
+
+def test_a_session_that_failed_its_flush_is_not_completed():
+    print()
+    print("'completed' is not the same as 'finished as it was asked to'")
+
+    status, reason = run_overnight.finishing_status(
+        {"flat_by": "06:00", "still_open": 7}, 0)
+    check("a flush that left 7 open is NOT completed", status, "ended_not_flat")
+    check("and the reason names the count", "7 position(s)" in reason, True)
+
+    status, _ = run_overnight.finishing_status(
+        {"flat_by": "06:00", "still_open": 0}, 0)
+    check("a flush that left nothing open IS completed", status, "completed")
+
+    # The distinction the whole journal exists for.
+    status, reason = run_overnight.finishing_status(
+        {"flat_by": "06:00", "still_open": None}, 0)
+    check("an account that could not be COUNTED is not flat either",
+          status, "ended_not_flat")
+    check("and says so rather than implying a number",
+          "could not be counted" in reason, True)
+
+    # No --flat-by means flatness was never promised, so holding is correct.
+    status, _ = run_overnight.finishing_status(
+        {"flat_by": None, "still_open": 7}, 0)
+    check("holding with no --flat-by asked for is completed", status, "completed")
+    status, _ = run_overnight.finishing_status({}, 0)
+    check("and an empty summary does not invent a failure", status, "completed")
+
+
 def main():
     print("crash journal and console guard checks")
     test_a_record_is_written_and_readable()
@@ -354,6 +430,8 @@ def main():
     test_the_watchdog_never_imports_a_venue()
     test_a_stuck_record_can_be_resolved_and_only_a_stuck_one()
     test_liveness_is_unknown_rather_than_dead()
+    test_a_weekend_deadline_is_refused_in_the_venues_week_not_ours()
+    test_a_session_that_failed_its_flush_is_not_completed()
 
     if FAILED:
         print(f"\n{len(FAILED)} check(s) failed")

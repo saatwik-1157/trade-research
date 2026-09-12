@@ -1191,6 +1191,59 @@ def test_a_refused_flush_is_retried_and_named():
         mt5_paper._log = real_log
 
 
+def test_a_closed_market_is_not_retried():
+    """The 2026-09-12 session, and the distinction 10031 vs 10018.
+
+    A Friday-night run reached its 06:00 deadline after the FX week had closed.
+    Seven positions, six attempts, ten seconds apart: 42 identical refusals and
+    a minute spent proving what the first answer already said. 10031 is worth
+    retrying because a trade server can come back within seconds; 10018 is a
+    calendar, and no number of attempts moves it.
+    """
+    print()
+    print("Wind-down - the market being shut is not a transient")
+
+    class Closed(HarvestMT5):
+        """Refuses everything with 10018, the way a weekend does."""
+
+        def __init__(self, positions):
+            super().__init__(positions)
+            self.attempts = 0
+
+        def order_send(self, request):
+            self.attempts += 1
+            return types.SimpleNamespace(retcode=take_profit.MARKET_CLOSED,
+                                         order=0, deal=0, price=0.0, volume=0.0)
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        c = Closed([pos(1, profit=-2.25), pos(2, profit=-1.10)])
+        closed, still = take_profit.flush_until_flat(c, live=True, attempts=6, wait=0)
+        check("nothing was closed", closed, 0)
+        check("both are reported still open", len(still), 2)
+        check("naming the retcode", still[0]["retcode"], 10018)
+        # The point: ONE round of two, not six rounds of two.
+        check("it stopped after the first round", c.attempts, 2)
+
+        # A MIXED round is not a closed market. One position refusing with
+        # 10031 means a retry can still help, and stopping early would spend
+        # the tail the flush exists to close.
+        class Mixed(Closed):
+            def order_send(self, request):
+                self.attempts += 1
+                code = 10018 if self.attempts % 2 else 10031
+                return types.SimpleNamespace(retcode=code, order=0, deal=0,
+                                             price=0.0, volume=0.0)
+
+        c = Mixed([pos(3, profit=-2.25), pos(4, profit=-1.10)])
+        closed, still = take_profit.flush_until_flat(c, live=True, attempts=3, wait=0)
+        check("a mixed refusal still uses every attempt", c.attempts, 6)
+        check("and still reports what stayed open", len(still), 2)
+    finally:
+        mt5_paper._log = real_log
+
+
 def test_a_halt_does_not_flush_hours_early():
     """`--max-daily-loss` firing at 22:00 stops trading; it does not mean close
     everything six hours before the operator asked."""
@@ -1844,6 +1897,7 @@ def main():
     test_a_deadline_is_the_wall_clock_and_rolls_to_tomorrow()
     test_the_flush_fires_when_flat_by_equals_the_stop_hour()
     test_a_refused_flush_is_retried_and_named()
+    test_a_closed_market_is_not_retried()
     test_a_halt_does_not_flush_hours_early()
     test_the_two_halts_are_told_apart_by_value()
     test_the_machine_is_released_even_when_the_session_raises()

@@ -279,6 +279,115 @@ def minutes_until(hour: int) -> tuple[float, datetime]:
     return (target - now).total_seconds() / 60.0, target
 
 
+def weekend_deadline(target, server_now, local_now):
+    """Does `target` (local) fall on a venue weekend? The decision, with no I/O.
+
+    Separated from the venue read so it can be tested against a Friday night in
+    Tokyo and a Friday night in Chicago without a terminal, which is the only
+    way to know the offset is applied in the right direction.
+
+    Returns (target_in_server_time, offset) or None.
+    """
+    offset = server_now - local_now
+    target_server = target + offset
+    if target_server.weekday() >= 5:  # Saturday, Sunday
+        return target_server, offset
+    return None
+
+
+def finishing_status(summary, code):
+    """How a session that returned should be recorded. (status, reason).
+
+    `completed` is not the same as `finished as it was asked to`. A session
+    that requested --flat-by and ended holding positions failed its last
+    obligation, and the record could not say so: the 2026-09-12 run reported
+    `completed, exit code 0` with seven positions still at the venue.
+
+    An account that could not be COUNTED is not flat either. It is unknown, and
+    unknown is never the good case -- the whole journal exists because a figure
+    nobody could read must not be written down as a zero.
+    """
+    summary = summary or {}
+    still = summary.get("still_open")
+    flat_by = summary.get("flat_by")
+    if flat_by is None:
+        return "completed", f"exit code {code}"
+    if still is None:
+        return "ended_not_flat", (
+            f"exit code {code}; --flat-by {flat_by} ran but the open book "
+            "could not be counted")
+    if still > 0:
+        return "ended_not_flat", (
+            f"exit code {code}; --flat-by {flat_by} left {still} position(s) "
+            "open at the venue")
+    return "completed", f"exit code {code}"
+
+
+def deadline_in_the_weekend(target):
+    """The venue's weekday at the deadline, when the deadline is a weekend one.
+
+    Returns `(target_in_server_time, offset)` for a deadline that falls on a
+    Saturday or Sunday at the VENUE, and None otherwise -- including when the
+    question could not be answered, because refusing a session over a clock we
+    could not read would be its own failure.
+
+    **Why this exists.** `--flat-by` promises the account is flat at the
+    deadline, and on a Friday-night session that promise cannot be kept: the FX
+    week closes before the deadline arrives and every close is refused with
+    10018. Measured 2026-09-12 -- a session ran to 06:00 on a Saturday, tried
+    seven positions six times, closed none, and left the book to the weekend
+    carrying financing and the Monday gap. Nothing was wrong with the session;
+    it was asked for something the calendar would not allow.
+
+    **Two assumptions, both stated rather than buried.**
+
+    The venue's week runs from Sunday evening to Friday night in SERVER time,
+    so a deadline landing on a Saturday or a Sunday cannot be met. MetaTrader's
+    Python API exposes no session schedule, so this is the calendar rather than
+    a reading from the venue.
+
+    `server_now()` is the last TICK's timestamp, not a live clock, so the
+    offset it yields is the server's only while quotes are arriving. That holds
+    at launch, which is when this runs -- a session started into a closed
+    market has nothing to trade anyway. When the market IS already shut the
+    tick is stale and the offset is wrong, but wrong in the direction that
+    makes a weekend deadline look like a weekend deadline, so the guard errs
+    toward refusing. That is the right direction to be wrong in.
+    """
+    import time as _time
+    from datetime import datetime as _dt
+
+    PROBES = ("EURUSD", "GBPUSD", "USDJPY", "XAUUSD")
+
+    def _stamps(mt5):
+        out = {}
+        for sym in PROBES:
+            tick = mt5.symbol_info_tick(sym)
+            if tick and getattr(tick, "time_msc", 0):
+                out[sym] = tick.time_msc
+        return out
+
+    try:
+        mt5 = mt5_paper.connect(None)
+        server = mt5_paper.server_now(mt5)
+        # Are quotes actually ARRIVING? Sampled twice rather than assumed,
+        # because `server_now` is the last tick's stamp and a stale one looks
+        # exactly like a live one. Without this the guard printed "server is
+        # -5.6h from this clock" on a Saturday -- a plausible figure, measured
+        # from a tick seven hours dead, and quoting it as the venue's offset
+        # would be inventing a number rather than reporting a gap.
+        first = _stamps(mt5)
+        _time.sleep(1.5)
+        live = _stamps(mt5) != first or not first
+    except Exception:  # noqa: BLE001 - an unreadable clock is not a refusal
+        return None
+    decided = weekend_deadline(target, server, _dt.now())
+    if decided is None:
+        return None
+    target_server, offset = decided
+    return target_server, offset, live, server
+
+
 def leg_argv(args) -> list[str]:
     """The take_profit arguments for one continuous leg.
 
@@ -511,7 +620,10 @@ def main() -> int:
     ap.add_argument("--paper", action="store_true",
                     help="run without sending orders")
     ap.add_argument("--force", action="store_true",
-                    help="start even though another session is running")
+                    help="start anyway: overrides both the running-session "
+                         "guard and the refusal to take a deadline that falls "
+                         "in the venue's weekend, when holding the book across "
+                         "the close is what you meant")
     ap.add_argument("--continuous", action="store_true",
                     help="run with NO stop hour and NO flat-by wind-down: legs "
                          "restart back to back and nothing is ever force-closed. "
@@ -576,6 +688,43 @@ def main() -> int:
         return run_continuous(args)
 
     minutes, target = minutes_until(args.until_hour)
+
+    # A wind-down is EXEMPT, and that is not a loophole. The guard exists so a
+    # session does not take positions it will not be able to close;
+    # --harvest-only takes none, and it is the exact command an operator runs
+    # to clean up a book the weekend caught. Refusing it would block the remedy
+    # with a warning about the problem.
+    weekend = None if args.harvest_only else deadline_in_the_weekend(target)
+    if weekend is not None and not args.force:
+        target_server, offset, live, last_tick = weekend
+        sign = "+" if offset.total_seconds() >= 0 else "-"
+        hours = abs(offset.total_seconds()) / 3600.0
+        print(f"\n  REFUSED: the {args.until_hour:02d}:00 deadline lands on a "
+              f"{target_server:%A} at the venue.")
+        if live:
+            print(f"    your {target:%a %H:%M} is {target_server:%a %H:%M} there "
+                  f"(server is {sign}{hours:.1f}h from this clock)")
+        else:
+            print("    QUOTES ARE NOT ARRIVING, so the venue's clock could not be")
+            print(f"    read live. Its last tick is stamped {last_tick:%a %H:%M} and "
+                  "the market")
+            print("    is already shut -- which is the same answer, reached without")
+            print("    quoting an offset measured from a dead tick.")
+        print()
+        print("    --flat-by cannot be honoured across the weekend close. Every")
+        print("    close is refused with retcode 10018 and the positions stay")
+        print("    open until the venue reopens, carrying financing and the")
+        print("    Monday gap. That happened on 2026-09-12: seven positions,")
+        print("    six attempts, none closed.")
+        print()
+        print("    Nothing was started and no order was sent. Options:")
+        print("      - run it on a night whose deadline is inside the week")
+        print("      - --until-hour N, with a deadline before the close")
+        print("      - --force, if holding the book over the weekend is what")
+        print("        you actually want")
+        print()
+        return 1
+
     argv = override(SETTINGS, "--rule", args.rule)
     argv = override(argv, "--max-positions", args.max_positions)
     argv = override(argv, "--max-consecutive-losses",
@@ -642,8 +791,9 @@ def main() -> int:
             # closed `completed` while still reporting the positions the
             # final pass saw would read as an abandoned tail.
             done = getattr(take_profit, "LAST_SUMMARY", None) or {}
+            status, detail = finishing_status(done, code)
             crash_report.finish(
-                session_id, status="completed", reason=f"exit code {code}",
+                session_id, status=status, reason=detail,
                 state={
                     "positions_open": done.get("still_open"),
                     "flushed": done.get("flushed"),
