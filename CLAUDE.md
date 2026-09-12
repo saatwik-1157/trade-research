@@ -618,7 +618,12 @@ the venue-week guard and the status a finished session records,
 and `python tests/test_risk_gate.py` after touching `tools/risk_gate.py`, the
 `gate` parameter on `mt5_paper.place`, the close recorder in
 `mt5_paper.close_own`, or `APPROVED_UPSTREAM` in `app/brokers/mt5.py`.
-All nine run in CI on every push, against Python 3.10, 3.12 and 3.14.
+Run `python tests/test_cli.py` after touching `tools/cli.py` or `build_exe.py`
+-- the command table is read by both, and both ways of breaking it are silent:
+a command naming a module that does not exist is fine until someone types it,
+and a module missing from the table is simply absent from the executable with
+no build error.
+All ten run in CI on every push, against Python 3.10, 3.12 and 3.14.
 
 On 3.10 the risk engine cannot be imported at all -- `app/risk/engine.py` uses
 `StrEnum` and `datetime.UTC`, both 3.11 -- so `risk_gate` reports itself

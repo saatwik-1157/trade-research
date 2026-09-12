@@ -41,19 +41,20 @@ from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import paths as _paths
+
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except (AttributeError, OSError):
     pass
 
-import numpy as np
-
 import mt5_account
 import mt5_paper
+import numpy as np
 import rule_search
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+ROOT = _paths.project_root()
 LEDGER = os.path.join(ROOT, "data", "track_record.jsonl")
 ORDER_LOG = os.path.join(ROOT, "data", "paper_trades.jsonl")
 

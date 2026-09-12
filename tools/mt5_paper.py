@@ -57,14 +57,15 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import paths as _paths
+
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except (AttributeError, OSError):
     pass
 
-import numpy as np  # noqa: E402
-
-import risk_gate  # noqa: E402
+import numpy as np
+import risk_gate
 
 DEFAULT_TERMINAL = r"C:\Program Files\MetaTrader 5\terminal64.exe"
 MAGIC = 770315  # tags orders from this tool so it never touches anything else
@@ -79,7 +80,7 @@ MAGIC = 770315  # tags orders from this tool so it never touches anything else
 # than writing its own send. What separates the two systems is the tag, not the
 # code.
 TRADE_LOG = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "paper_trades.jsonl"
+    _paths.project_root(), "data", "paper_trades.jsonl"
 )
 
 
@@ -673,7 +674,7 @@ def deal_money(mt5, deal_ticket) -> dict:
         return empty
     try:
         deals = mt5.history_deals_get(ticket=deal_ticket)
-    except Exception:  # noqa: BLE001 - an unreadable history is a gap, not a crash
+    except Exception:
         return empty
     if not deals:
         return empty
