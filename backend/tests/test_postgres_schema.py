@@ -3,18 +3,21 @@
 The suite runs on in-memory SQLite, which is fast and has two blind spots that
 have both drawn blood:
 
-* **Foreign keys are off** unless `PRAGMA foreign_keys=ON` is issued per
-  connection, and almost nothing issues it. A route can write a dangling
-  reference, pass every test, and fail on the real database -- which is
-  exactly what `POST /v1/orders` did through 174 API tests
-  (`KNOWN_TEST_LIMITATIONS.md` §1b).
+* **Foreign keys were off** unless `PRAGMA foreign_keys=ON` was issued per
+  connection, and nothing issued it. A route could write a dangling reference,
+  pass every test, and fail on the real database -- which is exactly what
+  `POST /v1/orders` did through 174 API tests (`KNOWN_TEST_LIMITATIONS.md`
+  §1b). Closed on 2026-09-12: `conftest.py` now issues the pragma from one
+  `Engine.connect` listener, so the SQLite suite enforces all 105 constraints.
+  This file still earns its place -- it proves the constraints exist in the
+  MIGRATED schema, which `create_all` cannot tell you.
 * **Migrations are never run.** Every test builds its schema with
   `Base.metadata.create_all`, so the 27 Alembic revisions that actually create
   production's schema are exercised by nothing. A model can drift from its
   migration indefinitely and the suite stays green, because the suite never
   looks at the migration.
 
-These tests close the second gap and widen the first. They **skip** unless
+These tests close the second gap, and the first is now closed on both sides. They **skip** unless
 `POSTGRES_TEST_URL` is set, so a developer machine is unaffected; CI sets it
 against a `postgres:16` service.
 

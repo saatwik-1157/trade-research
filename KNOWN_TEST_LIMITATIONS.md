@@ -40,7 +40,39 @@ order is one sample. "MT5 disconnect is safe" still means "the platform behaves
 correctly when `FakeBroker.disconnect()` is called", not when a terminal
 crashes.
 
-## 1b. Foreign keys are not enforced anywhere in this suite
+## 1b. ~~Foreign keys are not enforced anywhere in this suite~~ — RESOLVED 2026-09-12
+
+`tests/conftest.py` issues `PRAGMA foreign_keys=ON` from a single
+`@event.listens_for(Engine, "connect")` hook, so **all 105 foreign key
+constraints across 56 tables are now enforced in the SQLite suite**, against
+the 1 it used to cover. One listener rather than an edit per engine: the suite
+builds its engines in dozens of files, and a rule that has to be repeated in
+each is one that will be missed in the next. `Engine.connect` fires for the
+sync engine an async one wraps, so it reaches every session the tests open,
+including ones added later. It identifies SQLite by the driver's own module,
+so `asyncpg` reaching the same hook in the PostgreSQL job is skipped rather
+than being handed a `PRAGMA` it cannot parse.
+
+Turning it on cost **213 failures** — 44 in the main suite, 169 in
+`test_api_v1.py` — and they were two different bugs wearing one symptom:
+
+- **Missing parent rows.** Fixtures naming accounts, symbols, model versions
+  and strategy versions that no row backed.
+- **Flush ordering.** SQLAlchemy orders a flush by `relationship()`, not by
+  `ForeignKey`, and these models declare the columns without the
+  relationships — so `executions` was written before `orders`, `orders`
+  before `signals`, `market_bars` before `symbols`. The fix is to flush the
+  parent first, never to invent one.
+
+It also caught a test asserting a state the schema forbids:
+`validation_runs.model_version_id` is `NOT NULL` and a foreign key, so the
+"failed run for a missing candidate" it expected could never have been written
+on SQLite *or* PostgreSQL. The refusal now happens at `queue()`.
+
+Verify with `PRAGMA foreign_keys` returning `1` rather than assuming it — a
+pragma that silently failed would return this whole section to being true.
+
+### 1b (original) · the gap as first recorded
 
 **SQLite has foreign keys OFF unless `PRAGMA foreign_keys=ON` is issued per
 connection, and nothing here issues it.** PostgreSQL always enforces them. So

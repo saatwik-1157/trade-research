@@ -51,14 +51,12 @@ async def db() -> AsyncIterator[AsyncSession]:
         # ceremony -- it is the constraint the route satisfies by passing the
         # signed-in user's id.
         from app.auth.models import User
-        from app.models.accounts import RoleRow
 
-        # `users.role` is itself a foreign key, to `roles.name`. With the pragma
-        # on, seeding a user needs the role to exist -- which is the same thing
-        # that makes `python -m app.auth.bootstrap` fail on its own.
-        for rank, role_name in enumerate(("user", "trader", "admin")):
-            session.add(RoleRow(name=role_name, rank=rank, description=role_name))
-        await session.flush()
+        # `users.role` is itself a foreign key, to `roles.name`, so seeding a
+        # user needs the role to exist. `roles` is seeded once in conftest, on
+        # the table's own `after_create`, from the same ROLE_SEED constant
+        # migration 0002 uses -- so this fixture no longer seeds it and cannot
+        # drift from what production has.
 
         for uid in ("user-1", "user-2"):
             session.add(

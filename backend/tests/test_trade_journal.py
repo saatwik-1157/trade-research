@@ -181,6 +181,12 @@ async def make_order(
     requested: Decimal | None = Decimal("1.1000"),
     sizing: dict[str, Any] | None = None,
 ) -> Order:
+    # Anything already pending -- the Signal this order points at, say -- has
+    # to reach the database first. No relationship() joins Order to Signal, so
+    # SQLAlchemy has no dependency to sort by and orders the two mappers by its
+    # own key: `orders` can be inserted before `signals` exists. That was
+    # invisible while SQLite ignored foreign keys, and is an IntegrityError now.
+    await db.flush()
     row = Order(
         intent_id=f"intent-{signal_id or 'x'}",
         mode="demo",
@@ -584,6 +590,25 @@ async def test_the_exact_model_version_is_recorded_never_latest(
     """§9. A review that cannot say which weights decided cannot review."""
     async with sessions() as db:
         order = await make_order(db)
+        # The decision names the exact weights and the bot that acted, and the
+        # assertions below read those ids back -- so both have to be real rows,
+        # flushed before the decision that points at them.
+        from app.models.ai import AIModel, ModelVersion
+        from app.models.bots import Bot
+
+        db.add(
+            AIModel(id="m-1", key="trade_probability", name="trade probability", kind="classifier")
+        )
+        await db.flush()
+        db.add(ModelVersion(id="mv-2-3", model_id="m-1", version=3, status="draft"))
+        db.add(Bot(id="bot1", user_id="u1", name="bot", mode="demo"))
+        # The position below is attributed to strategy version `sv-1`.
+        from app.models.strategies import Strategy, StrategyVersion
+
+        db.add(Strategy(id="st-1", key="breakout", name="breakout"))
+        await db.flush()
+        db.add(StrategyVersion(id="sv-1", strategy_id="st-1", version=1, code_ref="mod:fn"))
+        await db.flush()
         decision = AiDecisionRecord(
             id="ai1",
             strategy_key="breakout",
@@ -790,6 +815,9 @@ async def test_the_timeline_is_chronological_and_names_its_sources(
             status="accepted",
         )
         db.add(webhook)
+        # Same ordering trap as `make_order`: the signal references this
+        # webhook, and SQLAlchemy would otherwise write `signals` first.
+        await db.flush()
         signal = Signal(
             id="sig1",
             signal_key="s1",
@@ -863,6 +891,8 @@ async def test_no_webhook_secret_reaches_the_timeline(
                 status="accepted",
             )
         )
+        # The signal references this webhook; flush so it exists first.
+        await db.flush()
         signal = Signal(
             id="sig1",
             signal_key="s1",
@@ -1170,6 +1200,37 @@ async def api(app: Any) -> Any:
 async def seed_trades(app: Any) -> None:
     """Two paper trades and one demo trade, with distinct attribution."""
     async with app.state.session_factory() as db:
+        # The accounts these trades are attributed to have to exist. The tests
+        # below filter by `acc-paper` and `acc-broker` by name, so those ids
+        # are load-bearing rather than incidental -- a generated id would
+        # satisfy the foreign key and then fail the assertion.
+        from app.auth.models import User
+
+        db.add(User(id="seed-u1", email="seed@b.io", password_hash="x", role="admin"))
+        db.add(
+            PaperAccount(
+                id="acc-paper",
+                user_id="seed-u1",
+                name="paper",
+                currency="USD",
+                starting_balance=Decimal("100000"),
+                balance=Decimal("100000"),
+                equity=Decimal("100000"),
+                status="active",
+            )
+        )
+        db.add(
+            BrokerAccount(
+                id="acc-broker",
+                user_id="seed-u1",
+                name="demo",
+                broker="mt5",
+                account_mode="demo",
+                currency="USD",
+            )
+        )
+        await db.flush()  # the parents land before the trades referencing them
+
         for index, (mode, account, reason, net, r) in enumerate(
             [
                 ("paper", "acc-paper", "take_profit", "50", "1.0"),

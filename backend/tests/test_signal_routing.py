@@ -63,12 +63,9 @@ async def db() -> AsyncIterator[AsyncSession]:
 async def _fixtures(db: AsyncSession) -> None:
     """A user, an account, a strategy and one version. No bot yet."""
     from app.auth.models import Role, User
-    from app.models.accounts import PaperAccount, RoleRow
+    from app.models.accounts import PaperAccount
     from app.models.strategies import Strategy, StrategyVersion
 
-    for rank, role in enumerate(Role):
-        db.add(RoleRow(name=str(role), rank=rank, description=str(role)))
-    await db.flush()
     db.add(User(id="u1", email="a@b.io", password_hash="x", role=str(Role.admin)))
     db.add(
         PaperAccount(
