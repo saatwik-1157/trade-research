@@ -40,6 +40,9 @@ import sys
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import paths as _paths
+
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except (AttributeError, OSError):
@@ -51,7 +54,7 @@ TRADINGVIEW_IPS = {"52.89.214.238", "34.212.75.30", "54.218.53.128", "52.32.178.
 MAX_BODY = 64 * 1024  # an alert is a few hundred bytes; anything larger is not one
 
 DEFAULT_LOG = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "alerts.jsonl"
+    _paths.project_root(), "data", "alerts.jsonl"
 )
 
 

@@ -79,9 +79,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Imported for the rule NAMES only, so `--rule` refuses a typo at the command
 # line instead of at the first pass. `mt5_paper` imports MetaTrader5 inside
 # `connect()` rather than at module scope, so this costs no terminal.
-import console_guard  # noqa: E402
-import crash_report  # noqa: E402
-import mt5_paper  # noqa: E402
+import console_guard
+import crash_report
+import mt5_paper
+import paths as _paths
 
 SETTINGS = [
     "--rule", "random",
@@ -240,7 +241,7 @@ def start_logging():
     The file matches the *.log rule already in .gitignore, which it needs to:
     a session log names the account and its balance.
     """
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root = _paths.project_root()
     log_dir = os.path.join(root, "logs")
     os.makedirs(log_dir, exist_ok=True)
     path = os.path.join(log_dir,
@@ -379,7 +380,7 @@ def deadline_in_the_weekend(target):
         first = _stamps(mt5)
         _time.sleep(1.5)
         live = _stamps(mt5) != first or not first
-    except Exception:  # noqa: BLE001 - an unreadable clock is not a refusal
+    except Exception:
         return None
     decided = weekend_deadline(target, server, _dt.now())
     if decided is None:
@@ -466,7 +467,7 @@ def merge_ledger() -> None:
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace", timeout=300,
         )
-    except Exception as exc:  # noqa: BLE001 - reported, never fatal to the run
+    except Exception as exc:
         print(f"  ledger merge failed ({type(exc).__name__}: {exc}); the trades "
               f"are still MetaTrader's and can be merged later")
         return

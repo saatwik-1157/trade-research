@@ -51,8 +51,9 @@ from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import crash_report  # noqa: E402
-import kill_switch  # noqa: E402
+import crash_report
+import kill_switch
+import paths as _paths
 
 #: A session that ends faster than this did not trade; it failed to start.
 FAST_EXIT_SECONDS = 90.0
@@ -70,7 +71,7 @@ POLL_SECONDS = 20.0
 
 
 def _root() -> str:
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return _paths.project_root()
 
 
 def session_alive() -> bool:
@@ -156,7 +157,7 @@ def start_session(until_hour: int, extra: list[str]) -> subprocess.Popen:
 
     logs = os.path.join(root, "logs")
     os.makedirs(logs, exist_ok=True)
-    capture = open(  # noqa: SIM115 - handed to the child, closed with it
+    capture = open(
         os.path.join(logs, "watchdog-launch.log"), "a", encoding="utf-8"
     )
     cmd = [exe, os.path.join(root, "tools", "run_overnight.py"),
