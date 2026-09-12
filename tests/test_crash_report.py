@@ -330,9 +330,23 @@ def test_liveness_is_unknown_rather_than_dead():
         sid = crash_report.new_session_id()
         crash_report.start(sid)
         record = crash_report.unfinished()[0]
-        # start() records this process, which is by definition alive.
-        check("this process reads as alive",
-              crash_report.process_alive(record), True)
+        # start() records this process, which is by definition alive -- but
+        # `process_alive` answers None, not True, when psutil is absent, and
+        # that is its documented contract rather than a shortcoming. psutil is
+        # NOT in requirements.txt (it is suggested in a comment), so CI is
+        # exactly the machine where it is missing. Asserting True unconditional
+        # tested the runner's packages instead of the function.
+        try:
+            import psutil  # noqa: F401
+        except ImportError:
+            expected: bool | None = None
+        else:
+            expected = True
+        check("this process reads as alive, or unknown without psutil",
+              crash_report.process_alive(record), expected)
+        # The property that holds either way, and the one the name promises.
+        check("and never as dead",
+              crash_report.process_alive(record) is False, False)
         check("a record with no pid is UNKNOWN, not dead",
               crash_report.process_alive({"session_id": sid}), None)
         check("and neither is a pid that is not a number",
