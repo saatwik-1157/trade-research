@@ -1,0 +1,5856 @@
+{
+  "timeframe": "H1",
+  "years": 3.2,
+  "sl_atr": 1.5,
+  "tp_atr": 1.5,
+  "spread_source": "median",
+  "split": 0.7,
+  "null_rounds": 3,
+  "blocks": 4,
+  "skip_hours": [],
+  "data_gaps": [
+    "symbols differ in typical bar size by 59x in points (XAGUSD=160, XAUUSD=745, XPDUSD=9386, XPTUSD=5737); pooled point figures add different units and are not meaningful - read per_symbol instead",
+    "symbols returned different bar counts; the in/out split is indexed off the first symbol, while eras are cut by time"
+  ],
+  "window": {
+    "from": "2023-06-13T21:00:00",
+    "to": "2026-08-25T16:00:00",
+    "bars_per_symbol": 18810,
+    "in_sample_bars": 13167,
+    "out_of_sample_bars": 5643
+  },
+  "median_atr_points_by_symbol": {
+    "XAUUSD": 744.8,
+    "XAGUSD": 159.9,
+    "XPTUSD": 5737.3,
+    "XPDUSD": 9386.2
+  },
+  "candidates_tested": 41,
+  "eras": {
+    "count": 4,
+    "from": "2023-06-13T21:00:00",
+    "to": "2026-08-25T16:00:00",
+    "note": "Equal-duration eras over the window every symbol covers. A rule positive only in the last era is a regime, not an edge, and every sequential split puts that same era in the holdout - so several splits agreeing is one observation, not several."
+  },
+  "candidates_with_enough_trades": 40,
+  "candidates": [
+    {
+      "name": "rsi_rev_7_20_80",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 1747,
+        "win_rate": 0.5037,
+        "expectancy_points_net": -498.52,
+        "expectancy_points_gross": 452.05,
+        "profit_factor": 0.804,
+        "total_points_net": -870919.2,
+        "avg_win_points": 4058.5,
+        "avg_loss_points": -5123.9,
+        "t_stat": -2.88,
+        "significant_at_95": true,
+        "avg_bars_held": 6.3,
+        "exit_mix": {
+          "tp": 880,
+          "sl": 867,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.56,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 501,
+        "obs_per_date": 3.49,
+        "t_stat_clustered_by_date": 0.96,
+        "mean_per_date": 189.62,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 840,
+        "win_rate": 0.5202,
+        "expectancy_points_net": 400.12,
+        "expectancy_points_gross": 1360.6,
+        "profit_factor": 1.06,
+        "total_points_net": 336102.7,
+        "avg_win_points": 13688.7,
+        "avg_loss_points": -14009.6,
+        "t_stat": 0.5,
+        "significant_at_95": false,
+        "avg_bars_held": 5.5,
+        "exit_mix": {
+          "tp": 437,
+          "sl": 402,
+          "timeout": 1
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": 0.33,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 215,
+        "obs_per_date": 3.91,
+        "t_stat_clustered_by_date": 3.55,
+        "mean_per_date": 3434.6,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 725,
+          "win_rate": 0.4897,
+          "expectancy_points_net": -22.03,
+          "t_stat": -0.68
+        },
+        "XAUUSD": {
+          "trades": 773,
+          "win_rate": 0.4631,
+          "expectancy_points_net": -78.41,
+          "t_stat": -0.89
+        },
+        "XPDUSD": {
+          "trades": 493,
+          "win_rate": 0.5497,
+          "expectancy_points_net": -1670.13,
+          "t_stat": -1.79
+        },
+        "XPTUSD": {
+          "trades": 596,
+          "win_rate": 0.5587,
+          "expectancy_points_net": 612.64,
+          "t_stat": 0.64
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 672,
+          "win_rate": 0.5074,
+          "expectancy_points_net": -472.76,
+          "t_stat": -1.77
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 649,
+          "win_rate": 0.4961,
+          "expectancy_points_net": -878.86,
+          "t_stat": -3.35
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 588,
+          "win_rate": 0.5102,
+          "expectancy_points_net": -120.84,
+          "t_stat": -0.29
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 678,
+          "win_rate": 0.5221,
+          "expectancy_points_net": 625.82,
+          "t_stat": 0.65
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -472.76,
+          -878.86,
+          -120.84,
+          625.82
+        ],
+        "min_block_expectancy": -878.86,
+        "max_block_expectancy": 625.82
+      }
+    },
+    {
+      "name": "rsi_rev_7_25_75",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 3090,
+        "win_rate": 0.5155,
+        "expectancy_points_net": -543.68,
+        "expectancy_points_gross": 497.15,
+        "profit_factor": 0.799,
+        "total_points_net": -1679963.0,
+        "avg_win_points": 4204.5,
+        "avg_loss_points": -5596.4,
+        "t_stat": -4.07,
+        "significant_at_95": true,
+        "avg_bars_held": 6.3,
+        "exit_mix": {
+          "tp": 1593,
+          "sl": 1497,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.55,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 565,
+        "obs_per_date": 5.47,
+        "t_stat_clustered_by_date": -0.24,
+        "mean_per_date": -37.97,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 1416,
+        "win_rate": 0.5007,
+        "expectancy_points_net": -185.09,
+        "expectancy_points_gross": 830.67,
+        "profit_factor": 0.974,
+        "total_points_net": -262081.4,
+        "avg_win_points": 13781.1,
+        "avg_loss_points": -14190.8,
+        "t_stat": -0.3,
+        "significant_at_95": false,
+        "avg_bars_held": 5.7,
+        "exit_mix": {
+          "tp": 709,
+          "sl": 705,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -0.48,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 245,
+        "obs_per_date": 5.78,
+        "t_stat_clustered_by_date": 2.93,
+        "mean_per_date": 2185.69,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 1203,
+          "win_rate": 0.4896,
+          "expectancy_points_net": -34.04,
+          "t_stat": -1.32
+        },
+        "XAUUSD": {
+          "trades": 1270,
+          "win_rate": 0.4811,
+          "expectancy_points_net": -52.24,
+          "t_stat": -0.77
+        },
+        "XPDUSD": {
+          "trades": 954,
+          "win_rate": 0.5419,
+          "expectancy_points_net": -1638.14,
+          "t_stat": -2.55
+        },
+        "XPTUSD": {
+          "trades": 1079,
+          "win_rate": 0.5422,
+          "expectancy_points_net": -252.05,
+          "t_stat": -0.37
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 1151,
+          "win_rate": 0.5169,
+          "expectancy_points_net": -424.1,
+          "t_stat": -2.06
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 1157,
+          "win_rate": 0.497,
+          "expectancy_points_net": -924.15,
+          "t_stat": -4.48
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 1057,
+          "win_rate": 0.5298,
+          "expectancy_points_net": -186.93,
+          "t_stat": -0.6
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 1141,
+          "win_rate": 0.5013,
+          "expectancy_points_net": -163.96,
+          "t_stat": -0.22
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -424.1,
+          -924.15,
+          -186.93,
+          -163.96
+        ],
+        "min_block_expectancy": -924.15,
+        "max_block_expectancy": -163.96
+      }
+    },
+    {
+      "name": "rsi_rev_7_30_70",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 4473,
+        "win_rate": 0.5113,
+        "expectancy_points_net": -626.21,
+        "expectancy_points_gross": 449.98,
+        "profit_factor": 0.778,
+        "total_points_net": -2801056.5,
+        "avg_win_points": 4301.3,
+        "avg_loss_points": -5781.4,
+        "t_stat": -5.54,
+        "significant_at_95": true,
+        "avg_bars_held": 6.4,
+        "exit_mix": {
+          "tp": 2287,
+          "sl": 2186,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.77,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 572,
+        "obs_per_date": 7.82,
+        "t_stat_clustered_by_date": -2.46,
+        "mean_per_date": -322.57,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 2050,
+        "win_rate": 0.5039,
+        "expectancy_points_net": -361.7,
+        "expectancy_points_gross": 712.08,
+        "profit_factor": 0.951,
+        "total_points_net": -741490.4,
+        "avg_win_points": 14035.4,
+        "avg_loss_points": -14985.3,
+        "t_stat": -0.71,
+        "significant_at_95": false,
+        "avg_bars_held": 5.9,
+        "exit_mix": {
+          "tp": 1033,
+          "sl": 1015,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.21,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 256,
+        "obs_per_date": 8.01,
+        "t_stat_clustered_by_date": 2.44,
+        "mean_per_date": 1639.12,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 1683,
+          "win_rate": 0.4866,
+          "expectancy_points_net": -32.0,
+          "t_stat": -1.54
+        },
+        "XAUUSD": {
+          "trades": 1792,
+          "win_rate": 0.4833,
+          "expectancy_points_net": -57.2,
+          "t_stat": -1.0
+        },
+        "XPDUSD": {
+          "trades": 1456,
+          "win_rate": 0.5529,
+          "expectancy_points_net": -1457.97,
+          "t_stat": -2.82
+        },
+        "XPTUSD": {
+          "trades": 1592,
+          "win_rate": 0.5214,
+          "expectancy_points_net": -793.58,
+          "t_stat": -1.44
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 1643,
+          "win_rate": 0.5143,
+          "expectancy_points_net": -559.07,
+          "t_stat": -3.13
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 1650,
+          "win_rate": 0.4958,
+          "expectancy_points_net": -925.0,
+          "t_stat": -5.27
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 1587,
+          "win_rate": 0.5249,
+          "expectancy_points_net": -122.85,
+          "t_stat": -0.47
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 1643,
+          "win_rate": 0.5015,
+          "expectancy_points_net": -549.47,
+          "t_stat": -0.9
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -559.07,
+          -925.0,
+          -122.85,
+          -549.47
+        ],
+        "min_block_expectancy": -925.0,
+        "max_block_expectancy": -122.85
+      }
+    },
+    {
+      "name": "rsi_rev_14_20_80",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 272,
+        "win_rate": 0.5037,
+        "expectancy_points_net": -160.35,
+        "expectancy_points_gross": 536.18,
+        "profit_factor": 0.921,
+        "total_points_net": -43616.4,
+        "avg_win_points": 3735.2,
+        "avg_loss_points": -4113.6,
+        "t_stat": -0.39,
+        "significant_at_95": false,
+        "avg_bars_held": 6.5,
+        "exit_mix": {
+          "tp": 137,
+          "sl": 135,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.15,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 137,
+        "obs_per_date": 1.99,
+        "t_stat_clustered_by_date": 1.46,
+        "mean_per_date": 650.31,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 138,
+        "win_rate": 0.4928,
+        "expectancy_points_net": 2989.66,
+        "expectancy_points_gross": 3660.87,
+        "profit_factor": 1.656,
+        "total_points_net": 412572.6,
+        "avg_win_points": 15314.0,
+        "avg_loss_points": -8982.6,
+        "t_stat": 1.75,
+        "significant_at_95": false,
+        "avg_bars_held": 5.2,
+        "exit_mix": {
+          "tp": 68,
+          "sl": 70,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": 1.13,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 58,
+        "obs_per_date": 2.38,
+        "t_stat_clustered_by_date": 1.7,
+        "mean_per_date": 3153.5,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 134,
+          "win_rate": 0.4254,
+          "expectancy_points_net": -141.89,
+          "t_stat": -2.15
+        },
+        "XAUUSD": {
+          "trades": 145,
+          "win_rate": 0.531,
+          "expectancy_points_net": 89.79,
+          "t_stat": 0.37
+        },
+        "XPDUSD": {
+          "trades": 49,
+          "win_rate": 0.5306,
+          "expectancy_points_net": -298.91,
+          "t_stat": -0.1
+        },
+        "XPTUSD": {
+          "trades": 82,
+          "win_rate": 0.5488,
+          "expectancy_points_net": 4751.18,
+          "t_stat": 1.8
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 113,
+          "win_rate": 0.469,
+          "expectancy_points_net": -486.37,
+          "t_stat": -0.75
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 92,
+          "win_rate": 0.5217,
+          "expectancy_points_net": -668.13,
+          "t_stat": -1.09
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 87,
+          "win_rate": 0.5402,
+          "expectancy_points_net": 939.6,
+          "t_stat": 1.1
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 118,
+          "win_rate": 0.4831,
+          "expectancy_points_net": 3420.67,
+          "t_stat": 1.74
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          -486.37,
+          -668.13,
+          939.6,
+          3420.67
+        ],
+        "min_block_expectancy": -668.13,
+        "max_block_expectancy": 3420.67
+      }
+    },
+    {
+      "name": "rsi_rev_14_25_75",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 778,
+        "win_rate": 0.4846,
+        "expectancy_points_net": -367.03,
+        "expectancy_points_gross": 443.94,
+        "profit_factor": 0.845,
+        "total_points_net": -285548.1,
+        "avg_win_points": 4138.3,
+        "avg_loss_points": -4602.8,
+        "t_stat": -1.41,
+        "significant_at_95": false,
+        "avg_bars_held": 6.8,
+        "exit_mix": {
+          "tp": 377,
+          "sl": 401,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.85,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 315,
+        "obs_per_date": 2.47,
+        "t_stat_clustered_by_date": 0.78,
+        "mean_per_date": 216.87,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 409,
+        "win_rate": 0.5012,
+        "expectancy_points_net": 875.22,
+        "expectancy_points_gross": 1754.09,
+        "profit_factor": 1.124,
+        "total_points_net": 357964.0,
+        "avg_win_points": 15777.2,
+        "avg_loss_points": -14099.8,
+        "t_stat": 0.68,
+        "significant_at_95": false,
+        "avg_bars_held": 5.2,
+        "exit_mix": {
+          "tp": 205,
+          "sl": 204,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": 0.97,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 132,
+        "obs_per_date": 3.1,
+        "t_stat_clustered_by_date": 3.03,
+        "mean_per_date": 3892.6,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 341,
+          "win_rate": 0.4399,
+          "expectancy_points_net": -80.9,
+          "t_stat": -1.46
+        },
+        "XAUUSD": {
+          "trades": 402,
+          "win_rate": 0.4652,
+          "expectancy_points_net": -64.37,
+          "t_stat": -0.49
+        },
+        "XPDUSD": {
+          "trades": 190,
+          "win_rate": 0.5684,
+          "expectancy_points_net": -603.22,
+          "t_stat": -0.34
+        },
+        "XPTUSD": {
+          "trades": 254,
+          "win_rate": 0.5394,
+          "expectancy_points_net": 946.82,
+          "t_stat": 0.54
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 292,
+          "win_rate": 0.4315,
+          "expectancy_points_net": -726.16,
+          "t_stat": -1.82
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 285,
+          "win_rate": 0.5228,
+          "expectancy_points_net": -378.53,
+          "t_stat": -0.94
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 271,
+          "win_rate": 0.5166,
+          "expectancy_points_net": 310.67,
+          "t_stat": 0.52
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 339,
+          "win_rate": 0.4926,
+          "expectancy_points_net": 908.98,
+          "t_stat": 0.6
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          -726.16,
+          -378.53,
+          310.67,
+          908.98
+        ],
+        "min_block_expectancy": -726.16,
+        "max_block_expectancy": 908.98
+      }
+    },
+    {
+      "name": "rsi_rev_14_30_70",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 1811,
+        "win_rate": 0.4992,
+        "expectancy_points_net": -616.03,
+        "expectancy_points_gross": 337.18,
+        "profit_factor": 0.77,
+        "total_points_net": -1115636.0,
+        "avg_win_points": 4133.6,
+        "avg_loss_points": -5349.9,
+        "t_stat": -3.52,
+        "significant_at_95": true,
+        "avg_bars_held": 6.6,
+        "exit_mix": {
+          "tp": 904,
+          "sl": 907,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.65,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 491,
+        "obs_per_date": 3.69,
+        "t_stat_clustered_by_date": 0.6,
+        "mean_per_date": 130.22,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 888,
+        "win_rate": 0.509,
+        "expectancy_points_net": -22.12,
+        "expectancy_points_gross": 902.47,
+        "profit_factor": 0.997,
+        "total_points_net": -19641.6,
+        "avg_win_points": 13746.2,
+        "avg_loss_points": -14295.7,
+        "t_stat": -0.03,
+        "significant_at_95": false,
+        "avg_bars_held": 5.6,
+        "exit_mix": {
+          "tp": 452,
+          "sl": 436,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -0.17,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 210,
+        "obs_per_date": 4.23,
+        "t_stat_clustered_by_date": 3.75,
+        "mean_per_date": 3033.24,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 754,
+          "win_rate": 0.4841,
+          "expectancy_points_net": -35.05,
+          "t_stat": -0.97
+        },
+        "XAUUSD": {
+          "trades": 819,
+          "win_rate": 0.4689,
+          "expectancy_points_net": -89.96,
+          "t_stat": -0.98
+        },
+        "XPDUSD": {
+          "trades": 507,
+          "win_rate": 0.5404,
+          "expectancy_points_net": -1882.61,
+          "t_stat": -2.01
+        },
+        "XPTUSD": {
+          "trades": 619,
+          "win_rate": 0.538,
+          "expectancy_points_net": -130.36,
+          "t_stat": -0.13
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 708,
+          "win_rate": 0.4944,
+          "expectancy_points_net": -424.98,
+          "t_stat": -1.62
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 677,
+          "win_rate": 0.5066,
+          "expectancy_points_net": -925.01,
+          "t_stat": -3.31
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 593,
+          "win_rate": 0.5059,
+          "expectancy_points_net": -187.18,
+          "t_stat": -0.44
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 721,
+          "win_rate": 0.5035,
+          "expectancy_points_net": -134.76,
+          "t_stat": -0.14
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -424.98,
+          -925.01,
+          -187.18,
+          -134.76
+        ],
+        "min_block_expectancy": -925.01,
+        "max_block_expectancy": -134.76
+      }
+    },
+    {
+      "name": "rsi_rev_21_20_80",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 60,
+        "win_rate": 0.55,
+        "expectancy_points_net": -634.82,
+        "expectancy_points_gross": 68.31,
+        "profit_factor": 0.692,
+        "total_points_net": -38089.1,
+        "avg_win_points": 2594.1,
+        "avg_loss_points": -4581.3,
+        "t_stat": -0.82,
+        "significant_at_95": false,
+        "avg_bars_held": 7.4,
+        "exit_mix": {
+          "tp": 33,
+          "sl": 27,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -0.86,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 43,
+        "obs_per_date": 1.4,
+        "t_stat_clustered_by_date": -0.04,
+        "mean_per_date": -38.74,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 27,
+        "win_rate": 0.5926,
+        "expectancy_points_net": 7081.21,
+        "expectancy_points_gross": 7492.88,
+        "profit_factor": 3.521,
+        "total_points_net": 191192.8,
+        "avg_win_points": 16688.6,
+        "avg_loss_points": -6893.2,
+        "t_stat": 1.58,
+        "significant_at_95": false,
+        "avg_bars_held": 4.7,
+        "exit_mix": {
+          "tp": 16,
+          "sl": 11,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": 0.07,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 15,
+        "obs_per_date": 1.8,
+        "t_stat_clustered_by_date": 0.92,
+        "mean_per_date": 4016.84,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.179,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 33,
+          "win_rate": 0.5152,
+          "expectancy_points_net": -106.77,
+          "t_stat": -0.52
+        },
+        "XAUUSD": {
+          "trades": 30,
+          "win_rate": 0.7,
+          "expectancy_points_net": 552.54,
+          "t_stat": 0.96
+        },
+        "XPDUSD": {
+          "trades": 10,
+          "win_rate": 0.4,
+          "expectancy_points_net": -4249.01,
+          "t_stat": -0.74
+        },
+        "XPTUSD": {
+          "trades": 14,
+          "win_rate": 0.5,
+          "expectancy_points_net": 13038.64,
+          "t_stat": 1.62
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 27,
+          "win_rate": 0.5556,
+          "expectancy_points_net": 1207.66,
+          "t_stat": 1.07
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 15,
+          "win_rate": 0.6667,
+          "expectancy_points_net": -2252.79,
+          "t_stat": -1.39
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 21,
+          "win_rate": 0.5238,
+          "expectancy_points_net": -770.49,
+          "t_stat": -0.54
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 24,
+          "win_rate": 0.5417,
+          "expectancy_points_net": 7102.87,
+          "t_stat": 1.41
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          1207.66,
+          -2252.79,
+          -770.49,
+          7102.87
+        ],
+        "min_block_expectancy": -2252.79,
+        "max_block_expectancy": 7102.87
+      }
+    },
+    {
+      "name": "rsi_rev_21_25_75",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 255,
+        "win_rate": 0.4941,
+        "expectancy_points_net": 8.68,
+        "expectancy_points_gross": 751.17,
+        "profit_factor": 1.004,
+        "total_points_net": 2214.4,
+        "avg_win_points": 4276.7,
+        "avg_loss_points": -4160.1,
+        "t_stat": 0.02,
+        "significant_at_95": false,
+        "avg_bars_held": 6.8,
+        "exit_mix": {
+          "tp": 126,
+          "sl": 129,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": 0.05,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 134,
+        "obs_per_date": 1.9,
+        "t_stat_clustered_by_date": 1.28,
+        "mean_per_date": 553.67,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 131,
+        "win_rate": 0.5038,
+        "expectancy_points_net": 4235.76,
+        "expectancy_points_gross": 4849.34,
+        "profit_factor": 1.955,
+        "total_points_net": 554885.1,
+        "avg_win_points": 17210.1,
+        "avg_loss_points": -8938.2,
+        "t_stat": 2.21,
+        "significant_at_95": true,
+        "avg_bars_held": 5.0,
+        "exit_mix": {
+          "tp": 66,
+          "sl": 65,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": 1.44,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 54,
+        "obs_per_date": 2.43,
+        "t_stat_clustered_by_date": 3.16,
+        "mean_per_date": 5690.18,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 122,
+          "win_rate": 0.4098,
+          "expectancy_points_net": -222.84,
+          "t_stat": -2.28
+        },
+        "XAUUSD": {
+          "trades": 136,
+          "win_rate": 0.4926,
+          "expectancy_points_net": -5.03,
+          "t_stat": -0.02
+        },
+        "XPDUSD": {
+          "trades": 44,
+          "win_rate": 0.5682,
+          "expectancy_points_net": 1594.84,
+          "t_stat": 0.54
+        },
+        "XPTUSD": {
+          "trades": 84,
+          "win_rate": 0.5952,
+          "expectancy_points_net": 6128.54,
+          "t_stat": 2.15
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 105,
+          "win_rate": 0.4476,
+          "expectancy_points_net": -147.13,
+          "t_stat": -0.22
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 84,
+          "win_rate": 0.5119,
+          "expectancy_points_net": -786.19,
+          "t_stat": -1.07
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 87,
+          "win_rate": 0.5287,
+          "expectancy_points_net": 778.15,
+          "t_stat": 0.81
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 110,
+          "win_rate": 0.5091,
+          "expectancy_points_net": 5189.9,
+          "t_stat": 2.33
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          -147.13,
+          -786.19,
+          778.15,
+          5189.9
+        ],
+        "min_block_expectancy": -786.19,
+        "max_block_expectancy": 5189.9
+      }
+    },
+    {
+      "name": "rsi_rev_21_30_70",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 806,
+        "win_rate": 0.4913,
+        "expectancy_points_net": -383.41,
+        "expectancy_points_gross": 444.13,
+        "profit_factor": 0.845,
+        "total_points_net": -309026.4,
+        "avg_win_points": 4265.3,
+        "avg_loss_points": -4873.3,
+        "t_stat": -1.44,
+        "significant_at_95": false,
+        "avg_bars_held": 6.9,
+        "exit_mix": {
+          "tp": 396,
+          "sl": 410,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.78,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 294,
+        "obs_per_date": 2.74,
+        "t_stat_clustered_by_date": 0.71,
+        "mean_per_date": 219.39,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 421,
+        "win_rate": 0.4941,
+        "expectancy_points_net": 152.51,
+        "expectancy_points_gross": 940.98,
+        "profit_factor": 1.021,
+        "total_points_net": 64204.6,
+        "avg_win_points": 15083.9,
+        "avg_loss_points": -14428.4,
+        "t_stat": 0.12,
+        "significant_at_95": false,
+        "avg_bars_held": 5.7,
+        "exit_mix": {
+          "tp": 208,
+          "sl": 213,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -0.13,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 126,
+        "obs_per_date": 3.34,
+        "t_stat_clustered_by_date": 2.34,
+        "mean_per_date": 2825.61,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 364,
+          "win_rate": 0.456,
+          "expectancy_points_net": -47.5,
+          "t_stat": -0.81
+        },
+        "XAUUSD": {
+          "trades": 409,
+          "win_rate": 0.4768,
+          "expectancy_points_net": -68.38,
+          "t_stat": -0.48
+        },
+        "XPDUSD": {
+          "trades": 185,
+          "win_rate": 0.5514,
+          "expectancy_points_net": -1555.72,
+          "t_stat": -0.87
+        },
+        "XPTUSD": {
+          "trades": 269,
+          "win_rate": 0.5242,
+          "expectancy_points_net": 328.05,
+          "t_stat": 0.19
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 324,
+          "win_rate": 0.4444,
+          "expectancy_points_net": -867.52,
+          "t_stat": -2.2
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 271,
+          "win_rate": 0.5314,
+          "expectancy_points_net": -223.19,
+          "t_stat": -0.51
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 288,
+          "win_rate": 0.5139,
+          "expectancy_points_net": 159.43,
+          "t_stat": 0.27
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 344,
+          "win_rate": 0.4884,
+          "expectancy_points_net": 147.74,
+          "t_stat": 0.1
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          -867.52,
+          -223.19,
+          159.43,
+          147.74
+        ],
+        "min_block_expectancy": -867.52,
+        "max_block_expectancy": 159.43
+      }
+    },
+    {
+      "name": "rsi_mom_14_30_70",
+      "family": "rsi_momentum",
+      "in_sample": {
+        "trades": 1811,
+        "win_rate": 0.4909,
+        "expectancy_points_net": -1376.95,
+        "expectancy_points_gross": -423.73,
+        "profit_factor": 0.56,
+        "total_points_net": -2493656.2,
+        "avg_win_points": 3569.2,
+        "avg_loss_points": -6146.1,
+        "t_stat": -7.7,
+        "significant_at_95": true,
+        "avg_bars_held": 6.6,
+        "exit_mix": {
+          "tp": 889,
+          "sl": 922,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.56,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 491,
+        "obs_per_date": 3.69,
+        "t_stat_clustered_by_date": -9.08,
+        "mean_per_date": -2146.01,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 888,
+        "win_rate": 0.4831,
+        "expectancy_points_net": -2259.32,
+        "expectancy_points_gross": -1334.73,
+        "profit_factor": 0.726,
+        "total_points_net": -2006277.4,
+        "avg_win_points": 12410.4,
+        "avg_loss_points": -15970.2,
+        "t_stat": -2.85,
+        "significant_at_95": true,
+        "avg_bars_held": 5.6,
+        "exit_mix": {
+          "tp": 429,
+          "sl": 459,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.66,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 210,
+        "obs_per_date": 4.23,
+        "t_stat_clustered_by_date": -6.21,
+        "mean_per_date": -5110.77,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 754,
+          "win_rate": 0.5053,
+          "expectancy_points_net": 12.65,
+          "t_stat": 0.35
+        },
+        "XAUUSD": {
+          "trades": 819,
+          "win_rate": 0.5263,
+          "expectancy_points_net": 74.72,
+          "t_stat": 0.82
+        },
+        "XPDUSD": {
+          "trades": 507,
+          "win_rate": 0.4477,
+          "expectancy_points_net": -4709.47,
+          "t_stat": -5.03
+        },
+        "XPTUSD": {
+          "trades": 619,
+          "win_rate": 0.4507,
+          "expectancy_points_net": -3526.59,
+          "t_stat": -3.64
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 708,
+          "win_rate": 0.4873,
+          "expectancy_points_net": -1622.37,
+          "t_stat": -5.91
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 677,
+          "win_rate": 0.4889,
+          "expectancy_points_net": -1238.2,
+          "t_stat": -4.43
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 593,
+          "win_rate": 0.489,
+          "expectancy_points_net": -1471.86,
+          "t_stat": -3.4
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 721,
+          "win_rate": 0.4882,
+          "expectancy_points_net": -2274.93,
+          "t_stat": -2.41
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1622.37,
+          -1238.2,
+          -1471.86,
+          -2274.93
+        ],
+        "min_block_expectancy": -2274.93,
+        "max_block_expectancy": -1238.2
+      }
+    },
+    {
+      "name": "rsi_mom_14_40_60",
+      "family": "rsi_momentum",
+      "in_sample": {
+        "trades": 5116,
+        "win_rate": 0.4863,
+        "expectancy_points_net": -1522.85,
+        "expectancy_points_gross": -426.28,
+        "profit_factor": 0.559,
+        "total_points_net": -7790916.0,
+        "avg_win_points": 3972.4,
+        "avg_loss_points": -6725.4,
+        "t_stat": -13.68,
+        "significant_at_95": true,
+        "avg_bars_held": 6.6,
+        "exit_mix": {
+          "tp": 2488,
+          "sl": 2628,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.57,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 573,
+        "obs_per_date": 8.93,
+        "t_stat_clustered_by_date": -14.67,
+        "mean_per_date": -1914.65,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 2323,
+        "win_rate": 0.4981,
+        "expectancy_points_net": -2165.3,
+        "expectancy_points_gross": -1068.48,
+        "profit_factor": 0.745,
+        "total_points_net": -5029996.8,
+        "avg_win_points": 12730.5,
+        "avg_loss_points": -16946.2,
+        "t_stat": -4.52,
+        "significant_at_95": true,
+        "avg_bars_held": 6.2,
+        "exit_mix": {
+          "tp": 1156,
+          "sl": 1165,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.6,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 254,
+        "obs_per_date": 9.15,
+        "t_stat_clustered_by_date": -6.18,
+        "mean_per_date": -4166.58,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 1900,
+          "win_rate": 0.5121,
+          "expectancy_points_net": 18.83,
+          "t_stat": 0.95
+        },
+        "XAUUSD": {
+          "trades": 2005,
+          "win_rate": 0.5217,
+          "expectancy_points_net": 92.95,
+          "t_stat": 1.74
+        },
+        "XPDUSD": {
+          "trades": 1705,
+          "win_rate": 0.454,
+          "expectancy_points_net": -4607.13,
+          "t_stat": -9.67
+        },
+        "XPTUSD": {
+          "trades": 1829,
+          "win_rate": 0.4658,
+          "expectancy_points_net": -2836.46,
+          "t_stat": -5.59
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 1867,
+          "win_rate": 0.4906,
+          "expectancy_points_net": -1476.79,
+          "t_stat": -8.15
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 1910,
+          "win_rate": 0.499,
+          "expectancy_points_net": -1299.31,
+          "t_stat": -7.73
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 1815,
+          "win_rate": 0.47,
+          "expectancy_points_net": -1972.47,
+          "t_stat": -7.87
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 1847,
+          "win_rate": 0.4997,
+          "expectancy_points_net": -2166.78,
+          "t_stat": -3.75
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1476.79,
+          -1299.31,
+          -1972.47,
+          -2166.78
+        ],
+        "min_block_expectancy": -2166.78,
+        "max_block_expectancy": -1299.31
+      }
+    },
+    {
+      "name": "sma_5_20",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 2566,
+        "win_rate": 0.4879,
+        "expectancy_points_net": -1454.34,
+        "expectancy_points_gross": -291.68,
+        "profit_factor": 0.587,
+        "total_points_net": -3731831.2,
+        "avg_win_points": 4233.2,
+        "avg_loss_points": -6873.5,
+        "t_stat": -9.08,
+        "significant_at_95": true,
+        "avg_bars_held": 7.3,
+        "exit_mix": {
+          "tp": 1252,
+          "sl": 1314,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.6,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 562,
+        "obs_per_date": 4.57,
+        "t_stat_clustered_by_date": -5.58,
+        "mean_per_date": -1113.5,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 1102,
+        "win_rate": 0.5064,
+        "expectancy_points_net": -1068.49,
+        "expectancy_points_gross": 145.53,
+        "profit_factor": 0.866,
+        "total_points_net": -1177477.8,
+        "avg_win_points": 13673.4,
+        "avg_loss_points": -16189.7,
+        "t_stat": -1.63,
+        "significant_at_95": false,
+        "avg_bars_held": 7.2,
+        "exit_mix": {
+          "tp": 556,
+          "sl": 544,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -0.86,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 245,
+        "obs_per_date": 4.5,
+        "t_stat_clustered_by_date": -0.65,
+        "mean_per_date": -520.4,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 912,
+          "win_rate": 0.5296,
+          "expectancy_points_net": 26.6,
+          "t_stat": 1.03
+        },
+        "XAUUSD": {
+          "trades": 899,
+          "win_rate": 0.4917,
+          "expectancy_points_net": -34.15,
+          "t_stat": -0.47
+        },
+        "XPDUSD": {
+          "trades": 920,
+          "win_rate": 0.4707,
+          "expectancy_points_net": -4043.48,
+          "t_stat": -6.46
+        },
+        "XPTUSD": {
+          "trades": 937,
+          "win_rate": 0.4824,
+          "expectancy_points_net": -1262.41,
+          "t_stat": -2.01
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 893,
+          "win_rate": 0.4882,
+          "expectancy_points_net": -1417.28,
+          "t_stat": -5.24
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 942,
+          "win_rate": 0.482,
+          "expectancy_points_net": -1326.91,
+          "t_stat": -5.59
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 955,
+          "win_rate": 0.4942,
+          "expectancy_points_net": -1964.42,
+          "t_stat": -5.51
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 878,
+          "win_rate": 0.5103,
+          "expectancy_points_net": -589.65,
+          "t_stat": -0.76
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1417.28,
+          -1326.91,
+          -1964.42,
+          -589.65
+        ],
+        "min_block_expectancy": -1964.42,
+        "max_block_expectancy": -589.65
+      }
+    },
+    {
+      "name": "ema_5_20",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 2216,
+        "win_rate": 0.4946,
+        "expectancy_points_net": -1396.46,
+        "expectancy_points_gross": -225.73,
+        "profit_factor": 0.603,
+        "total_points_net": -3094556.6,
+        "avg_win_points": 4281.1,
+        "avg_loss_points": -6952.4,
+        "t_stat": -8.02,
+        "significant_at_95": true,
+        "avg_bars_held": 7.0,
+        "exit_mix": {
+          "tp": 1096,
+          "sl": 1120,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.34,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 540,
+        "obs_per_date": 4.1,
+        "t_stat_clustered_by_date": -4.74,
+        "mean_per_date": -1014.87,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 994,
+        "win_rate": 0.507,
+        "expectancy_points_net": -575.94,
+        "expectancy_points_gross": 640.38,
+        "profit_factor": 0.927,
+        "total_points_net": -572481.8,
+        "avg_win_points": 14343.4,
+        "avg_loss_points": -15921.5,
+        "t_stat": -0.82,
+        "significant_at_95": false,
+        "avg_bars_held": 7.1,
+        "exit_mix": {
+          "tp": 502,
+          "sl": 490,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -0.72,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 234,
+        "obs_per_date": 4.25,
+        "t_stat_clustered_by_date": 0.79,
+        "mean_per_date": 676.25,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 771,
+          "win_rate": 0.5162,
+          "expectancy_points_net": -8.35,
+          "t_stat": -0.29
+        },
+        "XAUUSD": {
+          "trades": 798,
+          "win_rate": 0.4887,
+          "expectancy_points_net": -19.33,
+          "t_stat": -0.25
+        },
+        "XPDUSD": {
+          "trades": 803,
+          "win_rate": 0.472,
+          "expectancy_points_net": -3938.41,
+          "t_stat": -5.72
+        },
+        "XPTUSD": {
+          "trades": 838,
+          "win_rate": 0.5167,
+          "expectancy_points_net": -575.94,
+          "t_stat": -0.86
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 788,
+          "win_rate": 0.4835,
+          "expectancy_points_net": -1682.44,
+          "t_stat": -5.71
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 788,
+          "win_rate": 0.5114,
+          "expectancy_points_net": -1149.44,
+          "t_stat": -4.48
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 828,
+          "win_rate": 0.4855,
+          "expectancy_points_net": -1718.39,
+          "t_stat": -4.43
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 806,
+          "win_rate": 0.5136,
+          "expectancy_points_net": -15.74,
+          "t_stat": -0.02
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1682.44,
+          -1149.44,
+          -1718.39,
+          -15.74
+        ],
+        "min_block_expectancy": -1718.39,
+        "max_block_expectancy": -15.74
+      }
+    },
+    {
+      "name": "sma_10_50",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 1298,
+        "win_rate": 0.4738,
+        "expectancy_points_net": -1595.34,
+        "expectancy_points_gross": -394.11,
+        "profit_factor": 0.575,
+        "total_points_net": -2070746.1,
+        "avg_win_points": 4550.0,
+        "avg_loss_points": -7128.9,
+        "t_stat": -6.85,
+        "significant_at_95": true,
+        "avg_bars_held": 7.8,
+        "exit_mix": {
+          "tp": 615,
+          "sl": 683,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.69,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 481,
+        "obs_per_date": 2.7,
+        "t_stat_clustered_by_date": -5.37,
+        "mean_per_date": -1596.24,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 548,
+        "win_rate": 0.4471,
+        "expectancy_points_net": -3164.03,
+        "expectancy_points_gross": -1971.06,
+        "profit_factor": 0.658,
+        "total_points_net": -1733891.0,
+        "avg_win_points": 13632.9,
+        "avg_loss_points": -16745.7,
+        "t_stat": -3.23,
+        "significant_at_95": true,
+        "avg_bars_held": 7.3,
+        "exit_mix": {
+          "tp": 244,
+          "sl": 303,
+          "timeout": 1
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.67,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 199,
+        "obs_per_date": 2.75,
+        "t_stat_clustered_by_date": -2.28,
+        "mean_per_date": -3102.42,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 456,
+          "win_rate": 0.489,
+          "expectancy_points_net": -56.44,
+          "t_stat": -1.59
+        },
+        "XAUUSD": {
+          "trades": 434,
+          "win_rate": 0.4677,
+          "expectancy_points_net": -122.95,
+          "t_stat": -1.14
+        },
+        "XPDUSD": {
+          "trades": 466,
+          "win_rate": 0.4549,
+          "expectancy_points_net": -4992.07,
+          "t_stat": -5.57
+        },
+        "XPTUSD": {
+          "trades": 490,
+          "win_rate": 0.4531,
+          "expectancy_points_net": -2855.58,
+          "t_stat": -3.16
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 443,
+          "win_rate": 0.4718,
+          "expectancy_points_net": -1136.25,
+          "t_stat": -2.91
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 470,
+          "win_rate": 0.4936,
+          "expectancy_points_net": -1435.03,
+          "t_stat": -4.09
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 482,
+          "win_rate": 0.4627,
+          "expectancy_points_net": -1701.09,
+          "t_stat": -3.41
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 451,
+          "win_rate": 0.4346,
+          "expectancy_points_net": -4006.41,
+          "t_stat": -3.51
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1136.25,
+          -1435.03,
+          -1701.09,
+          -4006.41
+        ],
+        "min_block_expectancy": -4006.41,
+        "max_block_expectancy": -1136.25
+      }
+    },
+    {
+      "name": "ema_10_50",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 1256,
+        "win_rate": 0.4618,
+        "expectancy_points_net": -1951.78,
+        "expectancy_points_gross": -707.04,
+        "profit_factor": 0.514,
+        "total_points_net": -2451441.6,
+        "avg_win_points": 4467.7,
+        "avg_loss_points": -7459.6,
+        "t_stat": -8.23,
+        "significant_at_95": true,
+        "avg_bars_held": 7.7,
+        "exit_mix": {
+          "tp": 580,
+          "sl": 676,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.69,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 450,
+        "obs_per_date": 2.79,
+        "t_stat_clustered_by_date": -5.02,
+        "mean_per_date": -1538.62,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 553,
+        "win_rate": 0.4539,
+        "expectancy_points_net": -3138.07,
+        "expectancy_points_gross": -1847.72,
+        "profit_factor": 0.675,
+        "total_points_net": -1735354.8,
+        "avg_win_points": 14338.3,
+        "avg_loss_points": -17663.1,
+        "t_stat": -3.11,
+        "significant_at_95": true,
+        "avg_bars_held": 7.2,
+        "exit_mix": {
+          "tp": 250,
+          "sl": 302,
+          "timeout": 1
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.55,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 188,
+        "obs_per_date": 2.94,
+        "t_stat_clustered_by_date": -1.87,
+        "mean_per_date": -2471.25,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 411,
+          "win_rate": 0.4988,
+          "expectancy_points_net": -46.09,
+          "t_stat": -1.17
+        },
+        "XAUUSD": {
+          "trades": 422,
+          "win_rate": 0.455,
+          "expectancy_points_net": -104.63,
+          "t_stat": -0.95
+        },
+        "XPDUSD": {
+          "trades": 488,
+          "win_rate": 0.4508,
+          "expectancy_points_net": -5531.85,
+          "t_stat": -6.02
+        },
+        "XPTUSD": {
+          "trades": 488,
+          "win_rate": 0.4385,
+          "expectancy_points_net": -2918.34,
+          "t_stat": -3.3
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 410,
+          "win_rate": 0.4976,
+          "expectancy_points_net": -1807.98,
+          "t_stat": -4.24
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 455,
+          "win_rate": 0.4747,
+          "expectancy_points_net": -1503.58,
+          "t_stat": -4.27
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 493,
+          "win_rate": 0.4037,
+          "expectancy_points_net": -3201.86,
+          "t_stat": -6.38
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 451,
+          "win_rate": 0.4701,
+          "expectancy_points_net": -2622.79,
+          "t_stat": -2.23
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1807.98,
+          -1503.58,
+          -3201.86,
+          -2622.79
+        ],
+        "min_block_expectancy": -3201.86,
+        "max_block_expectancy": -1503.58
+      }
+    },
+    {
+      "name": "sma_20_50",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 1123,
+        "win_rate": 0.48,
+        "expectancy_points_net": -1727.89,
+        "expectancy_points_gross": -535.26,
+        "profit_factor": 0.54,
+        "total_points_net": -1940420.2,
+        "avg_win_points": 4226.7,
+        "avg_loss_points": -7223.7,
+        "t_stat": -7.07,
+        "significant_at_95": true,
+        "avg_bars_held": 7.7,
+        "exit_mix": {
+          "tp": 539,
+          "sl": 584,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.65,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 474,
+        "obs_per_date": 2.37,
+        "t_stat_clustered_by_date": -5.49,
+        "mean_per_date": -1707.06,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 505,
+        "win_rate": 0.4772,
+        "expectancy_points_net": -1143.16,
+        "expectancy_points_gross": 70.74,
+        "profit_factor": 0.859,
+        "total_points_net": -577296.1,
+        "avg_win_points": 14544.5,
+        "avg_loss_points": -15464.1,
+        "t_stat": -1.13,
+        "significant_at_95": false,
+        "avg_bars_held": 6.9,
+        "exit_mix": {
+          "tp": 240,
+          "sl": 263,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -0.97,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 188,
+        "obs_per_date": 2.69,
+        "t_stat_clustered_by_date": -0.84,
+        "mean_per_date": -1079.17,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 399,
+          "win_rate": 0.4637,
+          "expectancy_points_net": -61.64,
+          "t_stat": -1.58
+        },
+        "XAUUSD": {
+          "trades": 394,
+          "win_rate": 0.533,
+          "expectancy_points_net": 166.96,
+          "t_stat": 1.44
+        },
+        "XPDUSD": {
+          "trades": 420,
+          "win_rate": 0.4714,
+          "expectancy_points_net": -4146.87,
+          "t_stat": -4.46
+        },
+        "XPTUSD": {
+          "trades": 415,
+          "win_rate": 0.4506,
+          "expectancy_points_net": -1969.2,
+          "t_stat": -1.93
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 386,
+          "win_rate": 0.4845,
+          "expectancy_points_net": -1290.56,
+          "t_stat": -3.05
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 414,
+          "win_rate": 0.4952,
+          "expectancy_points_net": -1725.18,
+          "t_stat": -4.58
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 416,
+          "win_rate": 0.4543,
+          "expectancy_points_net": -1848.48,
+          "t_stat": -3.6
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 412,
+          "win_rate": 0.483,
+          "expectancy_points_net": -1301.86,
+          "t_stat": -1.09
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1290.56,
+          -1725.18,
+          -1848.48,
+          -1301.86
+        ],
+        "min_block_expectancy": -1848.48,
+        "max_block_expectancy": -1290.56
+      }
+    },
+    {
+      "name": "ema_20_50",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 916,
+        "win_rate": 0.4782,
+        "expectancy_points_net": -1798.62,
+        "expectancy_points_gross": -556.82,
+        "profit_factor": 0.541,
+        "total_points_net": -1647539.6,
+        "avg_win_points": 4435.4,
+        "avg_loss_points": -7511.0,
+        "t_stat": -6.52,
+        "significant_at_95": true,
+        "avg_bars_held": 7.8,
+        "exit_mix": {
+          "tp": 438,
+          "sl": 478,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.72,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 410,
+        "obs_per_date": 2.23,
+        "t_stat_clustered_by_date": -4.08,
+        "mean_per_date": -1353.05,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 422,
+        "win_rate": 0.4573,
+        "expectancy_points_net": -1637.33,
+        "expectancy_points_gross": -398.39,
+        "profit_factor": 0.81,
+        "total_points_net": -690954.2,
+        "avg_win_points": 15224.2,
+        "avg_loss_points": -15848.1,
+        "t_stat": -1.46,
+        "significant_at_95": false,
+        "avg_bars_held": 7.2,
+        "exit_mix": {
+          "tp": 192,
+          "sl": 228,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.32,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 160,
+        "obs_per_date": 2.64,
+        "t_stat_clustered_by_date": -0.85,
+        "mean_per_date": -1236.89,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 310,
+          "win_rate": 0.5194,
+          "expectancy_points_net": -37.1,
+          "t_stat": -0.79
+        },
+        "XAUUSD": {
+          "trades": 308,
+          "win_rate": 0.4643,
+          "expectancy_points_net": -54.21,
+          "t_stat": -0.41
+        },
+        "XPDUSD": {
+          "trades": 347,
+          "win_rate": 0.4697,
+          "expectancy_points_net": -4229.28,
+          "t_stat": -4.04
+        },
+        "XPTUSD": {
+          "trades": 373,
+          "win_rate": 0.4397,
+          "expectancy_points_net": -2259.35,
+          "t_stat": -2.17
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 312,
+          "win_rate": 0.4904,
+          "expectancy_points_net": -2045.45,
+          "t_stat": -4.14
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 339,
+          "win_rate": 0.5044,
+          "expectancy_points_net": -959.67,
+          "t_stat": -2.37
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 336,
+          "win_rate": 0.4345,
+          "expectancy_points_net": -2312.42,
+          "t_stat": -4.0
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 351,
+          "win_rate": 0.4587,
+          "expectancy_points_net": -1703.74,
+          "t_stat": -1.31
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -2045.45,
+          -959.67,
+          -2312.42,
+          -1703.74
+        ],
+        "min_block_expectancy": -2312.42,
+        "max_block_expectancy": -959.67
+      }
+    },
+    {
+      "name": "sma_20_100",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 664,
+        "win_rate": 0.4895,
+        "expectancy_points_net": -1317.66,
+        "expectancy_points_gross": -69.52,
+        "profit_factor": 0.634,
+        "total_points_net": -874926.1,
+        "avg_win_points": 4670.1,
+        "avg_loss_points": -7058.1,
+        "t_stat": -4.11,
+        "significant_at_95": true,
+        "avg_bars_held": 7.6,
+        "exit_mix": {
+          "tp": 325,
+          "sl": 339,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.62,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 360,
+        "obs_per_date": 1.84,
+        "t_stat_clustered_by_date": -2.68,
+        "mean_per_date": -1050.28,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 306,
+        "win_rate": 0.4248,
+        "expectancy_points_net": -3526.86,
+        "expectancy_points_gross": -2236.15,
+        "profit_factor": 0.641,
+        "total_points_net": -1079219.0,
+        "avg_win_points": 14849.0,
+        "avg_loss_points": -17099.9,
+        "t_stat": -2.6,
+        "significant_at_95": true,
+        "avg_bars_held": 6.9,
+        "exit_mix": {
+          "tp": 130,
+          "sl": 176,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.68,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 141,
+        "obs_per_date": 2.17,
+        "t_stat_clustered_by_date": -2.9,
+        "mean_per_date": -4394.66,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 220,
+          "win_rate": 0.4818,
+          "expectancy_points_net": -67.25,
+          "t_stat": -1.33
+        },
+        "XAUUSD": {
+          "trades": 229,
+          "win_rate": 0.476,
+          "expectancy_points_net": -25.47,
+          "t_stat": -0.16
+        },
+        "XPDUSD": {
+          "trades": 266,
+          "win_rate": 0.4699,
+          "expectancy_points_net": -3483.44,
+          "t_stat": -2.95
+        },
+        "XPTUSD": {
+          "trades": 255,
+          "win_rate": 0.451,
+          "expectancy_points_net": -3948.72,
+          "t_stat": -2.96
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 225,
+          "win_rate": 0.4711,
+          "expectancy_points_net": -1223.6,
+          "t_stat": -2.12
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 262,
+          "win_rate": 0.4924,
+          "expectancy_points_net": -1366.15,
+          "t_stat": -2.97
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 230,
+          "win_rate": 0.4783,
+          "expectancy_points_net": -2134.04,
+          "t_stat": -2.97
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 253,
+          "win_rate": 0.4348,
+          "expectancy_points_net": -3280.93,
+          "t_stat": -2.08
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1223.6,
+          -1366.15,
+          -2134.04,
+          -3280.93
+        ],
+        "min_block_expectancy": -3280.93,
+        "max_block_expectancy": -1223.6
+      }
+    },
+    {
+      "name": "ema_20_100",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 642,
+        "win_rate": 0.4798,
+        "expectancy_points_net": -1793.1,
+        "expectancy_points_gross": -535.95,
+        "profit_factor": 0.54,
+        "total_points_net": -1151168.2,
+        "avg_win_points": 4392.0,
+        "avg_loss_points": -7496.7,
+        "t_stat": -5.49,
+        "significant_at_95": true,
+        "avg_bars_held": 8.4,
+        "exit_mix": {
+          "tp": 308,
+          "sl": 334,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.6,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 330,
+        "obs_per_date": 1.95,
+        "t_stat_clustered_by_date": -2.61,
+        "mean_per_date": -1030.47,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 274,
+        "win_rate": 0.4562,
+        "expectancy_points_net": -2287.48,
+        "expectancy_points_gross": -998.07,
+        "profit_factor": 0.754,
+        "total_points_net": -626768.5,
+        "avg_win_points": 15364.3,
+        "avg_loss_points": -17096.0,
+        "t_stat": -1.58,
+        "significant_at_95": false,
+        "avg_bars_held": 6.9,
+        "exit_mix": {
+          "tp": 125,
+          "sl": 149,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -2.05,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 125,
+        "obs_per_date": 2.19,
+        "t_stat_clustered_by_date": -3.03,
+        "mean_per_date": -4928.74,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 216,
+          "win_rate": 0.5185,
+          "expectancy_points_net": -70.55,
+          "t_stat": -1.38
+        },
+        "XAUUSD": {
+          "trades": 201,
+          "win_rate": 0.4726,
+          "expectancy_points_net": -96.49,
+          "t_stat": -0.56
+        },
+        "XPDUSD": {
+          "trades": 247,
+          "win_rate": 0.4332,
+          "expectancy_points_net": -4119.65,
+          "t_stat": -3.48
+        },
+        "XPTUSD": {
+          "trades": 252,
+          "win_rate": 0.4722,
+          "expectancy_points_net": -2879.96,
+          "t_stat": -2.18
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 208,
+          "win_rate": 0.5048,
+          "expectancy_points_net": -1549.15,
+          "t_stat": -2.61
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 229,
+          "win_rate": 0.4978,
+          "expectancy_points_net": -1301.99,
+          "t_stat": -2.63
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 247,
+          "win_rate": 0.4332,
+          "expectancy_points_net": -3011.8,
+          "t_stat": -4.54
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 232,
+          "win_rate": 0.4612,
+          "expectancy_points_net": -1782.95,
+          "t_stat": -1.08
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1549.15,
+          -1301.99,
+          -3011.8,
+          -1782.95
+        ],
+        "min_block_expectancy": -3011.8,
+        "max_block_expectancy": -1301.99
+      }
+    },
+    {
+      "name": "sma_50_200",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 306,
+        "win_rate": 0.4706,
+        "expectancy_points_net": -1635.69,
+        "expectancy_points_gross": -541.28,
+        "profit_factor": 0.54,
+        "total_points_net": -500521.0,
+        "avg_win_points": 4087.6,
+        "avg_loss_points": -6723.0,
+        "t_stat": -3.57,
+        "significant_at_95": true,
+        "avg_bars_held": 8.4,
+        "exit_mix": {
+          "tp": 144,
+          "sl": 162,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.68,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 214,
+        "obs_per_date": 1.43,
+        "t_stat_clustered_by_date": -2.6,
+        "mean_per_date": -1347.58,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 136,
+        "win_rate": 0.4338,
+        "expectancy_points_net": -5712.59,
+        "expectancy_points_gross": -4477.36,
+        "profit_factor": 0.47,
+        "total_points_net": -776912.8,
+        "avg_win_points": 11673.2,
+        "avg_loss_points": -19034.2,
+        "t_stat": -2.74,
+        "significant_at_95": true,
+        "avg_bars_held": 7.7,
+        "exit_mix": {
+          "tp": 59,
+          "sl": 77,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.24,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 86,
+        "obs_per_date": 1.58,
+        "t_stat_clustered_by_date": -2.36,
+        "mean_per_date": -5843.25,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 115,
+          "win_rate": 0.5217,
+          "expectancy_points_net": -53.97,
+          "t_stat": -0.53
+        },
+        "XAUUSD": {
+          "trades": 109,
+          "win_rate": 0.5229,
+          "expectancy_points_net": 179.16,
+          "t_stat": 0.7
+        },
+        "XPDUSD": {
+          "trades": 105,
+          "win_rate": 0.381,
+          "expectancy_points_net": -8818.96,
+          "t_stat": -4.55
+        },
+        "XPTUSD": {
+          "trades": 113,
+          "win_rate": 0.4071,
+          "expectancy_points_net": -3228.01,
+          "t_stat": -1.57
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 102,
+          "win_rate": 0.451,
+          "expectancy_points_net": -1543.89,
+          "t_stat": -1.82
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 115,
+          "win_rate": 0.4696,
+          "expectancy_points_net": -1983.88,
+          "t_stat": -2.98
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 108,
+          "win_rate": 0.463,
+          "expectancy_points_net": -1877.43,
+          "t_stat": -1.89
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 117,
+          "win_rate": 0.453,
+          "expectancy_points_net": -5889.31,
+          "t_stat": -2.51
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1543.89,
+          -1983.88,
+          -1877.43,
+          -5889.31
+        ],
+        "min_block_expectancy": -5889.31,
+        "max_block_expectancy": -1543.89
+      }
+    },
+    {
+      "name": "ema_50_200",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 314,
+        "win_rate": 0.4586,
+        "expectancy_points_net": -1459.62,
+        "expectancy_points_gross": -265.38,
+        "profit_factor": 0.589,
+        "total_points_net": -458320.3,
+        "avg_win_points": 4559.4,
+        "avg_loss_points": -6558.1,
+        "t_stat": -3.24,
+        "significant_at_95": true,
+        "avg_bars_held": 9.1,
+        "exit_mix": {
+          "tp": 144,
+          "sl": 170,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.66,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 225,
+        "obs_per_date": 1.4,
+        "t_stat_clustered_by_date": -2.78,
+        "mean_per_date": -1382.4,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 121,
+        "win_rate": 0.4959,
+        "expectancy_points_net": -2644.96,
+        "expectancy_points_gross": -1385.5,
+        "profit_factor": 0.726,
+        "total_points_net": -320040.3,
+        "avg_win_points": 14127.7,
+        "avg_loss_points": -19142.7,
+        "t_stat": -1.12,
+        "significant_at_95": false,
+        "avg_bars_held": 7.1,
+        "exit_mix": {
+          "tp": 60,
+          "sl": 61,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.5,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 70,
+        "obs_per_date": 1.73,
+        "t_stat_clustered_by_date": -1.52,
+        "mean_per_date": -4290.37,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 110,
+          "win_rate": 0.4727,
+          "expectancy_points_net": 109.69,
+          "t_stat": 1.12
+        },
+        "XAUUSD": {
+          "trades": 99,
+          "win_rate": 0.5253,
+          "expectancy_points_net": 7.23,
+          "t_stat": 0.02
+        },
+        "XPDUSD": {
+          "trades": 113,
+          "win_rate": 0.4336,
+          "expectancy_points_net": -3773.11,
+          "t_stat": -2.17
+        },
+        "XPTUSD": {
+          "trades": 113,
+          "win_rate": 0.4513,
+          "expectancy_points_net": -3228.15,
+          "t_stat": -1.47
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 105,
+          "win_rate": 0.4571,
+          "expectancy_points_net": -1255.15,
+          "t_stat": -1.55
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 116,
+          "win_rate": 0.4224,
+          "expectancy_points_net": -2086.34,
+          "t_stat": -2.9
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 108,
+          "win_rate": 0.4722,
+          "expectancy_points_net": -2367.5,
+          "t_stat": -2.43
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 106,
+          "win_rate": 0.5283,
+          "expectancy_points_net": -1404.39,
+          "t_stat": -0.54
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1255.15,
+          -2086.34,
+          -2367.5,
+          -1404.39
+        ],
+        "min_block_expectancy": -2367.5,
+        "max_block_expectancy": -1255.15
+      }
+    },
+    {
+      "name": "sma_10_50_inv",
+      "family": "ma_cross_inv",
+      "in_sample": {
+        "trades": 1298,
+        "win_rate": 0.5193,
+        "expectancy_points_net": -843.6,
+        "expectancy_points_gross": 357.62,
+        "profit_factor": 0.745,
+        "total_points_net": -1094991.4,
+        "avg_win_points": 4734.6,
+        "avg_loss_points": -6868.8,
+        "t_stat": -3.66,
+        "significant_at_95": true,
+        "avg_bars_held": 7.8,
+        "exit_mix": {
+          "tp": 674,
+          "sl": 624,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.45,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 481,
+        "obs_per_date": 2.7,
+        "t_stat_clustered_by_date": -3.38,
+        "mean_per_date": -982.44,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 548,
+        "win_rate": 0.5493,
+        "expectancy_points_net": 547.65,
+        "expectancy_points_gross": 1740.62,
+        "profit_factor": 1.076,
+        "total_points_net": 300112.1,
+        "avg_win_points": 14151.2,
+        "avg_loss_points": -16029.9,
+        "t_stat": 0.56,
+        "significant_at_95": false,
+        "avg_bars_held": 7.3,
+        "exit_mix": {
+          "tp": 301,
+          "sl": 246,
+          "timeout": 1
+        },
+        "symbols": 4,
+        "symbols_positive": 4,
+        "t_stat_clustered_by_symbol": 1.7,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 199,
+        "obs_per_date": 2.75,
+        "t_stat_clustered_by_date": 0.39,
+        "mean_per_date": 525.11,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 456,
+          "win_rate": 0.5044,
+          "expectancy_points_net": 36.81,
+          "t_stat": 1.04
+        },
+        "XAUUSD": {
+          "trades": 434,
+          "win_rate": 0.5253,
+          "expectancy_points_net": 105.15,
+          "t_stat": 0.97
+        },
+        "XPDUSD": {
+          "trades": 466,
+          "win_rate": 0.5429,
+          "expectancy_points_net": -1229.08,
+          "t_stat": -1.37
+        },
+        "XPTUSD": {
+          "trades": 490,
+          "win_rate": 0.5388,
+          "expectancy_points_net": -580.71,
+          "t_stat": -0.64
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 443,
+          "win_rate": 0.5147,
+          "expectancy_points_net": -1171.88,
+          "t_stat": -2.99
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 470,
+          "win_rate": 0.5043,
+          "expectancy_points_net": -1076.16,
+          "t_stat": -3.07
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 482,
+          "win_rate": 0.5332,
+          "expectancy_points_net": -737.23,
+          "t_stat": -1.5
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 451,
+          "win_rate": 0.561,
+          "expectancy_points_net": 1298.0,
+          "t_stat": 1.15
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -1171.88,
+          -1076.16,
+          -737.23,
+          1298.0
+        ],
+        "min_block_expectancy": -1171.88,
+        "max_block_expectancy": 1298.0
+      }
+    },
+    {
+      "name": "sma_20_100_inv",
+      "family": "ma_cross_inv",
+      "in_sample": {
+        "trades": 664,
+        "win_rate": 0.506,
+        "expectancy_points_net": -1194.9,
+        "expectancy_points_gross": 53.24,
+        "profit_factor": 0.659,
+        "total_points_net": -793414.1,
+        "avg_win_points": 4564.6,
+        "avg_loss_points": -7094.8,
+        "t_stat": -3.73,
+        "significant_at_95": true,
+        "avg_bars_held": 7.6,
+        "exit_mix": {
+          "tp": 336,
+          "sl": 328,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.55,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 360,
+        "obs_per_date": 1.84,
+        "t_stat_clustered_by_date": -4.1,
+        "mean_per_date": -1620.54,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 306,
+        "win_rate": 0.5556,
+        "expectancy_points_net": 176.1,
+        "expectancy_points_gross": 1466.8,
+        "profit_factor": 1.023,
+        "total_points_net": 53885.5,
+        "avg_win_points": 14375.7,
+        "avg_loss_points": -17573.4,
+        "t_stat": 0.13,
+        "significant_at_95": false,
+        "avg_bars_held": 6.9,
+        "exit_mix": {
+          "tp": 170,
+          "sl": 136,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": 0.13,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 141,
+        "obs_per_date": 2.17,
+        "t_stat_clustered_by_date": 0.55,
+        "mean_per_date": 813.9,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 220,
+          "win_rate": 0.5045,
+          "expectancy_points_net": 45.49,
+          "t_stat": 0.9
+        },
+        "XAUUSD": {
+          "trades": 229,
+          "win_rate": 0.5197,
+          "expectancy_points_net": -1.12,
+          "t_stat": -0.01
+        },
+        "XPDUSD": {
+          "trades": 266,
+          "win_rate": 0.5226,
+          "expectancy_points_net": -3169.43,
+          "t_stat": -2.69
+        },
+        "XPTUSD": {
+          "trades": 255,
+          "win_rate": 0.5373,
+          "expectancy_points_net": 367.8,
+          "t_stat": 0.28
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 225,
+          "win_rate": 0.52,
+          "expectancy_points_net": -1487.71,
+          "t_stat": -2.58
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 262,
+          "win_rate": 0.5076,
+          "expectancy_points_net": -1008.72,
+          "t_stat": -2.2
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 230,
+          "win_rate": 0.513,
+          "expectancy_points_net": -345.04,
+          "t_stat": -0.49
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 253,
+          "win_rate": 0.5455,
+          "expectancy_points_net": -241.7,
+          "t_stat": -0.15
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1487.71,
+          -1008.72,
+          -345.04,
+          -241.7
+        ],
+        "min_block_expectancy": -1487.71,
+        "max_block_expectancy": -241.7
+      }
+    },
+    {
+      "name": "donchian_brk_20",
+      "family": "breakout",
+      "in_sample": {
+        "trades": 3341,
+        "win_rate": 0.4768,
+        "expectancy_points_net": -1587.0,
+        "expectancy_points_gross": -551.57,
+        "profit_factor": 0.528,
+        "total_points_net": -5302160.9,
+        "avg_win_points": 3728.3,
+        "avg_loss_points": -6431.0,
+        "t_stat": -11.91,
+        "significant_at_95": true,
+        "avg_bars_held": 6.4,
+        "exit_mix": {
+          "tp": 1593,
+          "sl": 1748,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.51,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 571,
+        "obs_per_date": 5.85,
+        "t_stat_clustered_by_date": -13.41,
+        "mean_per_date": -2055.08,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 1504,
+        "win_rate": 0.49,
+        "expectancy_points_net": -2383.02,
+        "expectancy_points_gross": -1366.52,
+        "profit_factor": 0.71,
+        "total_points_net": -3584059.6,
+        "avg_win_points": 11931.8,
+        "avg_loss_points": -16138.0,
+        "t_stat": -4.07,
+        "significant_at_95": true,
+        "avg_bars_held": 5.9,
+        "exit_mix": {
+          "tp": 736,
+          "sl": 766,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.6,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 253,
+        "obs_per_date": 5.94,
+        "t_stat_clustered_by_date": -6.54,
+        "mean_per_date": -4902.11,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 1327,
+          "win_rate": 0.5026,
+          "expectancy_points_net": 12.09,
+          "t_stat": 0.52
+        },
+        "XAUUSD": {
+          "trades": 1339,
+          "win_rate": 0.5183,
+          "expectancy_points_net": 93.56,
+          "t_stat": 1.5
+        },
+        "XPDUSD": {
+          "trades": 1022,
+          "win_rate": 0.4364,
+          "expectancy_points_net": -4979.48,
+          "t_stat": -8.1
+        },
+        "XPTUSD": {
+          "trades": 1157,
+          "win_rate": 0.452,
+          "expectancy_points_net": -3404.07,
+          "t_stat": -5.32
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 1159,
+          "win_rate": 0.472,
+          "expectancy_points_net": -1763.44,
+          "t_stat": -7.94
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 1280,
+          "win_rate": 0.4969,
+          "expectancy_points_net": -1311.66,
+          "t_stat": -6.6
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 1219,
+          "win_rate": 0.4676,
+          "expectancy_points_net": -1711.56,
+          "t_stat": -5.83
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 1187,
+          "win_rate": 0.4861,
+          "expectancy_points_net": -2592.31,
+          "t_stat": -3.64
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1763.44,
+          -1311.66,
+          -1711.56,
+          -2592.31
+        ],
+        "min_block_expectancy": -2592.31,
+        "max_block_expectancy": -1311.66
+      }
+    },
+    {
+      "name": "donchian_fade_20",
+      "family": "breakout_fade",
+      "in_sample": {
+        "trades": 3341,
+        "win_rate": 0.5139,
+        "expectancy_points_net": -549.01,
+        "expectancy_points_gross": 486.42,
+        "profit_factor": 0.799,
+        "total_points_net": -1834248.8,
+        "avg_win_points": 4253.6,
+        "avg_loss_points": -5626.7,
+        "t_stat": -4.25,
+        "significant_at_95": true,
+        "avg_bars_held": 6.4,
+        "exit_mix": {
+          "tp": 1717,
+          "sl": 1624,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.77,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 571,
+        "obs_per_date": 5.85,
+        "t_stat_clustered_by_date": -1.01,
+        "mean_per_date": -147.82,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 1504,
+        "win_rate": 0.504,
+        "expectancy_points_net": 166.79,
+        "expectancy_points_gross": 1183.28,
+        "profit_factor": 1.024,
+        "total_points_net": 250844.6,
+        "avg_win_points": 13912.4,
+        "avg_loss_points": -13800.0,
+        "t_stat": 0.29,
+        "significant_at_95": false,
+        "avg_bars_held": 5.9,
+        "exit_mix": {
+          "tp": 758,
+          "sl": 744,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": 0.15,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 253,
+        "obs_per_date": 5.94,
+        "t_stat_clustered_by_date": 3.69,
+        "mean_per_date": 2747.12,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 1327,
+          "win_rate": 0.4861,
+          "expectancy_points_net": -35.78,
+          "t_stat": -1.54
+        },
+        "XAUUSD": {
+          "trades": 1339,
+          "win_rate": 0.4742,
+          "expectancy_points_net": -113.98,
+          "t_stat": -1.83
+        },
+        "XPDUSD": {
+          "trades": 1022,
+          "win_rate": 0.5528,
+          "expectancy_points_net": -1501.91,
+          "t_stat": -2.44
+        },
+        "XPTUSD": {
+          "trades": 1157,
+          "win_rate": 0.5445,
+          "expectancy_points_net": 131.07,
+          "t_stat": 0.2
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 1159,
+          "win_rate": 0.516,
+          "expectancy_points_net": -384.75,
+          "t_stat": -1.82
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 1280,
+          "win_rate": 0.4922,
+          "expectancy_points_net": -941.03,
+          "t_stat": -4.77
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 1219,
+          "win_rate": 0.5291,
+          "expectancy_points_net": -232.42,
+          "t_stat": -0.81
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 1187,
+          "win_rate": 0.5072,
+          "expectancy_points_net": 295.16,
+          "t_stat": 0.42
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -384.75,
+          -941.03,
+          -232.42,
+          295.16
+        ],
+        "min_block_expectancy": -941.03,
+        "max_block_expectancy": 295.16
+      }
+    },
+    {
+      "name": "donchian_brk_55",
+      "family": "breakout",
+      "in_sample": {
+        "trades": 1983,
+        "win_rate": 0.4947,
+        "expectancy_points_net": -1385.33,
+        "expectancy_points_gross": -372.25,
+        "profit_factor": 0.572,
+        "total_points_net": -2747114.4,
+        "avg_win_points": 3736.5,
+        "avg_loss_points": -6399.8,
+        "t_stat": -8.0,
+        "significant_at_95": true,
+        "avg_bars_held": 6.6,
+        "exit_mix": {
+          "tp": 981,
+          "sl": 1002,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.44,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 521,
+        "obs_per_date": 3.81,
+        "t_stat_clustered_by_date": -9.64,
+        "mean_per_date": -2148.24,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 910,
+        "win_rate": 0.5132,
+        "expectancy_points_net": -1841.16,
+        "expectancy_points_gross": -900.18,
+        "profit_factor": 0.766,
+        "total_points_net": -1675455.1,
+        "avg_win_points": 11723.6,
+        "avg_loss_points": -16140.8,
+        "t_stat": -2.41,
+        "significant_at_95": true,
+        "avg_bars_held": 5.8,
+        "exit_mix": {
+          "tp": 467,
+          "sl": 443,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.52,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 211,
+        "obs_per_date": 4.31,
+        "t_stat_clustered_by_date": -5.38,
+        "mean_per_date": -5002.6,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 807,
+          "win_rate": 0.5266,
+          "expectancy_points_net": 54.35,
+          "t_stat": 1.7
+        },
+        "XAUUSD": {
+          "trades": 831,
+          "win_rate": 0.5391,
+          "expectancy_points_net": 185.13,
+          "t_stat": 2.25
+        },
+        "XPDUSD": {
+          "trades": 583,
+          "win_rate": 0.4443,
+          "expectancy_points_net": -4659.74,
+          "t_stat": -5.61
+        },
+        "XPTUSD": {
+          "trades": 672,
+          "win_rate": 0.4702,
+          "expectancy_points_net": -2832.81,
+          "t_stat": -3.21
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 713,
+          "win_rate": 0.4853,
+          "expectancy_points_net": -1555.63,
+          "t_stat": -5.54
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 755,
+          "win_rate": 0.5046,
+          "expectancy_points_net": -1249.92,
+          "t_stat": -4.76
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 708,
+          "win_rate": 0.5099,
+          "expectancy_points_net": -1185.71,
+          "t_stat": -3.1
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 717,
+          "win_rate": 0.5021,
+          "expectancy_points_net": -2134.21,
+          "t_stat": -2.28
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1555.63,
+          -1249.92,
+          -1185.71,
+          -2134.21
+        ],
+        "min_block_expectancy": -2134.21,
+        "max_block_expectancy": -1185.71
+      }
+    },
+    {
+      "name": "donchian_fade_55",
+      "family": "breakout_fade",
+      "in_sample": {
+        "trades": 1983,
+        "win_rate": 0.4957,
+        "expectancy_points_net": -733.93,
+        "expectancy_points_gross": 279.15,
+        "profit_factor": 0.741,
+        "total_points_net": -1455386.4,
+        "avg_win_points": 4230.9,
+        "avg_loss_points": -5614.4,
+        "t_stat": -4.33,
+        "significant_at_95": true,
+        "avg_bars_held": 6.6,
+        "exit_mix": {
+          "tp": 983,
+          "sl": 1000,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.82,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 521,
+        "obs_per_date": 3.81,
+        "t_stat_clustered_by_date": -0.29,
+        "mean_per_date": -59.91,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 910,
+        "win_rate": 0.4835,
+        "expectancy_points_net": -198.8,
+        "expectancy_points_gross": 742.18,
+        "profit_factor": 0.971,
+        "total_points_net": -180906.4,
+        "avg_win_points": 13951.3,
+        "avg_loss_points": -13445.7,
+        "t_stat": -0.26,
+        "significant_at_95": false,
+        "avg_bars_held": 5.8,
+        "exit_mix": {
+          "tp": 440,
+          "sl": 470,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -0.35,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 211,
+        "obs_per_date": 4.31,
+        "t_stat_clustered_by_date": 3.26,
+        "mean_per_date": 2959.1,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 807,
+          "win_rate": 0.4634,
+          "expectancy_points_net": -76.26,
+          "t_stat": -2.39
+        },
+        "XAUUSD": {
+          "trades": 831,
+          "win_rate": 0.4561,
+          "expectancy_points_net": -199.91,
+          "t_stat": -2.43
+        },
+        "XPDUSD": {
+          "trades": 583,
+          "win_rate": 0.5437,
+          "expectancy_points_net": -1831.27,
+          "t_stat": -2.2
+        },
+        "XPTUSD": {
+          "trades": 672,
+          "win_rate": 0.5253,
+          "expectancy_points_net": -507.43,
+          "t_stat": -0.58
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 713,
+          "win_rate": 0.4979,
+          "expectancy_points_net": -523.59,
+          "t_stat": -1.95
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 755,
+          "win_rate": 0.4887,
+          "expectancy_points_net": -1029.12,
+          "t_stat": -3.94
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 708,
+          "win_rate": 0.4859,
+          "expectancy_points_net": -734.07,
+          "t_stat": -1.94
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 717,
+          "win_rate": 0.4951,
+          "expectancy_points_net": 47.04,
+          "t_stat": 0.05
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -523.59,
+          -1029.12,
+          -734.07,
+          47.04
+        ],
+        "min_block_expectancy": -1029.12,
+        "max_block_expectancy": 47.04
+      }
+    },
+    {
+      "name": "donchian_brk_100",
+      "family": "breakout",
+      "in_sample": {
+        "trades": 1508,
+        "win_rate": 0.496,
+        "expectancy_points_net": -1328.93,
+        "expectancy_points_gross": -352.49,
+        "profit_factor": 0.581,
+        "total_points_net": -2004028.9,
+        "avg_win_points": 3714.9,
+        "avg_loss_points": -6293.1,
+        "t_stat": -6.72,
+        "significant_at_95": true,
+        "avg_bars_held": 6.5,
+        "exit_mix": {
+          "tp": 748,
+          "sl": 760,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.45,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 456,
+        "obs_per_date": 3.31,
+        "t_stat_clustered_by_date": -7.91,
+        "mean_per_date": -2035.77,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 708,
+        "win_rate": 0.5297,
+        "expectancy_points_net": -1730.24,
+        "expectancy_points_gross": -810.93,
+        "profit_factor": 0.778,
+        "total_points_net": -1225008.4,
+        "avg_win_points": 11459.2,
+        "avg_loss_points": -16583.2,
+        "t_stat": -1.97,
+        "significant_at_95": true,
+        "avg_bars_held": 5.6,
+        "exit_mix": {
+          "tp": 375,
+          "sl": 333,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.32,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 173,
+        "obs_per_date": 4.09,
+        "t_stat_clustered_by_date": -4.83,
+        "mean_per_date": -5102.74,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 624,
+          "win_rate": 0.5369,
+          "expectancy_points_net": 79.6,
+          "t_stat": 2.16
+        },
+        "XAUUSD": {
+          "trades": 647,
+          "win_rate": 0.5456,
+          "expectancy_points_net": 221.04,
+          "t_stat": 2.38
+        },
+        "XPDUSD": {
+          "trades": 416,
+          "win_rate": 0.4519,
+          "expectancy_points_net": -4184.21,
+          "t_stat": -4.15
+        },
+        "XPTUSD": {
+          "trades": 529,
+          "win_rate": 0.4669,
+          "expectancy_points_net": -3177.85,
+          "t_stat": -3.13
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 544,
+          "win_rate": 0.4982,
+          "expectancy_points_net": -1439.08,
+          "t_stat": -4.49
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 571,
+          "win_rate": 0.4939,
+          "expectancy_points_net": -1256.33,
+          "t_stat": -4.15
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 549,
+          "win_rate": 0.51,
+          "expectancy_points_net": -1171.78,
+          "t_stat": -2.74
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 552,
+          "win_rate": 0.5254,
+          "expectancy_points_net": -1966.5,
+          "t_stat": -1.81
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1439.08,
+          -1256.33,
+          -1171.78,
+          -1966.5
+        ],
+        "min_block_expectancy": -1966.5,
+        "max_block_expectancy": -1171.78
+      }
+    },
+    {
+      "name": "donchian_fade_100",
+      "family": "breakout_fade",
+      "in_sample": {
+        "trades": 1508,
+        "win_rate": 0.4934,
+        "expectancy_points_net": -725.47,
+        "expectancy_points_gross": 250.97,
+        "profit_factor": 0.741,
+        "total_points_net": -1094011.2,
+        "avg_win_points": 4199.6,
+        "avg_loss_points": -5521.6,
+        "t_stat": -3.74,
+        "significant_at_95": true,
+        "avg_bars_held": 6.5,
+        "exit_mix": {
+          "tp": 744,
+          "sl": 764,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.8,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 456,
+        "obs_per_date": 3.31,
+        "t_stat_clustered_by_date": -0.52,
+        "mean_per_date": -126.16,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 708,
+        "win_rate": 0.4661,
+        "expectancy_points_net": -311.45,
+        "expectancy_points_gross": 607.86,
+        "profit_factor": 0.956,
+        "total_points_net": -220509.1,
+        "avg_win_points": 14402.6,
+        "avg_loss_points": -13157.1,
+        "t_stat": -0.36,
+        "significant_at_95": false,
+        "avg_bars_held": 5.6,
+        "exit_mix": {
+          "tp": 330,
+          "sl": 378,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -0.39,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 173,
+        "obs_per_date": 4.09,
+        "t_stat_clustered_by_date": 2.96,
+        "mean_per_date": 3034.79,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 624,
+          "win_rate": 0.4535,
+          "expectancy_points_net": -101.74,
+          "t_stat": -2.76
+        },
+        "XAUUSD": {
+          "trades": 647,
+          "win_rate": 0.4482,
+          "expectancy_points_net": -237.18,
+          "t_stat": -2.55
+        },
+        "XPDUSD": {
+          "trades": 416,
+          "win_rate": 0.5361,
+          "expectancy_points_net": -2341.28,
+          "t_stat": -2.32
+        },
+        "XPTUSD": {
+          "trades": 529,
+          "win_rate": 0.5255,
+          "expectancy_points_net": -233.67,
+          "t_stat": -0.23
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 544,
+          "win_rate": 0.4853,
+          "expectancy_points_net": -585.42,
+          "t_stat": -1.89
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 571,
+          "win_rate": 0.4974,
+          "expectancy_points_net": -996.91,
+          "t_stat": -3.3
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 549,
+          "win_rate": 0.4845,
+          "expectancy_points_net": -646.42,
+          "t_stat": -1.53
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 552,
+          "win_rate": 0.471,
+          "expectancy_points_net": -130.31,
+          "t_stat": -0.12
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -585.42,
+          -996.91,
+          -646.42,
+          -130.31
+        ],
+        "min_block_expectancy": -996.91,
+        "max_block_expectancy": -130.31
+      }
+    },
+    {
+      "name": "boll_fade_20_2.0",
+      "family": "bollinger_fade",
+      "in_sample": {
+        "trades": 4028,
+        "win_rate": 0.5052,
+        "expectancy_points_net": -799.04,
+        "expectancy_points_gross": 332.47,
+        "profit_factor": 0.737,
+        "total_points_net": -3218530.2,
+        "avg_win_points": 4430.5,
+        "avg_loss_points": -6138.8,
+        "t_stat": -6.51,
+        "significant_at_95": true,
+        "avg_bars_held": 6.4,
+        "exit_mix": {
+          "tp": 2035,
+          "sl": 1993,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.7,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 571,
+        "obs_per_date": 7.05,
+        "t_stat_clustered_by_date": -4.18,
+        "mean_per_date": -590.75,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 1711,
+        "win_rate": 0.4927,
+        "expectancy_points_net": -701.58,
+        "expectancy_points_gross": 421.95,
+        "profit_factor": 0.909,
+        "total_points_net": -1200409.5,
+        "avg_win_points": 14143.8,
+        "avg_loss_points": -15119.4,
+        "t_stat": -1.25,
+        "significant_at_95": false,
+        "avg_bars_held": 5.9,
+        "exit_mix": {
+          "tp": 843,
+          "sl": 866,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.77,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 254,
+        "obs_per_date": 6.74,
+        "t_stat_clustered_by_date": 1.0,
+        "mean_per_date": 737.12,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 1464,
+          "win_rate": 0.4734,
+          "expectancy_points_net": -36.96,
+          "t_stat": -1.74
+        },
+        "XAUUSD": {
+          "trades": 1484,
+          "win_rate": 0.4872,
+          "expectancy_points_net": -63.31,
+          "t_stat": -1.05
+        },
+        "XPDUSD": {
+          "trades": 1372,
+          "win_rate": 0.5379,
+          "expectancy_points_net": -1920.3,
+          "t_stat": -3.69
+        },
+        "XPTUSD": {
+          "trades": 1419,
+          "win_rate": 0.5102,
+          "expectancy_points_net": -1153.08,
+          "t_stat": -2.04
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 1498,
+          "win_rate": 0.506,
+          "expectancy_points_net": -731.44,
+          "t_stat": -3.72
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 1477,
+          "win_rate": 0.4848,
+          "expectancy_points_net": -1173.79,
+          "t_stat": -6.14
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 1377,
+          "win_rate": 0.5207,
+          "expectancy_points_net": -429.13,
+          "t_stat": -1.55
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 1387,
+          "win_rate": 0.4953,
+          "expectancy_points_net": -720.0,
+          "t_stat": -1.08
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -731.44,
+          -1173.79,
+          -429.13,
+          -720.0
+        ],
+        "min_block_expectancy": -1173.79,
+        "max_block_expectancy": -429.13
+      }
+    },
+    {
+      "name": "boll_ride_20_2.0",
+      "family": "bollinger_ride",
+      "in_sample": {
+        "trades": 4028,
+        "win_rate": 0.4858,
+        "expectancy_points_net": -1522.61,
+        "expectancy_points_gross": -391.1,
+        "profit_factor": 0.561,
+        "total_points_net": -6133068.6,
+        "avg_win_points": 4012.8,
+        "avg_loss_points": -6753.4,
+        "t_stat": -12.18,
+        "significant_at_95": true,
+        "avg_bars_held": 6.4,
+        "exit_mix": {
+          "tp": 1957,
+          "sl": 2071,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.52,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 571,
+        "obs_per_date": 7.05,
+        "t_stat_clustered_by_date": -13.09,
+        "mean_per_date": -1831.1,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 1711,
+        "win_rate": 0.5015,
+        "expectancy_points_net": -1777.82,
+        "expectancy_points_gross": -654.29,
+        "profit_factor": 0.785,
+        "total_points_net": -3041849.3,
+        "avg_win_points": 12957.3,
+        "avg_loss_points": -16599.3,
+        "t_stat": -3.16,
+        "significant_at_95": true,
+        "avg_bars_held": 5.9,
+        "exit_mix": {
+          "tp": 857,
+          "sl": 852,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.55,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 254,
+        "obs_per_date": 6.74,
+        "t_stat_clustered_by_date": -4.32,
+        "mean_per_date": -3174.26,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 1464,
+          "win_rate": 0.515,
+          "expectancy_points_net": 14.63,
+          "t_stat": 0.69
+        },
+        "XAUUSD": {
+          "trades": 1484,
+          "win_rate": 0.5054,
+          "expectancy_points_net": 43.62,
+          "t_stat": 0.72
+        },
+        "XPDUSD": {
+          "trades": 1372,
+          "win_rate": 0.4548,
+          "expectancy_points_net": -4468.57,
+          "t_stat": -8.6
+        },
+        "XPTUSD": {
+          "trades": 1419,
+          "win_rate": 0.4841,
+          "expectancy_points_net": -2205.92,
+          "t_stat": -3.91
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 1498,
+          "win_rate": 0.4806,
+          "expectancy_points_net": -1654.56,
+          "t_stat": -8.15
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 1477,
+          "win_rate": 0.5064,
+          "expectancy_points_net": -1214.75,
+          "t_stat": -6.35
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 1377,
+          "win_rate": 0.4764,
+          "expectancy_points_net": -1727.82,
+          "t_stat": -6.15
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 1387,
+          "win_rate": 0.4982,
+          "expectancy_points_net": -1819.03,
+          "t_stat": -2.73
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1654.56,
+          -1214.75,
+          -1727.82,
+          -1819.03
+        ],
+        "min_block_expectancy": -1819.03,
+        "max_block_expectancy": -1214.75
+      }
+    },
+    {
+      "name": "boll_fade_20_2.5",
+      "family": "bollinger_fade",
+      "in_sample": {
+        "trades": 2739,
+        "win_rate": 0.5035,
+        "expectancy_points_net": -781.75,
+        "expectancy_points_gross": 356.73,
+        "profit_factor": 0.742,
+        "total_points_net": -2141215.1,
+        "avg_win_points": 4466.5,
+        "avg_loss_points": -6103.3,
+        "t_stat": -5.26,
+        "significant_at_95": true,
+        "avg_bars_held": 6.3,
+        "exit_mix": {
+          "tp": 1379,
+          "sl": 1360,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.73,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 559,
+        "obs_per_date": 4.9,
+        "t_stat_clustered_by_date": -2.95,
+        "mean_per_date": -523.41,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 1105,
+        "win_rate": 0.4977,
+        "expectancy_points_net": 250.72,
+        "expectancy_points_gross": 1325.25,
+        "profit_factor": 1.036,
+        "total_points_net": 277049.7,
+        "avg_win_points": 14355.6,
+        "avg_loss_points": -13727.1,
+        "t_stat": 0.38,
+        "significant_at_95": false,
+        "avg_bars_held": 5.7,
+        "exit_mix": {
+          "tp": 550,
+          "sl": 553,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": 1.27,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 234,
+        "obs_per_date": 4.72,
+        "t_stat_clustered_by_date": 2.19,
+        "mean_per_date": 2008.67,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 1006,
+          "win_rate": 0.4622,
+          "expectancy_points_net": -45.29,
+          "t_stat": -1.92
+        },
+        "XAUUSD": {
+          "trades": 986,
+          "win_rate": 0.4868,
+          "expectancy_points_net": -16.89,
+          "t_stat": -0.25
+        },
+        "XPDUSD": {
+          "trades": 914,
+          "win_rate": 0.5503,
+          "expectancy_points_net": -1200.34,
+          "t_stat": -2.04
+        },
+        "XPTUSD": {
+          "trades": 938,
+          "win_rate": 0.5128,
+          "expectancy_points_net": -751.42,
+          "t_stat": -1.1
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 1033,
+          "win_rate": 0.5063,
+          "expectancy_points_net": -592.96,
+          "t_stat": -2.49
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 992,
+          "win_rate": 0.4768,
+          "expectancy_points_net": -1141.74,
+          "t_stat": -4.91
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 933,
+          "win_rate": 0.5295,
+          "expectancy_points_net": -581.22,
+          "t_stat": -1.75
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 886,
+          "win_rate": 0.4955,
+          "expectancy_points_net": 477.71,
+          "t_stat": 0.6
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -592.96,
+          -1141.74,
+          -581.22,
+          477.71
+        ],
+        "min_block_expectancy": -1141.74,
+        "max_block_expectancy": 477.71
+      }
+    },
+    {
+      "name": "boll_ride_20_2.5",
+      "family": "bollinger_ride",
+      "in_sample": {
+        "trades": 2739,
+        "win_rate": 0.4867,
+        "expectancy_points_net": -1544.83,
+        "expectancy_points_gross": -406.36,
+        "profit_factor": 0.557,
+        "total_points_net": -4231296.3,
+        "avg_win_points": 3998.3,
+        "avg_loss_points": -6800.1,
+        "t_stat": -10.18,
+        "significant_at_95": true,
+        "avg_bars_held": 6.3,
+        "exit_mix": {
+          "tp": 1333,
+          "sl": 1406,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.49,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 559,
+        "obs_per_date": 4.9,
+        "t_stat_clustered_by_date": -10.53,
+        "mean_per_date": -1903.61,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 1105,
+        "win_rate": 0.4959,
+        "expectancy_points_net": -2628.79,
+        "expectancy_points_gross": -1554.27,
+        "profit_factor": 0.689,
+        "total_points_net": -2904817.1,
+        "avg_win_points": 11748.3,
+        "avg_loss_points": -16773.6,
+        "t_stat": -3.92,
+        "significant_at_95": true,
+        "avg_bars_held": 5.7,
+        "exit_mix": {
+          "tp": 547,
+          "sl": 556,
+          "timeout": 2
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.61,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 234,
+        "obs_per_date": 4.72,
+        "t_stat_clustered_by_date": -4.7,
+        "mean_per_date": -4396.35,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 1006,
+          "win_rate": 0.5229,
+          "expectancy_points_net": 22.09,
+          "t_stat": 0.93
+        },
+        "XAUUSD": {
+          "trades": 986,
+          "win_rate": 0.5051,
+          "expectancy_points_net": -3.26,
+          "t_stat": -0.05
+        },
+        "XPDUSD": {
+          "trades": 914,
+          "win_rate": 0.442,
+          "expectancy_points_net": -5197.97,
+          "t_stat": -8.83
+        },
+        "XPTUSD": {
+          "trades": 938,
+          "win_rate": 0.4829,
+          "expectancy_points_net": -2563.09,
+          "t_stat": -3.75
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 1033,
+          "win_rate": 0.4811,
+          "expectancy_points_net": -1794.1,
+          "t_stat": -7.29
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 992,
+          "win_rate": 0.5111,
+          "expectancy_points_net": -1224.2,
+          "t_stat": -5.23
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 933,
+          "win_rate": 0.4673,
+          "expectancy_points_net": -1599.62,
+          "t_stat": -4.75
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 886,
+          "win_rate": 0.4977,
+          "expectancy_points_net": -2907.41,
+          "t_stat": -3.63
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1794.1,
+          -1224.2,
+          -1599.62,
+          -2907.41
+        ],
+        "min_block_expectancy": -2907.41,
+        "max_block_expectancy": -1224.2
+      }
+    },
+    {
+      "name": "boll_fade_50_2.0",
+      "family": "bollinger_fade",
+      "in_sample": {
+        "trades": 2587,
+        "win_rate": 0.5149,
+        "expectancy_points_net": -597.21,
+        "expectancy_points_gross": 492.98,
+        "profit_factor": 0.798,
+        "total_points_net": -1544984.2,
+        "avg_win_points": 4593.7,
+        "avg_loss_points": -6106.6,
+        "t_stat": -3.81,
+        "significant_at_95": true,
+        "avg_bars_held": 7.1,
+        "exit_mix": {
+          "tp": 1332,
+          "sl": 1255,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.76,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 540,
+        "obs_per_date": 4.79,
+        "t_stat_clustered_by_date": -0.12,
+        "mean_per_date": -26.16,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 1224,
+        "win_rate": 0.509,
+        "expectancy_points_net": -107.69,
+        "expectancy_points_gross": 974.13,
+        "profit_factor": 0.985,
+        "total_points_net": -131811.0,
+        "avg_win_points": 14154.9,
+        "avg_loss_points": -14892.3,
+        "t_stat": -0.17,
+        "significant_at_95": false,
+        "avg_bars_held": 6.3,
+        "exit_mix": {
+          "tp": 623,
+          "sl": 598,
+          "timeout": 3
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -0.43,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 234,
+        "obs_per_date": 5.23,
+        "t_stat_clustered_by_date": 4.37,
+        "mean_per_date": 3273.27,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 998,
+          "win_rate": 0.49,
+          "expectancy_points_net": -51.59,
+          "t_stat": -1.63
+        },
+        "XAUUSD": {
+          "trades": 1030,
+          "win_rate": 0.4767,
+          "expectancy_points_net": -113.76,
+          "t_stat": -1.43
+        },
+        "XPDUSD": {
+          "trades": 879,
+          "win_rate": 0.554,
+          "expectancy_points_net": -1299.45,
+          "t_stat": -1.98
+        },
+        "XPTUSD": {
+          "trades": 904,
+          "win_rate": 0.5398,
+          "expectancy_points_net": -404.77,
+          "t_stat": -0.54
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 919,
+          "win_rate": 0.5332,
+          "expectancy_points_net": -513.47,
+          "t_stat": -1.97
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 965,
+          "win_rate": 0.4964,
+          "expectancy_points_net": -823.25,
+          "t_stat": -3.49
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 956,
+          "win_rate": 0.5209,
+          "expectancy_points_net": -178.66,
+          "t_stat": -0.53
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 971,
+          "win_rate": 0.5026,
+          "expectancy_points_net": -246.84,
+          "t_stat": -0.31
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -513.47,
+          -823.25,
+          -178.66,
+          -246.84
+        ],
+        "min_block_expectancy": -823.25,
+        "max_block_expectancy": -178.66
+      }
+    },
+    {
+      "name": "boll_ride_50_2.0",
+      "family": "bollinger_ride",
+      "in_sample": {
+        "trades": 2587,
+        "win_rate": 0.477,
+        "expectancy_points_net": -1678.51,
+        "expectancy_points_gross": -588.31,
+        "profit_factor": 0.535,
+        "total_points_net": -4342293.5,
+        "avg_win_points": 4055.7,
+        "avg_loss_points": -6908.4,
+        "t_stat": -10.44,
+        "significant_at_95": true,
+        "avg_bars_held": 7.1,
+        "exit_mix": {
+          "tp": 1234,
+          "sl": 1353,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.51,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 540,
+        "obs_per_date": 4.79,
+        "t_stat_clustered_by_date": -10.61,
+        "mean_per_date": -2353.4,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 1224,
+        "win_rate": 0.4845,
+        "expectancy_points_net": -2307.4,
+        "expectancy_points_gross": -1225.59,
+        "profit_factor": 0.73,
+        "total_points_net": -2824263.0,
+        "avg_win_points": 12878.9,
+        "avg_loss_points": -16579.2,
+        "t_stat": -3.53,
+        "significant_at_95": true,
+        "avg_bars_held": 6.3,
+        "exit_mix": {
+          "tp": 591,
+          "sl": 630,
+          "timeout": 3
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.59,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 234,
+        "obs_per_date": 5.23,
+        "t_stat_clustered_by_date": -7.21,
+        "mean_per_date": -5615.96,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 998,
+          "win_rate": 0.502,
+          "expectancy_points_net": 28.8,
+          "t_stat": 0.91
+        },
+        "XAUUSD": {
+          "trades": 1030,
+          "win_rate": 0.5184,
+          "expectancy_points_net": 97.75,
+          "t_stat": 1.23
+        },
+        "XPDUSD": {
+          "trades": 879,
+          "win_rate": 0.4323,
+          "expectancy_points_net": -5293.34,
+          "t_stat": -8.09
+        },
+        "XPTUSD": {
+          "trades": 904,
+          "win_rate": 0.4558,
+          "expectancy_points_net": -2923.82,
+          "t_stat": -3.91
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 919,
+          "win_rate": 0.457,
+          "expectancy_points_net": -1770.6,
+          "t_stat": -6.57
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 965,
+          "win_rate": 0.4933,
+          "expectancy_points_net": -1497.23,
+          "t_stat": -6.24
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 956,
+          "win_rate": 0.4749,
+          "expectancy_points_net": -1995.27,
+          "t_stat": -5.79
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 971,
+          "win_rate": 0.4912,
+          "expectancy_points_net": -2252.39,
+          "t_stat": -2.85
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1770.6,
+          -1497.23,
+          -1995.27,
+          -2252.39
+        ],
+        "min_block_expectancy": -2252.39,
+        "max_block_expectancy": -1497.23
+      }
+    },
+    {
+      "name": "mom_24",
+      "family": "momentum",
+      "in_sample": {
+        "trades": 2362,
+        "win_rate": 0.4848,
+        "expectancy_points_net": -1422.49,
+        "expectancy_points_gross": -247.75,
+        "profit_factor": 0.598,
+        "total_points_net": -3359911.7,
+        "avg_win_points": 4361.4,
+        "avg_loss_points": -6864.2,
+        "t_stat": -8.47,
+        "significant_at_95": true,
+        "avg_bars_held": 7.2,
+        "exit_mix": {
+          "tp": 1145,
+          "sl": 1217,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.65,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 546,
+        "obs_per_date": 4.33,
+        "t_stat_clustered_by_date": -5.3,
+        "mean_per_date": -1164.73,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 1081,
+        "win_rate": 0.5134,
+        "expectancy_points_net": -546.55,
+        "expectancy_points_gross": 657.86,
+        "profit_factor": 0.929,
+        "total_points_net": -590823.5,
+        "avg_win_points": 13827.0,
+        "avg_loss_points": -15712.5,
+        "t_stat": -0.82,
+        "significant_at_95": false,
+        "avg_bars_held": 6.8,
+        "exit_mix": {
+          "tp": 554,
+          "sl": 526,
+          "timeout": 1
+        },
+        "symbols": 4,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": -0.74,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 240,
+        "obs_per_date": 4.5,
+        "t_stat_clustered_by_date": -0.22,
+        "mean_per_date": -215.85,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 849,
+          "win_rate": 0.5135,
+          "expectancy_points_net": 2.16,
+          "t_stat": 0.08
+        },
+        "XAUUSD": {
+          "trades": 843,
+          "win_rate": 0.4935,
+          "expectancy_points_net": 13.16,
+          "t_stat": 0.18
+        },
+        "XPDUSD": {
+          "trades": 869,
+          "win_rate": 0.481,
+          "expectancy_points_net": -3209.35,
+          "t_stat": -4.97
+        },
+        "XPTUSD": {
+          "trades": 882,
+          "win_rate": 0.4875,
+          "expectancy_points_net": -1331.89,
+          "t_stat": -1.99
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 861,
+          "win_rate": 0.4843,
+          "expectancy_points_net": -1444.25,
+          "t_stat": -5.13
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 840,
+          "win_rate": 0.5,
+          "expectancy_points_net": -1067.31,
+          "t_stat": -4.39
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 861,
+          "win_rate": 0.4797,
+          "expectancy_points_net": -1457.51,
+          "t_stat": -3.87
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 881,
+          "win_rate": 0.5108,
+          "expectancy_points_net": -630.85,
+          "t_stat": -0.81
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1444.25,
+          -1067.31,
+          -1457.51,
+          -630.85
+        ],
+        "min_block_expectancy": -1457.51,
+        "max_block_expectancy": -630.85
+      }
+    },
+    {
+      "name": "mom_24_inv",
+      "family": "momentum_inv",
+      "in_sample": {
+        "trades": 2362,
+        "win_rate": 0.5064,
+        "expectancy_points_net": -988.18,
+        "expectancy_points_gross": 186.56,
+        "profit_factor": 0.698,
+        "total_points_net": -2334070.1,
+        "avg_win_points": 4518.9,
+        "avg_loss_points": -6637.0,
+        "t_stat": -5.92,
+        "significant_at_95": true,
+        "avg_bars_held": 7.2,
+        "exit_mix": {
+          "tp": 1197,
+          "sl": 1165,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.48,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 546,
+        "obs_per_date": 4.33,
+        "t_stat_clustered_by_date": -5.88,
+        "mean_per_date": -1278.33,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 1081,
+        "win_rate": 0.4764,
+        "expectancy_points_net": -2135.93,
+        "expectancy_points_gross": -931.52,
+        "profit_factor": 0.747,
+        "total_points_net": -2308944.4,
+        "avg_win_points": 13240.5,
+        "avg_loss_points": -16126.9,
+        "t_stat": -3.21,
+        "significant_at_95": true,
+        "avg_bars_held": 6.8,
+        "exit_mix": {
+          "tp": 515,
+          "sl": 565,
+          "timeout": 1
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.81,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 240,
+        "obs_per_date": 4.5,
+        "t_stat_clustered_by_date": -2.64,
+        "mean_per_date": -2624.68,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 849,
+          "win_rate": 0.4759,
+          "expectancy_points_net": -23.81,
+          "t_stat": -0.93
+        },
+        "XAUUSD": {
+          "trades": 843,
+          "win_rate": 0.4982,
+          "expectancy_points_net": -39.39,
+          "t_stat": -0.55
+        },
+        "XPDUSD": {
+          "trades": 869,
+          "win_rate": 0.5086,
+          "expectancy_points_net": -3177.42,
+          "t_stat": -4.92
+        },
+        "XPTUSD": {
+          "trades": 882,
+          "win_rate": 0.5045,
+          "expectancy_points_net": -2073.03,
+          "t_stat": -3.09
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 861,
+          "win_rate": 0.4983,
+          "expectancy_points_net": -1093.88,
+          "t_stat": -3.92
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 840,
+          "win_rate": 0.494,
+          "expectancy_points_net": -1191.35,
+          "t_stat": -4.85
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 861,
+          "win_rate": 0.518,
+          "expectancy_points_net": -999.72,
+          "t_stat": -2.67
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 881,
+          "win_rate": 0.4779,
+          "expectancy_points_net": -2088.18,
+          "t_stat": -2.69
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1093.88,
+          -1191.35,
+          -999.72,
+          -2088.18
+        ],
+        "min_block_expectancy": -2088.18,
+        "max_block_expectancy": -999.72
+      }
+    },
+    {
+      "name": "mom_72",
+      "family": "momentum",
+      "in_sample": {
+        "trades": 1370,
+        "win_rate": 0.4774,
+        "expectancy_points_net": -1798.39,
+        "expectancy_points_gross": -554.76,
+        "profit_factor": 0.541,
+        "total_points_net": -2463787.8,
+        "avg_win_points": 4436.4,
+        "avg_loss_points": -7493.3,
+        "t_stat": -7.86,
+        "significant_at_95": true,
+        "avg_bars_held": 7.6,
+        "exit_mix": {
+          "tp": 654,
+          "sl": 716,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.66,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 451,
+        "obs_per_date": 3.04,
+        "t_stat_clustered_by_date": -5.22,
+        "mean_per_date": -1627.15,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 643,
+        "win_rate": 0.4603,
+        "expectancy_points_net": -2835.77,
+        "expectancy_points_gross": -1611.6,
+        "profit_factor": 0.679,
+        "total_points_net": -1823398.5,
+        "avg_win_points": 13011.3,
+        "avg_loss_points": -16353.7,
+        "t_stat": -3.35,
+        "significant_at_95": true,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 296,
+          "sl": 346,
+          "timeout": 1
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.84,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 190,
+        "obs_per_date": 3.38,
+        "t_stat_clustered_by_date": -3.35,
+        "mean_per_date": -3988.87,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 471,
+          "win_rate": 0.4947,
+          "expectancy_points_net": -52.98,
+          "t_stat": -1.41
+        },
+        "XAUUSD": {
+          "trades": 486,
+          "win_rate": 0.4774,
+          "expectancy_points_net": -73.16,
+          "t_stat": -0.7
+        },
+        "XPDUSD": {
+          "trades": 546,
+          "win_rate": 0.467,
+          "expectancy_points_net": -4499.14,
+          "t_stat": -5.64
+        },
+        "XPTUSD": {
+          "trades": 510,
+          "win_rate": 0.451,
+          "expectancy_points_net": -3470.88,
+          "t_stat": -4.01
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 489,
+          "win_rate": 0.4458,
+          "expectancy_points_net": -2202.86,
+          "t_stat": -5.57
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 509,
+          "win_rate": 0.5108,
+          "expectancy_points_net": -1097.51,
+          "t_stat": -3.31
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 494,
+          "win_rate": 0.4717,
+          "expectancy_points_net": -2343.08,
+          "t_stat": -4.44
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 521,
+          "win_rate": 0.4587,
+          "expectancy_points_net": -2867.32,
+          "t_stat": -2.92
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -2202.86,
+          -1097.51,
+          -2343.08,
+          -2867.32
+        ],
+        "min_block_expectancy": -2867.32,
+        "max_block_expectancy": -1097.51
+      }
+    },
+    {
+      "name": "mom_72_inv",
+      "family": "momentum_inv",
+      "in_sample": {
+        "trades": 1370,
+        "win_rate": 0.5161,
+        "expectancy_points_net": -695.41,
+        "expectancy_points_gross": 548.22,
+        "profit_factor": 0.788,
+        "total_points_net": -952715.4,
+        "avg_win_points": 4996.7,
+        "avg_loss_points": -6765.3,
+        "t_stat": -3.09,
+        "significant_at_95": true,
+        "avg_bars_held": 7.6,
+        "exit_mix": {
+          "tp": 707,
+          "sl": 663,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -1.39,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 451,
+        "obs_per_date": 3.04,
+        "t_stat_clustered_by_date": -3.31,
+        "mean_per_date": -1037.58,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 643,
+        "win_rate": 0.5303,
+        "expectancy_points_net": 280.23,
+        "expectancy_points_gross": 1504.4,
+        "profit_factor": 1.039,
+        "total_points_net": 180189.5,
+        "avg_win_points": 14055.7,
+        "avg_loss_points": -15274.2,
+        "t_stat": 0.33,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 341,
+          "sl": 301,
+          "timeout": 1
+        },
+        "symbols": 4,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": 0.38,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 190,
+        "obs_per_date": 3.38,
+        "t_stat_clustered_by_date": 1.14,
+        "mean_per_date": 1353.86,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 471,
+          "win_rate": 0.4904,
+          "expectancy_points_net": 30.79,
+          "t_stat": 0.82
+        },
+        "XAUUSD": {
+          "trades": 486,
+          "win_rate": 0.5103,
+          "expectancy_points_net": 46.41,
+          "t_stat": 0.44
+        },
+        "XPDUSD": {
+          "trades": 546,
+          "win_rate": 0.5293,
+          "expectancy_points_net": -1775.01,
+          "t_stat": -2.22
+        },
+        "XPTUSD": {
+          "trades": 510,
+          "win_rate": 0.549,
+          "expectancy_points_net": 312.88,
+          "t_stat": 0.36
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 489,
+          "win_rate": 0.5481,
+          "expectancy_points_net": -403.76,
+          "t_stat": -1.05
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 509,
+          "win_rate": 0.4774,
+          "expectancy_points_net": -1341.62,
+          "t_stat": -4.01
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 494,
+          "win_rate": 0.5243,
+          "expectancy_points_net": -123.97,
+          "t_stat": -0.24
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 521,
+          "win_rate": 0.5336,
+          "expectancy_points_net": 324.45,
+          "t_stat": 0.33
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -403.76,
+          -1341.62,
+          -123.97,
+          324.45
+        ],
+        "min_block_expectancy": -1341.62,
+        "max_block_expectancy": 324.45
+      }
+    },
+    {
+      "name": "mom_168",
+      "family": "momentum",
+      "in_sample": {
+        "trades": 874,
+        "win_rate": 0.4886,
+        "expectancy_points_net": -1543.2,
+        "expectancy_points_gross": -362.64,
+        "profit_factor": 0.581,
+        "total_points_net": -1348755.4,
+        "avg_win_points": 4373.6,
+        "avg_loss_points": -7195.3,
+        "t_stat": -5.56,
+        "significant_at_95": true,
+        "avg_bars_held": 7.7,
+        "exit_mix": {
+          "tp": 427,
+          "sl": 447,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.35,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 353,
+        "obs_per_date": 2.48,
+        "t_stat_clustered_by_date": -3.88,
+        "mean_per_date": -1346.78,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 401,
+        "win_rate": 0.4713,
+        "expectancy_points_net": -3190.88,
+        "expectancy_points_gross": -1766.77,
+        "profit_factor": 0.697,
+        "total_points_net": -1279542.5,
+        "avg_win_points": 15605.2,
+        "avg_loss_points": -19947.7,
+        "t_stat": -2.58,
+        "significant_at_95": true,
+        "avg_bars_held": 7.4,
+        "exit_mix": {
+          "tp": 189,
+          "sl": 212,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.6,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 133,
+        "obs_per_date": 3.02,
+        "t_stat_clustered_by_date": -2.78,
+        "mean_per_date": -4030.63,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 275,
+          "win_rate": 0.5273,
+          "expectancy_points_net": 45.18,
+          "t_stat": 1.02
+        },
+        "XAUUSD": {
+          "trades": 301,
+          "win_rate": 0.505,
+          "expectancy_points_net": -43.54,
+          "t_stat": -0.28
+        },
+        "XPDUSD": {
+          "trades": 331,
+          "win_rate": 0.4381,
+          "expectancy_points_net": -4507.66,
+          "t_stat": -4.3
+        },
+        "XPTUSD": {
+          "trades": 368,
+          "win_rate": 0.4728,
+          "expectancy_points_net": -3085.82,
+          "t_stat": -2.7
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 257,
+          "win_rate": 0.5136,
+          "expectancy_points_net": -1761.71,
+          "t_stat": -3.14
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 328,
+          "win_rate": 0.5091,
+          "expectancy_points_net": -1221.69,
+          "t_stat": -3.06
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 340,
+          "win_rate": 0.4441,
+          "expectancy_points_net": -2149.88,
+          "t_stat": -3.74
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 350,
+          "win_rate": 0.4743,
+          "expectancy_points_net": -2982.48,
+          "t_stat": -2.18
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -1761.71,
+          -1221.69,
+          -2149.88,
+          -2982.48
+        ],
+        "min_block_expectancy": -2982.48,
+        "max_block_expectancy": -1221.69
+      }
+    },
+    {
+      "name": "mom_168_inv",
+      "family": "momentum_inv",
+      "in_sample": {
+        "trades": 874,
+        "win_rate": 0.5057,
+        "expectancy_points_net": -832.73,
+        "expectancy_points_gross": 347.83,
+        "profit_factor": 0.741,
+        "total_points_net": -727808.7,
+        "avg_win_points": 4712.3,
+        "avg_loss_points": -6506.1,
+        "t_stat": -3.07,
+        "significant_at_95": true,
+        "avg_bars_held": 7.7,
+        "exit_mix": {
+          "tp": 442,
+          "sl": 432,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.65,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 353,
+        "obs_per_date": 2.48,
+        "t_stat_clustered_by_date": -3.24,
+        "mean_per_date": -1097.68,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 401,
+        "win_rate": 0.5212,
+        "expectancy_points_net": 200.71,
+        "expectancy_points_gross": 1624.82,
+        "profit_factor": 1.023,
+        "total_points_net": 80484.8,
+        "avg_win_points": 17089.8,
+        "avg_loss_points": -18183.7,
+        "t_stat": 0.16,
+        "significant_at_95": false,
+        "avg_bars_held": 7.4,
+        "exit_mix": {
+          "tp": 209,
+          "sl": 192,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -0.01,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 133,
+        "obs_per_date": 3.02,
+        "t_stat_clustered_by_date": 0.63,
+        "mean_per_date": 893.91,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "XAGUSD": {
+          "trades": 275,
+          "win_rate": 0.4582,
+          "expectancy_points_net": -76.3,
+          "t_stat": -1.73
+        },
+        "XAUUSD": {
+          "trades": 301,
+          "win_rate": 0.4884,
+          "expectancy_points_net": 24.49,
+          "t_stat": 0.16
+        },
+        "XPDUSD": {
+          "trades": 331,
+          "win_rate": 0.5589,
+          "expectancy_points_net": -1804.84,
+          "t_stat": -1.72
+        },
+        "XPTUSD": {
+          "trades": 368,
+          "win_rate": 0.5245,
+          "expectancy_points_net": -98.67,
+          "t_stat": -0.09
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-06-13T21:00:00",
+          "to": "2024-04-01T01:45:00",
+          "trades": 257,
+          "win_rate": 0.4747,
+          "expectancy_points_net": -819.1,
+          "t_stat": -1.48
+        },
+        {
+          "block": 2,
+          "from": "2024-04-01T01:45:00",
+          "to": "2025-01-18T06:30:00",
+          "trades": 328,
+          "win_rate": 0.4848,
+          "expectancy_points_net": -1026.92,
+          "t_stat": -2.59
+        },
+        {
+          "block": 3,
+          "from": "2025-01-18T06:30:00",
+          "to": "2025-11-06T11:15:00",
+          "trades": 340,
+          "win_rate": 0.5559,
+          "expectancy_points_net": -340.73,
+          "t_stat": -0.61
+        },
+        {
+          "block": 4,
+          "from": "2025-11-06T11:15:00",
+          "to": "2026-08-25T16:00:00",
+          "trades": 350,
+          "win_rate": 0.5171,
+          "expectancy_points_net": 45.33,
+          "t_stat": 0.03
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -819.1,
+          -1026.92,
+          -340.73,
+          45.33
+        ],
+        "min_block_expectancy": -1026.92,
+        "max_block_expectancy": 45.33
+      }
+    }
+  ],
+  "verdict": {
+    "candidates_judged": 40,
+    "bonferroni_z_threshold": 3.227,
+    "best_candidate": "rsi_rev_21_25_75",
+    "best_in_sample_t": 0.02,
+    "best_out_of_sample_t": 2.21,
+    "best_out_of_sample_expectancy": 4235.76,
+    "permutation_null_best_t_per_round": [
+      -1.14,
+      -1.01,
+      -0.76
+    ],
+    "permutation_null_best_t_mean": -0.97,
+    "beats_bonferroni": false,
+    "beats_permutation_null": true,
+    "holds_out_of_sample": true,
+    "candidates_positive_out_of_sample_at_1_96": [
+      "rsi_rev_21_25_75"
+    ],
+    "expected_by_chance_at_1_96": 1.0,
+    "best_out_of_sample_t_clustered_by_date": 3.16,
+    "best_survives_date_clustering": true,
+    "best_out_of_sample_signs_disagree": false,
+    "best_out_of_sample_obs_per_date": 2.43,
+    "best_out_of_sample_t_clustered_by_symbol": 1.44,
+    "best_symbols_positive_out_of_sample": 2,
+    "best_block_summary": {
+      "blocks_graded": 4,
+      "blocks_positive": 2,
+      "expectancy_by_block": [
+        -147.13,
+        -786.19,
+        778.15,
+        5189.9
+      ],
+      "min_block_expectancy": -786.19,
+      "max_block_expectancy": 5189.9
+    },
+    "walk_forward": {
+      "folds": [
+        {
+          "test_block": 2,
+          "trained_on_blocks": "1-1",
+          "selected": "rsi_rev_21_25_75",
+          "train_t": -0.22,
+          "train_trades": 105,
+          "test_trades": 84,
+          "test_expectancy_points_net": -786.19,
+          "test_t": -1.07
+        },
+        {
+          "test_block": 3,
+          "trained_on_blocks": "1-2",
+          "selected": "rsi_rev_21_25_75",
+          "train_t": -0.88,
+          "train_trades": 189,
+          "test_trades": 87,
+          "test_expectancy_points_net": 778.15,
+          "test_t": 0.81
+        },
+        {
+          "test_block": 4,
+          "trained_on_blocks": "1-3",
+          "selected": "rsi_rev_21_25_75",
+          "train_t": -0.11,
+          "train_trades": 276,
+          "test_trades": 110,
+          "test_expectancy_points_net": 5189.9,
+          "test_t": 2.33
+        }
+      ],
+      "folds_graded": 3,
+      "folds_profitable": 2,
+      "mean_test_expectancy_points_net": 1727.29,
+      "note": "Each fold ranks every candidate on the blocks before the test block and trades only the winner through it, so the selection never sees the era it is judged on."
+    },
+    "reading": "A candidate counts as evidence only if it clears the Bonferroni threshold, exceeds the best the permutation null reached over the same number of candidates, AND holds out of sample. The permutation null trades exactly as often as the real candidate and pays the same spread, so it isolates timing skill. Candidates passing 1.96 out of sample should be compared against expected_by_chance before being read as survivors. Two further checks sit alongside those. Clustering by entry date collapses the trades one shared dollar move opens across seven pairs into a single observation, which is the correction that applies here; the by-symbol figure is a consistency check and goes UP when every pair agrees, so it is not evidence. The era blocks and the walk-forward ask whether a result predates the most recent regime: a single sequential split cannot, because its holdout is always the present."
+  }
+}

@@ -1,0 +1,6540 @@
+{
+  "timeframe": "D1",
+  "years": 3.2,
+  "sl_atr": 1.5,
+  "tp_atr": 1.5,
+  "spread_source": "median",
+  "split": 0.7,
+  "null_rounds": 3,
+  "blocks": 4,
+  "skip_hours": [],
+  "data_gaps": [
+    "symbols returned different bar counts; the in/out split is indexed off the first symbol, while eras are cut by time"
+  ],
+  "window": {
+    "from": "2023-07-03T00:00:00",
+    "to": "2026-09-11T00:00:00",
+    "bars_per_symbol": 831,
+    "in_sample_bars": 581,
+    "out_of_sample_bars": 250
+  },
+  "median_atr_points_by_symbol": {
+    "EURUSD": 682.6,
+    "GBPUSD": 865.3,
+    "USDJPY": 1218.9,
+    "USDCAD": 661.2,
+    "AUDUSD": 566.6,
+    "USDCHF": 601.9,
+    "NZDUSD": 543.9
+  },
+  "candidates_tested": 41,
+  "eras": {
+    "count": 4,
+    "from": "2023-07-03T00:00:00",
+    "to": "2026-09-11T00:00:00",
+    "note": "Equal-duration eras over the window every symbol covers. A rule positive only in the last era is a regime, not an edge, and every sequential split puts that same era in the holdout - so several splits agreeing is one observation, not several."
+  },
+  "candidates_with_enough_trades": 31,
+  "candidates": [
+    {
+      "name": "rsi_rev_7_20_80",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 101,
+        "win_rate": 0.5743,
+        "expectancy_points_net": 143.17,
+        "expectancy_points_gross": 146.46,
+        "profit_factor": 1.272,
+        "total_points_net": 14459.9,
+        "avg_win_points": 1165.8,
+        "avg_loss_points": -1236.2,
+        "t_stat": 1.1,
+        "significant_at_95": false,
+        "avg_bars_held": 6.8,
+        "exit_mix": {
+          "tp": 58,
+          "sl": 43,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 1.24,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 76,
+        "obs_per_date": 1.33,
+        "t_stat_clustered_by_date": 0.53,
+        "mean_per_date": 76.31,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 53,
+        "win_rate": 0.5849,
+        "expectancy_points_net": 239.78,
+        "expectancy_points_gross": 242.99,
+        "profit_factor": 1.607,
+        "total_points_net": 12708.6,
+        "avg_win_points": 1085.9,
+        "avg_loss_points": -952.4,
+        "t_stat": 1.62,
+        "significant_at_95": false,
+        "avg_bars_held": 5.4,
+        "exit_mix": {
+          "tp": 31,
+          "sl": 21,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 2.22,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 36,
+        "obs_per_date": 1.47,
+        "t_stat_clustered_by_date": 0.67,
+        "mean_per_date": 119.29,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 18,
+          "win_rate": 0.6111,
+          "expectancy_points_net": 267.86,
+          "t_stat": 1.35
+        },
+        "EURUSD": {
+          "trades": 20,
+          "win_rate": 0.7,
+          "expectancy_points_net": 274.04,
+          "t_stat": 1.08
+        },
+        "GBPUSD": {
+          "trades": 20,
+          "win_rate": 0.8,
+          "expectancy_points_net": 787.05,
+          "t_stat": 3.35
+        },
+        "NZDUSD": {
+          "trades": 14,
+          "win_rate": 0.5714,
+          "expectancy_points_net": 126.03,
+          "t_stat": 0.58
+        },
+        "USDCAD": {
+          "trades": 29,
+          "win_rate": 0.4828,
+          "expectancy_points_net": 20.91,
+          "t_stat": 0.12
+        },
+        "USDCHF": {
+          "trades": 25,
+          "win_rate": 0.52,
+          "expectancy_points_net": 22.28,
+          "t_stat": 0.11
+        },
+        "USDJPY": {
+          "trades": 28,
+          "win_rate": 0.4643,
+          "expectancy_points_net": -64.38,
+          "t_stat": -0.17
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 36,
+          "win_rate": 0.6111,
+          "expectancy_points_net": 253.41,
+          "t_stat": 1.37
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 47,
+          "win_rate": 0.5319,
+          "expectancy_points_net": 20.94,
+          "t_stat": 0.1
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 23,
+          "win_rate": 0.6087,
+          "expectancy_points_net": 308.78,
+          "t_stat": 1.03
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 48,
+          "win_rate": 0.5833,
+          "expectancy_points_net": 207.49,
+          "t_stat": 1.36
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 4,
+        "expectancy_by_block": [
+          253.41,
+          20.94,
+          308.78,
+          207.49
+        ],
+        "min_block_expectancy": 20.94,
+        "max_block_expectancy": 308.78
+      }
+    },
+    {
+      "name": "rsi_rev_7_25_75",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 192,
+        "win_rate": 0.5677,
+        "expectancy_points_net": 170.62,
+        "expectancy_points_gross": 174.05,
+        "profit_factor": 1.316,
+        "total_points_net": 32759.4,
+        "avg_win_points": 1252.2,
+        "avg_loss_points": -1249.7,
+        "t_stat": 1.73,
+        "significant_at_95": false,
+        "avg_bars_held": 7.5,
+        "exit_mix": {
+          "tp": 109,
+          "sl": 83,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 6,
+        "t_stat_clustered_by_symbol": 3.76,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 114,
+        "obs_per_date": 1.68,
+        "t_stat_clustered_by_date": 1.3,
+        "mean_per_date": 162.25,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 103,
+        "win_rate": 0.5243,
+        "expectancy_points_net": 85.48,
+        "expectancy_points_gross": 88.96,
+        "profit_factor": 1.188,
+        "total_points_net": 8804.7,
+        "avg_win_points": 1029.0,
+        "avg_loss_points": -954.3,
+        "t_stat": 0.83,
+        "significant_at_95": false,
+        "avg_bars_held": 7.2,
+        "exit_mix": {
+          "tp": 54,
+          "sl": 48,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 1.25,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 60,
+        "obs_per_date": 1.72,
+        "t_stat_clustered_by_date": 0.48,
+        "mean_per_date": 61.18,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 34,
+          "win_rate": 0.5588,
+          "expectancy_points_net": 166.3,
+          "t_stat": 1.11
+        },
+        "EURUSD": {
+          "trades": 47,
+          "win_rate": 0.5957,
+          "expectancy_points_net": 148.29,
+          "t_stat": 0.86
+        },
+        "GBPUSD": {
+          "trades": 42,
+          "win_rate": 0.619,
+          "expectancy_points_net": 295.5,
+          "t_stat": 1.45
+        },
+        "NZDUSD": {
+          "trades": 28,
+          "win_rate": 0.5357,
+          "expectancy_points_net": 96.83,
+          "t_stat": 0.59
+        },
+        "USDCAD": {
+          "trades": 49,
+          "win_rate": 0.4898,
+          "expectancy_points_net": 10.91,
+          "t_stat": 0.07
+        },
+        "USDCHF": {
+          "trades": 49,
+          "win_rate": 0.551,
+          "expectancy_points_net": 62.77,
+          "t_stat": 0.44
+        },
+        "USDJPY": {
+          "trades": 46,
+          "win_rate": 0.5217,
+          "expectancy_points_net": 221.9,
+          "t_stat": 0.74
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 61,
+          "win_rate": 0.5738,
+          "expectancy_points_net": 198.01,
+          "t_stat": 1.31
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 82,
+          "win_rate": 0.5,
+          "expectancy_points_net": -42.08,
+          "t_stat": -0.28
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 65,
+          "win_rate": 0.6923,
+          "expectancy_points_net": 514.27,
+          "t_stat": 2.98
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 87,
+          "win_rate": 0.4828,
+          "expectancy_points_net": -5.65,
+          "t_stat": -0.05
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          198.01,
+          -42.08,
+          514.27,
+          -5.65
+        ],
+        "min_block_expectancy": -42.08,
+        "max_block_expectancy": 514.27
+      }
+    },
+    {
+      "name": "rsi_rev_7_30_70",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 313,
+        "win_rate": 0.524,
+        "expectancy_points_net": 24.01,
+        "expectancy_points_gross": 27.47,
+        "profit_factor": 1.04,
+        "total_points_net": 7514.0,
+        "avg_win_points": 1203.1,
+        "avg_loss_points": -1273.8,
+        "t_stat": 0.31,
+        "significant_at_95": false,
+        "avg_bars_held": 6.2,
+        "exit_mix": {
+          "tp": 164,
+          "sl": 149,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 0.71,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 178,
+        "obs_per_date": 1.76,
+        "t_stat_clustered_by_date": -0.61,
+        "mean_per_date": -59.34,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 148,
+        "win_rate": 0.4865,
+        "expectancy_points_net": 18.48,
+        "expectancy_points_gross": 21.86,
+        "profit_factor": 1.037,
+        "total_points_net": 2734.6,
+        "avg_win_points": 1071.9,
+        "avg_loss_points": -979.5,
+        "t_stat": 0.21,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 72,
+          "sl": 75,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": 0.25,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 85,
+        "obs_per_date": 1.74,
+        "t_stat_clustered_by_date": 0.41,
+        "mean_per_date": 46.42,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 62,
+          "win_rate": 0.5323,
+          "expectancy_points_net": 89.08,
+          "t_stat": 0.76
+        },
+        "EURUSD": {
+          "trades": 68,
+          "win_rate": 0.5147,
+          "expectancy_points_net": 26.18,
+          "t_stat": 0.19
+        },
+        "GBPUSD": {
+          "trades": 69,
+          "win_rate": 0.5217,
+          "expectancy_points_net": 35.0,
+          "t_stat": 0.22
+        },
+        "NZDUSD": {
+          "trades": 58,
+          "win_rate": 0.5345,
+          "expectancy_points_net": 53.53,
+          "t_stat": 0.48
+        },
+        "USDCAD": {
+          "trades": 59,
+          "win_rate": 0.4915,
+          "expectancy_points_net": -1.3,
+          "t_stat": -0.01
+        },
+        "USDCHF": {
+          "trades": 73,
+          "win_rate": 0.4932,
+          "expectancy_points_net": -5.77,
+          "t_stat": -0.05
+        },
+        "USDJPY": {
+          "trades": 72,
+          "win_rate": 0.5,
+          "expectancy_points_net": -28.84,
+          "t_stat": -0.12
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 100,
+          "win_rate": 0.54,
+          "expectancy_points_net": 82.81,
+          "t_stat": 0.73
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 130,
+          "win_rate": 0.4538,
+          "expectancy_points_net": -163.43,
+          "t_stat": -1.36
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 108,
+          "win_rate": 0.6296,
+          "expectancy_points_net": 277.57,
+          "t_stat": 1.98
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 123,
+          "win_rate": 0.4472,
+          "expectancy_points_net": -55.0,
+          "t_stat": -0.57
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          82.81,
+          -163.43,
+          277.57,
+          -55.0
+        ],
+        "min_block_expectancy": -163.43,
+        "max_block_expectancy": 277.57
+      }
+    },
+    {
+      "name": "rsi_rev_14_20_80",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 13,
+        "win_rate": 0.6154,
+        "expectancy_points_net": 324.38,
+        "expectancy_points_gross": 326.84,
+        "profit_factor": 1.542,
+        "total_points_net": 4217.0,
+        "avg_win_points": 1499.1,
+        "avg_loss_points": -1555.2,
+        "t_stat": 0.66,
+        "significant_at_95": false,
+        "avg_bars_held": 4.3,
+        "exit_mix": {
+          "tp": 8,
+          "sl": 5,
+          "timeout": 0
+        },
+        "symbols": 4,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": 2.03,
+        "symbol_cluster_threshold_95": 3.182,
+        "symbol_cluster_significant": false,
+        "entry_dates": 11,
+        "obs_per_date": 1.18,
+        "t_stat_clustered_by_date": 0.15,
+        "mean_per_date": 76.89,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.228,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 5,
+        "win_rate": 0.6,
+        "expectancy_points_net": 185.53,
+        "expectancy_points_gross": 188.53,
+        "profit_factor": 1.531,
+        "total_points_net": 927.6,
+        "avg_win_points": 891.8,
+        "avg_loss_points": -873.8,
+        "t_stat": 0.43,
+        "significant_at_95": false,
+        "avg_bars_held": 5.6,
+        "exit_mix": {
+          "tp": 3,
+          "sl": 2,
+          "timeout": 0
+        },
+        "symbols": 3,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": 1.11,
+        "symbol_cluster_threshold_95": 4.303,
+        "symbol_cluster_significant": false,
+        "entry_dates": 5,
+        "obs_per_date": 1.0,
+        "t_stat_clustered_by_date": 0.43,
+        "mean_per_date": 185.53,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.776,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "expectancy_points_net": 53.43,
+          "t_stat": 0.06
+        },
+        "GBPUSD": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "expectancy_points_net": 1090.11,
+          "t_stat": 0.0
+        },
+        "NZDUSD": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "expectancy_points_net": 813.32,
+          "t_stat": 0.0
+        },
+        "USDCAD": {
+          "trades": 3,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 400.43,
+          "t_stat": 0.6
+        },
+        "USDCHF": {
+          "trades": 6,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 470.25,
+          "t_stat": 0.9
+        },
+        "USDJPY": {
+          "trades": 5,
+          "win_rate": 0.4,
+          "expectancy_points_net": -177.69,
+          "t_stat": -0.15
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 5,
+          "win_rate": 0.8,
+          "expectancy_points_net": 647.35,
+          "t_stat": 1.76
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 6,
+          "win_rate": 0.5,
+          "expectancy_points_net": 65.19,
+          "t_stat": 0.07
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 2,
+          "win_rate": 0.5,
+          "expectancy_points_net": 294.54,
+          "t_stat": 0.18
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 5,
+          "win_rate": 0.6,
+          "expectancy_points_net": 185.53,
+          "t_stat": 0.43
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 4,
+        "expectancy_by_block": [
+          647.35,
+          65.19,
+          294.54,
+          185.53
+        ],
+        "min_block_expectancy": 65.19,
+        "max_block_expectancy": 647.35
+      }
+    },
+    {
+      "name": "rsi_rev_14_25_75",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 37,
+        "win_rate": 0.5676,
+        "expectancy_points_net": 60.03,
+        "expectancy_points_gross": 63.3,
+        "profit_factor": 1.097,
+        "total_points_net": 2220.9,
+        "avg_win_points": 1191.9,
+        "avg_loss_points": -1425.5,
+        "t_stat": 0.25,
+        "significant_at_95": false,
+        "avg_bars_held": 5.6,
+        "exit_mix": {
+          "tp": 21,
+          "sl": 16,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 1.66,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 29,
+        "obs_per_date": 1.28,
+        "t_stat_clustered_by_date": -0.14,
+        "mean_per_date": -36.66,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.086,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 20,
+        "win_rate": 0.7,
+        "expectancy_points_net": 461.03,
+        "expectancy_points_gross": 464.08,
+        "profit_factor": 2.583,
+        "total_points_net": 9220.6,
+        "avg_win_points": 1074.5,
+        "avg_loss_points": -970.5,
+        "t_stat": 1.98,
+        "significant_at_95": true,
+        "avg_bars_held": 3.1,
+        "exit_mix": {
+          "tp": 13,
+          "sl": 6,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 6,
+        "t_stat_clustered_by_symbol": 2.58,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 15,
+        "obs_per_date": 1.33,
+        "t_stat_clustered_by_date": 1.26,
+        "mean_per_date": 357.82,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.179,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 4,
+          "win_rate": 0.5,
+          "expectancy_points_net": 84.77,
+          "t_stat": 0.17
+        },
+        "EURUSD": {
+          "trades": 7,
+          "win_rate": 0.8571,
+          "expectancy_points_net": 702.11,
+          "t_stat": 1.4
+        },
+        "GBPUSD": {
+          "trades": 6,
+          "win_rate": 0.8333,
+          "expectancy_points_net": 818.16,
+          "t_stat": 2.02
+        },
+        "NZDUSD": {
+          "trades": 3,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 317.18,
+          "t_stat": 0.61
+        },
+        "USDCAD": {
+          "trades": 10,
+          "win_rate": 0.8,
+          "expectancy_points_net": 588.67,
+          "t_stat": 2.32
+        },
+        "USDCHF": {
+          "trades": 15,
+          "win_rate": 0.4,
+          "expectancy_points_net": -233.53,
+          "t_stat": -0.84
+        },
+        "USDJPY": {
+          "trades": 12,
+          "win_rate": 0.5,
+          "expectancy_points_net": -171.38,
+          "t_stat": -0.28
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 16,
+          "win_rate": 0.5625,
+          "expectancy_points_net": 165.95,
+          "t_stat": 0.66
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 15,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 219.01,
+          "t_stat": 0.46
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 8,
+          "win_rate": 0.5,
+          "expectancy_points_net": -120.79,
+          "t_stat": -0.21
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 18,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 359.3,
+          "t_stat": 1.45
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 3,
+        "expectancy_by_block": [
+          165.95,
+          219.01,
+          -120.79,
+          359.3
+        ],
+        "min_block_expectancy": -120.79,
+        "max_block_expectancy": 359.3
+      }
+    },
+    {
+      "name": "rsi_rev_14_30_70",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 107,
+        "win_rate": 0.5794,
+        "expectancy_points_net": 199.39,
+        "expectancy_points_gross": 202.9,
+        "profit_factor": 1.354,
+        "total_points_net": 21334.3,
+        "avg_win_points": 1315.0,
+        "avg_loss_points": -1337.7,
+        "t_stat": 1.4,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 62,
+          "sl": 45,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 2.19,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 72,
+        "obs_per_date": 1.49,
+        "t_stat_clustered_by_date": 0.7,
+        "mean_per_date": 116.21,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 48,
+        "win_rate": 0.6458,
+        "expectancy_points_net": 358.85,
+        "expectancy_points_gross": 362.02,
+        "profit_factor": 2.063,
+        "total_points_net": 17225.0,
+        "avg_win_points": 1078.2,
+        "avg_loss_points": -953.0,
+        "t_stat": 2.39,
+        "significant_at_95": true,
+        "avg_bars_held": 5.6,
+        "exit_mix": {
+          "tp": 31,
+          "sl": 16,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 6,
+        "t_stat_clustered_by_symbol": 2.68,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 32,
+        "obs_per_date": 1.5,
+        "t_stat_clustered_by_date": 1.52,
+        "mean_per_date": 281.9,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 15,
+          "win_rate": 0.7333,
+          "expectancy_points_net": 522.1,
+          "t_stat": 2.49
+        },
+        "EURUSD": {
+          "trades": 24,
+          "win_rate": 0.625,
+          "expectancy_points_net": 199.5,
+          "t_stat": 0.72
+        },
+        "GBPUSD": {
+          "trades": 22,
+          "win_rate": 0.7273,
+          "expectancy_points_net": 608.1,
+          "t_stat": 2.41
+        },
+        "NZDUSD": {
+          "trades": 13,
+          "win_rate": 0.6154,
+          "expectancy_points_net": 228.67,
+          "t_stat": 1.01
+        },
+        "USDCAD": {
+          "trades": 24,
+          "win_rate": 0.5417,
+          "expectancy_points_net": 83.81,
+          "t_stat": 0.39
+        },
+        "USDCHF": {
+          "trades": 31,
+          "win_rate": 0.5484,
+          "expectancy_points_net": 130.61,
+          "t_stat": 0.65
+        },
+        "USDJPY": {
+          "trades": 26,
+          "win_rate": 0.5,
+          "expectancy_points_net": 135.7,
+          "t_stat": 0.31
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 36,
+          "win_rate": 0.5833,
+          "expectancy_points_net": 296.37,
+          "t_stat": 1.56
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 48,
+          "win_rate": 0.5833,
+          "expectancy_points_net": 93.21,
+          "t_stat": 0.41
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 28,
+          "win_rate": 0.5714,
+          "expectancy_points_net": 319.28,
+          "t_stat": 1.0
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 43,
+          "win_rate": 0.6512,
+          "expectancy_points_net": 336.65,
+          "t_stat": 2.18
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 4,
+        "expectancy_by_block": [
+          296.37,
+          93.21,
+          319.28,
+          336.65
+        ],
+        "min_block_expectancy": 93.21,
+        "max_block_expectancy": 336.65
+      }
+    },
+    {
+      "name": "rsi_rev_21_20_80",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 2,
+        "win_rate": 0.5,
+        "expectancy_points_net": 1096.7,
+        "expectancy_points_gross": 1098.7,
+        "profit_factor": 2.509,
+        "total_points_net": 2193.4,
+        "avg_win_points": 3647.2,
+        "avg_loss_points": -1453.8,
+        "t_stat": 0.43,
+        "significant_at_95": false,
+        "avg_bars_held": 1.5,
+        "exit_mix": {
+          "tp": 1,
+          "sl": 1,
+          "timeout": 0
+        },
+        "symbols": 1,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": null,
+        "symbol_cluster_note": "too few symbols for clustered inference",
+        "entry_dates": 2,
+        "obs_per_date": 1.0,
+        "t_stat_clustered_by_date": null,
+        "date_cluster_note": "too few entry dates for clustered inference"
+      },
+      "out_of_sample": {
+        "trades": 1,
+        "win_rate": 1.0,
+        "expectancy_points_net": 937.21,
+        "expectancy_points_gross": 939.21,
+        "profit_factor": null,
+        "total_points_net": 937.2,
+        "avg_win_points": 937.2,
+        "avg_loss_points": null,
+        "t_stat": 0.0,
+        "significant_at_95": false,
+        "avg_bars_held": 12.0,
+        "exit_mix": {
+          "tp": 1,
+          "sl": 0,
+          "timeout": 0
+        },
+        "symbols": 1,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": null,
+        "symbol_cluster_note": "too few symbols for clustered inference",
+        "entry_dates": 1,
+        "obs_per_date": 1.0,
+        "t_stat_clustered_by_date": null,
+        "date_cluster_note": "too few entry dates for clustered inference"
+      },
+      "per_symbol": {
+        "USDCAD": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "expectancy_points_net": 937.21,
+          "t_stat": 0.0
+        },
+        "USDJPY": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "expectancy_points_net": 1096.7,
+          "t_stat": 0.43
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 0,
+          "win_rate": null,
+          "expectancy_points_net": null,
+          "t_stat": null
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 2,
+          "win_rate": 0.5,
+          "expectancy_points_net": 1096.7,
+          "t_stat": 0.43
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 0,
+          "win_rate": null,
+          "expectancy_points_net": null,
+          "t_stat": null
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 1,
+          "win_rate": 1.0,
+          "expectancy_points_net": 937.21,
+          "t_stat": 0.0
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 2,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          1096.7,
+          937.21
+        ],
+        "min_block_expectancy": 937.21,
+        "max_block_expectancy": 1096.7
+      }
+    },
+    {
+      "name": "rsi_rev_21_25_75",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 6,
+        "win_rate": 0.5,
+        "expectancy_points_net": -106.99,
+        "expectancy_points_gross": -104.66,
+        "profit_factor": 0.902,
+        "total_points_net": -642.0,
+        "avg_win_points": 1962.8,
+        "avg_loss_points": -2176.8,
+        "t_stat": -0.1,
+        "significant_at_95": false,
+        "avg_bars_held": 4.5,
+        "exit_mix": {
+          "tp": 3,
+          "sl": 3,
+          "timeout": 0
+        },
+        "symbols": 3,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": 0.29,
+        "symbol_cluster_threshold_95": 4.303,
+        "symbol_cluster_significant": false,
+        "entry_dates": 6,
+        "obs_per_date": 1.0,
+        "t_stat_clustered_by_date": -0.1,
+        "mean_per_date": -106.99,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.571,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 5,
+        "win_rate": 0.6,
+        "expectancy_points_net": 191.4,
+        "expectancy_points_gross": 194.4,
+        "profit_factor": 1.548,
+        "total_points_net": 957.0,
+        "avg_win_points": 901.5,
+        "avg_loss_points": -873.8,
+        "t_stat": 0.44,
+        "significant_at_95": false,
+        "avg_bars_held": 5.4,
+        "exit_mix": {
+          "tp": 3,
+          "sl": 2,
+          "timeout": 0
+        },
+        "symbols": 3,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": 1.1,
+        "symbol_cluster_threshold_95": 4.303,
+        "symbol_cluster_significant": false,
+        "entry_dates": 4,
+        "obs_per_date": 1.25,
+        "t_stat_clustered_by_date": 0.04,
+        "mean_per_date": 18.66,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 3.182,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "expectancy_points_net": 53.43,
+          "t_stat": 0.06
+        },
+        "NZDUSD": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "expectancy_points_net": 842.68,
+          "t_stat": 0.0
+        },
+        "USDCAD": {
+          "trades": 3,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 400.43,
+          "t_stat": 0.6
+        },
+        "USDCHF": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "expectancy_points_net": -399.96,
+          "t_stat": -0.28
+        },
+        "USDJPY": {
+          "trades": 3,
+          "win_rate": 0.3333,
+          "expectancy_points_net": -345.29,
+          "t_stat": -0.17
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 1,
+          "win_rate": 1.0,
+          "expectancy_points_net": 1047.43,
+          "t_stat": 0.0
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 4,
+          "win_rate": 0.5,
+          "expectancy_points_net": 39.49,
+          "t_stat": 0.03
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 1,
+          "win_rate": 0.0,
+          "expectancy_points_net": -1847.36,
+          "t_stat": 0.0
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 5,
+          "win_rate": 0.6,
+          "expectancy_points_net": 191.4,
+          "t_stat": 0.44
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 3,
+        "expectancy_by_block": [
+          1047.43,
+          39.49,
+          -1847.36,
+          191.4
+        ],
+        "min_block_expectancy": -1847.36,
+        "max_block_expectancy": 1047.43
+      }
+    },
+    {
+      "name": "rsi_rev_21_30_70",
+      "family": "rsi_reversion",
+      "in_sample": {
+        "trades": 38,
+        "win_rate": 0.5263,
+        "expectancy_points_net": -48.18,
+        "expectancy_points_gross": -45.07,
+        "profit_factor": 0.937,
+        "total_points_net": -1830.8,
+        "avg_win_points": 1354.9,
+        "avg_loss_points": -1607.2,
+        "t_stat": -0.17,
+        "significant_at_95": false,
+        "avg_bars_held": 6.8,
+        "exit_mix": {
+          "tp": 20,
+          "sl": 18,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 4,
+        "t_stat_clustered_by_symbol": 1.23,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 32,
+        "obs_per_date": 1.19,
+        "t_stat_clustered_by_date": -0.82,
+        "mean_per_date": -233.52,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 14,
+        "win_rate": 0.7857,
+        "expectancy_points_net": 595.69,
+        "expectancy_points_gross": 598.84,
+        "profit_factor": 4.36,
+        "total_points_net": 8339.7,
+        "avg_win_points": 983.8,
+        "avg_loss_points": -827.4,
+        "t_stat": 2.65,
+        "significant_at_95": true,
+        "avg_bars_held": 3.4,
+        "exit_mix": {
+          "tp": 10,
+          "sl": 3,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 7,
+        "t_stat_clustered_by_symbol": 5.13,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 9,
+        "obs_per_date": 1.56,
+        "t_stat_clustered_by_date": 1.75,
+        "mean_per_date": 498.5,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.306,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 5,
+          "win_rate": 0.6,
+          "expectancy_points_net": 285.16,
+          "t_stat": 0.66
+        },
+        "EURUSD": {
+          "trades": 5,
+          "win_rate": 0.6,
+          "expectancy_points_net": 171.25,
+          "t_stat": 0.19
+        },
+        "GBPUSD": {
+          "trades": 4,
+          "win_rate": 0.75,
+          "expectancy_points_net": 666.25,
+          "t_stat": 1.1
+        },
+        "NZDUSD": {
+          "trades": 2,
+          "win_rate": 1.0,
+          "expectancy_points_net": 838.66,
+          "t_stat": 20.2
+        },
+        "USDCAD": {
+          "trades": 9,
+          "win_rate": 0.7778,
+          "expectancy_points_net": 501.74,
+          "t_stat": 1.74
+        },
+        "USDCHF": {
+          "trades": 16,
+          "win_rate": 0.5,
+          "expectancy_points_net": 21.77,
+          "t_stat": 0.07
+        },
+        "USDJPY": {
+          "trades": 11,
+          "win_rate": 0.4545,
+          "expectancy_points_net": -452.67,
+          "t_stat": -0.62
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 11,
+          "win_rate": 0.5455,
+          "expectancy_points_net": 113.29,
+          "t_stat": 0.36
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 20,
+          "win_rate": 0.6,
+          "expectancy_points_net": -13.3,
+          "t_stat": -0.03
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 8,
+          "win_rate": 0.375,
+          "expectancy_points_net": -157.43,
+          "t_stat": -0.22
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 13,
+          "win_rate": 0.7692,
+          "expectancy_points_net": 522.17,
+          "t_stat": 2.27
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          113.29,
+          -13.3,
+          -157.43,
+          522.17
+        ],
+        "min_block_expectancy": -157.43,
+        "max_block_expectancy": 522.17
+      }
+    },
+    {
+      "name": "rsi_mom_14_30_70",
+      "family": "rsi_momentum",
+      "in_sample": {
+        "trades": 107,
+        "win_rate": 0.4112,
+        "expectancy_points_net": -233.55,
+        "expectancy_points_gross": -230.04,
+        "profit_factor": 0.7,
+        "total_points_net": -24989.8,
+        "avg_win_points": 1327.8,
+        "avg_loss_points": -1324.0,
+        "t_stat": -1.65,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 44,
+          "sl": 63,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -2.61,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 72,
+        "obs_per_date": 1.49,
+        "t_stat_clustered_by_date": -0.99,
+        "mean_per_date": -163.43,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 48,
+        "win_rate": 0.3542,
+        "expectancy_points_net": -365.19,
+        "expectancy_points_gross": -362.02,
+        "profit_factor": 0.479,
+        "total_points_net": -17529.0,
+        "avg_win_points": 947.9,
+        "avg_loss_points": -1085.3,
+        "t_stat": -2.43,
+        "significant_at_95": true,
+        "avg_bars_held": 5.6,
+        "exit_mix": {
+          "tp": 16,
+          "sl": 31,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -2.71,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 32,
+        "obs_per_date": 1.5,
+        "t_stat_clustered_by_date": -1.55,
+        "mean_per_date": -287.96,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 15,
+          "win_rate": 0.2667,
+          "expectancy_points_net": -530.1,
+          "t_stat": -2.53
+        },
+        "EURUSD": {
+          "trades": 24,
+          "win_rate": 0.375,
+          "expectancy_points_net": -215.5,
+          "t_stat": -0.78
+        },
+        "GBPUSD": {
+          "trades": 22,
+          "win_rate": 0.2727,
+          "expectancy_points_net": -612.1,
+          "t_stat": -2.43
+        },
+        "NZDUSD": {
+          "trades": 13,
+          "win_rate": 0.3846,
+          "expectancy_points_net": -234.67,
+          "t_stat": -1.03
+        },
+        "USDCAD": {
+          "trades": 24,
+          "win_rate": 0.4583,
+          "expectancy_points_net": -87.81,
+          "t_stat": -0.41
+        },
+        "USDCHF": {
+          "trades": 31,
+          "win_rate": 0.4516,
+          "expectancy_points_net": -136.61,
+          "t_stat": -0.68
+        },
+        "USDJPY": {
+          "trades": 26,
+          "win_rate": 0.4615,
+          "expectancy_points_net": -251.38,
+          "t_stat": -0.58
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 36,
+          "win_rate": 0.4167,
+          "expectancy_points_net": -302.7,
+          "t_stat": -1.6
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 48,
+          "win_rate": 0.3958,
+          "expectancy_points_net": -160.24,
+          "t_stat": -0.71
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 28,
+          "win_rate": 0.4286,
+          "expectancy_points_net": -327.57,
+          "t_stat": -1.03
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 43,
+          "win_rate": 0.3488,
+          "expectancy_points_net": -343.21,
+          "t_stat": -2.22
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -302.7,
+          -160.24,
+          -327.57,
+          -343.21
+        ],
+        "min_block_expectancy": -343.21,
+        "max_block_expectancy": -160.24
+      }
+    },
+    {
+      "name": "rsi_mom_14_40_60",
+      "family": "rsi_momentum",
+      "in_sample": {
+        "trades": 360,
+        "win_rate": 0.475,
+        "expectancy_points_net": -25.81,
+        "expectancy_points_gross": -22.35,
+        "profit_factor": 0.958,
+        "total_points_net": -9291.7,
+        "avg_win_points": 1247.8,
+        "avg_loss_points": -1178.1,
+        "t_stat": -0.37,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 171,
+          "sl": 189,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": -0.72,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 204,
+        "obs_per_date": 1.76,
+        "t_stat_clustered_by_date": -0.63,
+        "mean_per_date": -53.45,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 171,
+        "win_rate": 0.4386,
+        "expectancy_points_net": -184.29,
+        "expectancy_points_gross": -180.94,
+        "profit_factor": 0.701,
+        "total_points_net": -31513.1,
+        "avg_win_points": 983.5,
+        "avg_loss_points": -1096.6,
+        "t_stat": -2.2,
+        "significant_at_95": true,
+        "avg_bars_held": 6.5,
+        "exit_mix": {
+          "tp": 74,
+          "sl": 95,
+          "timeout": 2
+        },
+        "symbols": 7,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -3.05,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 97,
+        "obs_per_date": 1.76,
+        "t_stat_clustered_by_date": -1.74,
+        "mean_per_date": -184.19,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 67,
+          "win_rate": 0.4627,
+          "expectancy_points_net": -92.78,
+          "t_stat": -0.82
+        },
+        "EURUSD": {
+          "trades": 78,
+          "win_rate": 0.4487,
+          "expectancy_points_net": -85.69,
+          "t_stat": -0.65
+        },
+        "GBPUSD": {
+          "trades": 80,
+          "win_rate": 0.45,
+          "expectancy_points_net": -117.58,
+          "t_stat": -0.8
+        },
+        "NZDUSD": {
+          "trades": 66,
+          "win_rate": 0.4242,
+          "expectancy_points_net": -138.58,
+          "t_stat": -1.34
+        },
+        "USDCAD": {
+          "trades": 74,
+          "win_rate": 0.473,
+          "expectancy_points_net": -54.3,
+          "t_stat": -0.44
+        },
+        "USDCHF": {
+          "trades": 90,
+          "win_rate": 0.4778,
+          "expectancy_points_net": -64.96,
+          "t_stat": -0.61
+        },
+        "USDJPY": {
+          "trades": 76,
+          "win_rate": 0.5,
+          "expectancy_points_net": 6.74,
+          "t_stat": 0.03
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 116,
+          "win_rate": 0.4569,
+          "expectancy_points_net": -114.92,
+          "t_stat": -1.09
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 149,
+          "win_rate": 0.5302,
+          "expectancy_points_net": 124.67,
+          "t_stat": 1.15
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 122,
+          "win_rate": 0.4098,
+          "expectancy_points_net": -157.73,
+          "t_stat": -1.21
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 144,
+          "win_rate": 0.4444,
+          "expectancy_points_net": -186.15,
+          "t_stat": -2.07
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -114.92,
+          124.67,
+          -157.73,
+          -186.15
+        ],
+        "min_block_expectancy": -186.15,
+        "max_block_expectancy": 124.67
+      }
+    },
+    {
+      "name": "sma_5_20",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 192,
+        "win_rate": 0.4896,
+        "expectancy_points_net": -6.54,
+        "expectancy_points_gross": -3.08,
+        "profit_factor": 0.989,
+        "total_points_net": -1255.9,
+        "avg_win_points": 1155.6,
+        "avg_loss_points": -1121.2,
+        "t_stat": -0.07,
+        "significant_at_95": false,
+        "avg_bars_held": 6.3,
+        "exit_mix": {
+          "tp": 94,
+          "sl": 98,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 4,
+        "t_stat_clustered_by_symbol": 0.27,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 150,
+        "obs_per_date": 1.28,
+        "t_stat_clustered_by_date": 0.27,
+        "mean_per_date": 26.22,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 92,
+        "win_rate": 0.5326,
+        "expectancy_points_net": 45.66,
+        "expectancy_points_gross": 49.12,
+        "profit_factor": 1.093,
+        "total_points_net": 4200.8,
+        "avg_win_points": 1011.7,
+        "avg_loss_points": -1055.1,
+        "t_stat": 0.39,
+        "significant_at_95": false,
+        "avg_bars_held": 6.2,
+        "exit_mix": {
+          "tp": 46,
+          "sl": 42,
+          "timeout": 4
+        },
+        "symbols": 7,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": 0.48,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 76,
+        "obs_per_date": 1.21,
+        "t_stat_clustered_by_date": -0.12,
+        "mean_per_date": -15.39,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 41,
+          "win_rate": 0.3659,
+          "expectancy_points_net": -202.56,
+          "t_stat": -1.44
+        },
+        "EURUSD": {
+          "trades": 42,
+          "win_rate": 0.619,
+          "expectancy_points_net": 199.86,
+          "t_stat": 1.23
+        },
+        "GBPUSD": {
+          "trades": 43,
+          "win_rate": 0.5116,
+          "expectancy_points_net": 12.05,
+          "t_stat": 0.06
+        },
+        "NZDUSD": {
+          "trades": 42,
+          "win_rate": 0.5238,
+          "expectancy_points_net": 46.08,
+          "t_stat": 0.36
+        },
+        "USDCAD": {
+          "trades": 45,
+          "win_rate": 0.4222,
+          "expectancy_points_net": -164.4,
+          "t_stat": -1.02
+        },
+        "USDCHF": {
+          "trades": 39,
+          "win_rate": 0.5385,
+          "expectancy_points_net": 85.08,
+          "t_stat": 0.58
+        },
+        "USDJPY": {
+          "trades": 32,
+          "win_rate": 0.5625,
+          "expectancy_points_net": 140.08,
+          "t_stat": 0.4
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 48,
+          "win_rate": 0.6042,
+          "expectancy_points_net": 263.31,
+          "t_stat": 1.71
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 72,
+          "win_rate": 0.5278,
+          "expectancy_points_net": 45.29,
+          "t_stat": 0.32
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 91,
+          "win_rate": 0.3516,
+          "expectancy_points_net": -274.43,
+          "t_stat": -2.16
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 73,
+          "win_rate": 0.6027,
+          "expectancy_points_net": 164.62,
+          "t_stat": 1.22
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 3,
+        "expectancy_by_block": [
+          263.31,
+          45.29,
+          -274.43,
+          164.62
+        ],
+        "min_block_expectancy": -274.43,
+        "max_block_expectancy": 263.31
+      }
+    },
+    {
+      "name": "ema_5_20",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 156,
+        "win_rate": 0.4808,
+        "expectancy_points_net": -21.66,
+        "expectancy_points_gross": -18.11,
+        "profit_factor": 0.964,
+        "total_points_net": -3378.5,
+        "avg_win_points": 1198.6,
+        "avg_loss_points": -1151.5,
+        "t_stat": -0.21,
+        "significant_at_95": false,
+        "avg_bars_held": 6.5,
+        "exit_mix": {
+          "tp": 75,
+          "sl": 81,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": -0.23,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 120,
+        "obs_per_date": 1.3,
+        "t_stat_clustered_by_date": 0.05,
+        "mean_per_date": 5.48,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 77,
+        "win_rate": 0.5714,
+        "expectancy_points_net": 150.57,
+        "expectancy_points_gross": 153.9,
+        "profit_factor": 1.342,
+        "total_points_net": 11594.0,
+        "avg_win_points": 1033.3,
+        "avg_loss_points": -1026.5,
+        "t_stat": 1.19,
+        "significant_at_95": false,
+        "avg_bars_held": 7.1,
+        "exit_mix": {
+          "tp": 42,
+          "sl": 32,
+          "timeout": 3
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 1.28,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 61,
+        "obs_per_date": 1.26,
+        "t_stat_clustered_by_date": 0.6,
+        "mean_per_date": 87.98,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 40,
+          "win_rate": 0.475,
+          "expectancy_points_net": 28.52,
+          "t_stat": 0.2
+        },
+        "EURUSD": {
+          "trades": 33,
+          "win_rate": 0.5455,
+          "expectancy_points_net": 64.86,
+          "t_stat": 0.34
+        },
+        "GBPUSD": {
+          "trades": 28,
+          "win_rate": 0.5714,
+          "expectancy_points_net": 234.83,
+          "t_stat": 0.92
+        },
+        "NZDUSD": {
+          "trades": 36,
+          "win_rate": 0.5278,
+          "expectancy_points_net": 24.68,
+          "t_stat": 0.17
+        },
+        "USDCAD": {
+          "trades": 33,
+          "win_rate": 0.4545,
+          "expectancy_points_net": -77.78,
+          "t_stat": -0.42
+        },
+        "USDCHF": {
+          "trades": 29,
+          "win_rate": 0.5172,
+          "expectancy_points_net": 35.29,
+          "t_stat": 0.2
+        },
+        "USDJPY": {
+          "trades": 34,
+          "win_rate": 0.5,
+          "expectancy_points_net": -29.0,
+          "t_stat": -0.08
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 39,
+          "win_rate": 0.5641,
+          "expectancy_points_net": 223.45,
+          "t_stat": 1.32
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 56,
+          "win_rate": 0.5179,
+          "expectancy_points_net": 27.0,
+          "t_stat": 0.15
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 80,
+          "win_rate": 0.3875,
+          "expectancy_points_net": -206.65,
+          "t_stat": -1.45
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 58,
+          "win_rate": 0.6379,
+          "expectancy_points_net": 250.36,
+          "t_stat": 1.68
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 3,
+        "expectancy_by_block": [
+          223.45,
+          27.0,
+          -206.65,
+          250.36
+        ],
+        "min_block_expectancy": -206.65,
+        "max_block_expectancy": 250.36
+      }
+    },
+    {
+      "name": "sma_10_50",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 86,
+        "win_rate": 0.5349,
+        "expectancy_points_net": 153.46,
+        "expectancy_points_gross": 156.85,
+        "profit_factor": 1.303,
+        "total_points_net": 13197.9,
+        "avg_win_points": 1232.5,
+        "avg_loss_points": -1087.4,
+        "t_stat": 1.13,
+        "significant_at_95": false,
+        "avg_bars_held": 8.2,
+        "exit_mix": {
+          "tp": 46,
+          "sl": 40,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 6,
+        "t_stat_clustered_by_symbol": 2.23,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 74,
+        "obs_per_date": 1.16,
+        "t_stat_clustered_by_date": 0.91,
+        "mean_per_date": 131.39,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 46,
+        "win_rate": 0.6957,
+        "expectancy_points_net": 280.18,
+        "expectancy_points_gross": 283.81,
+        "profit_factor": 1.743,
+        "total_points_net": 12888.1,
+        "avg_win_points": 945.1,
+        "avg_loss_points": -1239.7,
+        "t_stat": 1.77,
+        "significant_at_95": false,
+        "avg_bars_held": 6.2,
+        "exit_mix": {
+          "tp": 31,
+          "sl": 14,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 6,
+        "t_stat_clustered_by_symbol": 1.32,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 37,
+        "obs_per_date": 1.24,
+        "t_stat_clustered_by_date": 1.55,
+        "mean_per_date": 269.58,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 21,
+          "win_rate": 0.5238,
+          "expectancy_points_net": 57.15,
+          "t_stat": 0.27
+        },
+        "EURUSD": {
+          "trades": 19,
+          "win_rate": 0.5789,
+          "expectancy_points_net": 147.8,
+          "t_stat": 0.64
+        },
+        "GBPUSD": {
+          "trades": 19,
+          "win_rate": 0.6842,
+          "expectancy_points_net": 491.65,
+          "t_stat": 1.79
+        },
+        "NZDUSD": {
+          "trades": 20,
+          "win_rate": 0.6,
+          "expectancy_points_net": 178.22,
+          "t_stat": 0.87
+        },
+        "USDCAD": {
+          "trades": 17,
+          "win_rate": 0.7059,
+          "expectancy_points_net": 375.68,
+          "t_stat": 1.48
+        },
+        "USDCHF": {
+          "trades": 18,
+          "win_rate": 0.5556,
+          "expectancy_points_net": 110.48,
+          "t_stat": 0.53
+        },
+        "USDJPY": {
+          "trades": 18,
+          "win_rate": 0.5,
+          "expectancy_points_net": 44.27,
+          "t_stat": 0.09
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 29,
+          "win_rate": 0.4828,
+          "expectancy_points_net": 26.08,
+          "t_stat": 0.12
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 30,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 420.02,
+          "t_stat": 1.88
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 33,
+          "win_rate": 0.4242,
+          "expectancy_points_net": -70.5,
+          "t_stat": -0.3
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 40,
+          "win_rate": 0.75,
+          "expectancy_points_net": 376.39,
+          "t_stat": 2.27
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 3,
+        "expectancy_by_block": [
+          26.08,
+          420.02,
+          -70.5,
+          376.39
+        ],
+        "min_block_expectancy": -70.5,
+        "max_block_expectancy": 420.02
+      }
+    },
+    {
+      "name": "ema_10_50",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 85,
+        "win_rate": 0.5765,
+        "expectancy_points_net": 242.87,
+        "expectancy_points_gross": 246.3,
+        "profit_factor": 1.551,
+        "total_points_net": 20643.6,
+        "avg_win_points": 1185.8,
+        "avg_loss_points": -1040.6,
+        "t_stat": 1.86,
+        "significant_at_95": false,
+        "avg_bars_held": 7.6,
+        "exit_mix": {
+          "tp": 49,
+          "sl": 36,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 6,
+        "t_stat_clustered_by_symbol": 2.29,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 72,
+        "obs_per_date": 1.18,
+        "t_stat_clustered_by_date": 1.21,
+        "mean_per_date": 168.92,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 55,
+        "win_rate": 0.5091,
+        "expectancy_points_net": -63.07,
+        "expectancy_points_gross": -59.63,
+        "profit_factor": 0.89,
+        "total_points_net": -3468.7,
+        "avg_win_points": 1004.3,
+        "avg_loss_points": -1170.0,
+        "t_stat": -0.39,
+        "significant_at_95": false,
+        "avg_bars_held": 7.5,
+        "exit_mix": {
+          "tp": 28,
+          "sl": 27,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": -0.14,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 49,
+        "obs_per_date": 1.12,
+        "t_stat_clustered_by_date": -0.81,
+        "mean_per_date": -135.46,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 25,
+          "win_rate": 0.56,
+          "expectancy_points_net": 141.15,
+          "t_stat": 0.75
+        },
+        "EURUSD": {
+          "trades": 18,
+          "win_rate": 0.6111,
+          "expectancy_points_net": 142.43,
+          "t_stat": 0.63
+        },
+        "GBPUSD": {
+          "trades": 20,
+          "win_rate": 0.6,
+          "expectancy_points_net": 261.68,
+          "t_stat": 0.91
+        },
+        "NZDUSD": {
+          "trades": 26,
+          "win_rate": 0.5,
+          "expectancy_points_net": 47.04,
+          "t_stat": 0.27
+        },
+        "USDCAD": {
+          "trades": 17,
+          "win_rate": 0.7059,
+          "expectancy_points_net": 338.92,
+          "t_stat": 1.39
+        },
+        "USDCHF": {
+          "trades": 17,
+          "win_rate": 0.3529,
+          "expectancy_points_net": -222.95,
+          "t_stat": -1.09
+        },
+        "USDJPY": {
+          "trades": 17,
+          "win_rate": 0.5294,
+          "expectancy_points_net": 156.12,
+          "t_stat": 0.28
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 26,
+          "win_rate": 0.6538,
+          "expectancy_points_net": 436.8,
+          "t_stat": 2.22
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 28,
+          "win_rate": 0.75,
+          "expectancy_points_net": 583.98,
+          "t_stat": 2.65
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 37,
+          "win_rate": 0.2973,
+          "expectancy_points_net": -343.56,
+          "t_stat": -1.74
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 49,
+          "win_rate": 0.5714,
+          "expectancy_points_net": 44.45,
+          "t_stat": 0.26
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 3,
+        "expectancy_by_block": [
+          436.8,
+          583.98,
+          -343.56,
+          44.45
+        ],
+        "min_block_expectancy": -343.56,
+        "max_block_expectancy": 583.98
+      }
+    },
+    {
+      "name": "sma_20_50",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 72,
+        "win_rate": 0.5694,
+        "expectancy_points_net": 150.54,
+        "expectancy_points_gross": 154.0,
+        "profit_factor": 1.308,
+        "total_points_net": 10838.9,
+        "avg_win_points": 1122.6,
+        "avg_loss_points": -1135.1,
+        "t_stat": 1.03,
+        "significant_at_95": false,
+        "avg_bars_held": 6.4,
+        "exit_mix": {
+          "tp": 41,
+          "sl": 31,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 1.74,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 63,
+        "obs_per_date": 1.14,
+        "t_stat_clustered_by_date": 1.03,
+        "mean_per_date": 157.27,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 41,
+        "win_rate": 0.6341,
+        "expectancy_points_net": 172.98,
+        "expectancy_points_gross": 176.42,
+        "profit_factor": 1.382,
+        "total_points_net": 7092.2,
+        "avg_win_points": 987.5,
+        "avg_loss_points": -1238.8,
+        "t_stat": 0.95,
+        "significant_at_95": false,
+        "avg_bars_held": 6.6,
+        "exit_mix": {
+          "tp": 26,
+          "sl": 15,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 0.98,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 37,
+        "obs_per_date": 1.11,
+        "t_stat_clustered_by_date": 0.78,
+        "mean_per_date": 151.09,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 19,
+          "win_rate": 0.4737,
+          "expectancy_points_net": -93.03,
+          "t_stat": -0.44
+        },
+        "EURUSD": {
+          "trades": 16,
+          "win_rate": 0.6875,
+          "expectancy_points_net": 368.28,
+          "t_stat": 1.61
+        },
+        "GBPUSD": {
+          "trades": 15,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 491.24,
+          "t_stat": 1.61
+        },
+        "NZDUSD": {
+          "trades": 17,
+          "win_rate": 0.7059,
+          "expectancy_points_net": 308.14,
+          "t_stat": 1.62
+        },
+        "USDCAD": {
+          "trades": 17,
+          "win_rate": 0.5294,
+          "expectancy_points_net": -14.32,
+          "t_stat": -0.05
+        },
+        "USDCHF": {
+          "trades": 13,
+          "win_rate": 0.6923,
+          "expectancy_points_net": 342.33,
+          "t_stat": 1.51
+        },
+        "USDJPY": {
+          "trades": 16,
+          "win_rate": 0.4375,
+          "expectancy_points_net": -187.98,
+          "t_stat": -0.35
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 24,
+          "win_rate": 0.625,
+          "expectancy_points_net": 276.99,
+          "t_stat": 1.25
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 26,
+          "win_rate": 0.5385,
+          "expectancy_points_net": 84.13,
+          "t_stat": 0.34
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 28,
+          "win_rate": 0.5357,
+          "expectancy_points_net": 37.2,
+          "t_stat": 0.14
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 35,
+          "win_rate": 0.6571,
+          "expectancy_points_net": 230.12,
+          "t_stat": 1.2
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 4,
+        "expectancy_by_block": [
+          276.99,
+          84.13,
+          37.2,
+          230.12
+        ],
+        "min_block_expectancy": 37.2,
+        "max_block_expectancy": 276.99
+      }
+    },
+    {
+      "name": "ema_20_50",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 62,
+        "win_rate": 0.5484,
+        "expectancy_points_net": 147.71,
+        "expectancy_points_gross": 151.31,
+        "profit_factor": 1.313,
+        "total_points_net": 9158.1,
+        "avg_win_points": 1128.8,
+        "avg_loss_points": -1043.7,
+        "t_stat": 0.98,
+        "significant_at_95": false,
+        "avg_bars_held": 7.4,
+        "exit_mix": {
+          "tp": 34,
+          "sl": 28,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 1.63,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 53,
+        "obs_per_date": 1.17,
+        "t_stat_clustered_by_date": 1.27,
+        "mean_per_date": 207.72,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 38,
+        "win_rate": 0.7105,
+        "expectancy_points_net": 331.78,
+        "expectancy_points_gross": 335.22,
+        "profit_factor": 1.896,
+        "total_points_net": 12607.5,
+        "avg_win_points": 988.0,
+        "avg_loss_points": -1279.0,
+        "t_stat": 1.84,
+        "significant_at_95": false,
+        "avg_bars_held": 7.5,
+        "exit_mix": {
+          "tp": 27,
+          "sl": 11,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 1.0,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 36,
+        "obs_per_date": 1.06,
+        "t_stat_clustered_by_date": 1.55,
+        "mean_per_date": 291.4,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 17,
+          "win_rate": 0.5882,
+          "expectancy_points_net": 185.32,
+          "t_stat": 0.82
+        },
+        "EURUSD": {
+          "trades": 15,
+          "win_rate": 0.6,
+          "expectancy_points_net": 189.54,
+          "t_stat": 0.75
+        },
+        "GBPUSD": {
+          "trades": 15,
+          "win_rate": 0.6,
+          "expectancy_points_net": 307.04,
+          "t_stat": 0.92
+        },
+        "NZDUSD": {
+          "trades": 19,
+          "win_rate": 0.6316,
+          "expectancy_points_net": 242.46,
+          "t_stat": 1.17
+        },
+        "USDCAD": {
+          "trades": 13,
+          "win_rate": 0.7692,
+          "expectancy_points_net": 415.54,
+          "t_stat": 1.71
+        },
+        "USDCHF": {
+          "trades": 11,
+          "win_rate": 0.5455,
+          "expectancy_points_net": 73.62,
+          "t_stat": 0.27
+        },
+        "USDJPY": {
+          "trades": 10,
+          "win_rate": 0.5,
+          "expectancy_points_net": 34.79,
+          "t_stat": 0.05
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 20,
+          "win_rate": 0.45,
+          "expectancy_points_net": -37.32,
+          "t_stat": -0.14
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 22,
+          "win_rate": 0.7727,
+          "expectancy_points_net": 587.12,
+          "t_stat": 2.75
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 26,
+          "win_rate": 0.3846,
+          "expectancy_points_net": -149.23,
+          "t_stat": -0.62
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 32,
+          "win_rate": 0.7812,
+          "expectancy_points_net": 421.1,
+          "t_stat": 2.13
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          -37.32,
+          587.12,
+          -149.23,
+          421.1
+        ],
+        "min_block_expectancy": -149.23,
+        "max_block_expectancy": 587.12
+      }
+    },
+    {
+      "name": "sma_20_100",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 47,
+        "win_rate": 0.5319,
+        "expectancy_points_net": 46.53,
+        "expectancy_points_gross": 50.25,
+        "profit_factor": 1.087,
+        "total_points_net": 2186.9,
+        "avg_win_points": 1091.2,
+        "avg_loss_points": -1140.7,
+        "t_stat": 0.25,
+        "significant_at_95": false,
+        "avg_bars_held": 7.1,
+        "exit_mix": {
+          "tp": 25,
+          "sl": 22,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 4,
+        "t_stat_clustered_by_symbol": 0.31,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 41,
+        "obs_per_date": 1.15,
+        "t_stat_clustered_by_date": 0.4,
+        "mean_per_date": 82.89,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 33,
+        "win_rate": 0.4545,
+        "expectancy_points_net": -151.82,
+        "expectancy_points_gross": -148.21,
+        "profit_factor": 0.741,
+        "total_points_net": -5010.0,
+        "avg_win_points": 954.8,
+        "avg_loss_points": -1074.0,
+        "t_stat": -0.79,
+        "significant_at_95": false,
+        "avg_bars_held": 6.5,
+        "exit_mix": {
+          "tp": 15,
+          "sl": 18,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.15,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 29,
+        "obs_per_date": 1.14,
+        "t_stat_clustered_by_date": -0.82,
+        "mean_per_date": -168.53,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.086,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 11,
+          "win_rate": 0.3636,
+          "expectancy_points_net": -204.51,
+          "t_stat": -0.77
+        },
+        "EURUSD": {
+          "trades": 15,
+          "win_rate": 0.3333,
+          "expectancy_points_net": -276.19,
+          "t_stat": -1.17
+        },
+        "GBPUSD": {
+          "trades": 12,
+          "win_rate": 0.75,
+          "expectancy_points_net": 549.25,
+          "t_stat": 1.59
+        },
+        "NZDUSD": {
+          "trades": 13,
+          "win_rate": 0.6923,
+          "expectancy_points_net": 276.1,
+          "t_stat": 1.29
+        },
+        "USDCAD": {
+          "trades": 11,
+          "win_rate": 0.5455,
+          "expectancy_points_net": 202.79,
+          "t_stat": 0.67
+        },
+        "USDCHF": {
+          "trades": 9,
+          "win_rate": 0.4444,
+          "expectancy_points_net": -82.26,
+          "t_stat": -0.27
+        },
+        "USDJPY": {
+          "trades": 9,
+          "win_rate": 0.3333,
+          "expectancy_points_net": -900.13,
+          "t_stat": -1.2
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 16,
+          "win_rate": 0.5,
+          "expectancy_points_net": -132.44,
+          "t_stat": -0.43
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 20,
+          "win_rate": 0.4,
+          "expectancy_points_net": -234.01,
+          "t_stat": -0.85
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 15,
+          "win_rate": 0.8,
+          "expectancy_points_net": 750.47,
+          "t_stat": 2.68
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 29,
+          "win_rate": 0.4138,
+          "expectancy_points_net": -251.07,
+          "t_stat": -1.23
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -132.44,
+          -234.01,
+          750.47,
+          -251.07
+        ],
+        "min_block_expectancy": -251.07,
+        "max_block_expectancy": 750.47
+      }
+    },
+    {
+      "name": "ema_20_100",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 48,
+        "win_rate": 0.5208,
+        "expectancy_points_net": 110.91,
+        "expectancy_points_gross": 114.66,
+        "profit_factor": 1.216,
+        "total_points_net": 5323.5,
+        "avg_win_points": 1197.0,
+        "avg_loss_points": -1069.6,
+        "t_stat": 0.6,
+        "significant_at_95": false,
+        "avg_bars_held": 10.2,
+        "exit_mix": {
+          "tp": 25,
+          "sl": 23,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 4,
+        "t_stat_clustered_by_symbol": 0.91,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 46,
+        "obs_per_date": 1.04,
+        "t_stat_clustered_by_date": 0.47,
+        "mean_per_date": 87.96,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 31,
+        "win_rate": 0.5484,
+        "expectancy_points_net": 32.55,
+        "expectancy_points_gross": 36.23,
+        "profit_factor": 1.069,
+        "total_points_net": 1009.1,
+        "avg_win_points": 919.8,
+        "avg_loss_points": -1044.9,
+        "t_stat": 0.18,
+        "significant_at_95": false,
+        "avg_bars_held": 8.7,
+        "exit_mix": {
+          "tp": 17,
+          "sl": 14,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 4,
+        "t_stat_clustered_by_symbol": -0.79,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 29,
+        "obs_per_date": 1.07,
+        "t_stat_clustered_by_date": 0.3,
+        "mean_per_date": 55.71,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.086,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 11,
+          "win_rate": 0.4545,
+          "expectancy_points_net": -79.77,
+          "t_stat": -0.3
+        },
+        "EURUSD": {
+          "trades": 15,
+          "win_rate": 0.2667,
+          "expectancy_points_net": -349.49,
+          "t_stat": -1.5
+        },
+        "GBPUSD": {
+          "trades": 11,
+          "win_rate": 0.8182,
+          "expectancy_points_net": 767.01,
+          "t_stat": 2.4
+        },
+        "NZDUSD": {
+          "trades": 14,
+          "win_rate": 0.6429,
+          "expectancy_points_net": 92.39,
+          "t_stat": 0.37
+        },
+        "USDCAD": {
+          "trades": 11,
+          "win_rate": 0.7273,
+          "expectancy_points_net": 530.98,
+          "t_stat": 1.85
+        },
+        "USDCHF": {
+          "trades": 10,
+          "win_rate": 0.4,
+          "expectancy_points_net": -152.13,
+          "t_stat": -0.52
+        },
+        "USDJPY": {
+          "trades": 7,
+          "win_rate": 0.4286,
+          "expectancy_points_net": -228.22,
+          "t_stat": -0.24
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 16,
+          "win_rate": 0.4375,
+          "expectancy_points_net": -249.15,
+          "t_stat": -0.78
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 22,
+          "win_rate": 0.5,
+          "expectancy_points_net": 175.31,
+          "t_stat": 0.71
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 13,
+          "win_rate": 0.6923,
+          "expectancy_points_net": 523.34,
+          "t_stat": 1.4
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 28,
+          "win_rate": 0.5357,
+          "expectancy_points_net": -12.18,
+          "t_stat": -0.06
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          -249.15,
+          175.31,
+          523.34,
+          -12.18
+        ],
+        "min_block_expectancy": -249.15,
+        "max_block_expectancy": 523.34
+      }
+    },
+    {
+      "name": "sma_50_200",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 24,
+        "win_rate": 0.5833,
+        "expectancy_points_net": 295.94,
+        "expectancy_points_gross": 299.56,
+        "profit_factor": 1.598,
+        "total_points_net": 7102.5,
+        "avg_win_points": 1355.9,
+        "avg_loss_points": -1188.0,
+        "t_stat": 1.02,
+        "significant_at_95": false,
+        "avg_bars_held": 7.8,
+        "exit_mix": {
+          "tp": 14,
+          "sl": 10,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": 0.79,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 23,
+        "obs_per_date": 1.04,
+        "t_stat_clustered_by_date": 1.19,
+        "mean_per_date": 315.76,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.086,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 15,
+        "win_rate": 0.2667,
+        "expectancy_points_net": -638.5,
+        "expectancy_points_gross": -635.83,
+        "profit_factor": 0.248,
+        "total_points_net": -9577.5,
+        "avg_win_points": 789.7,
+        "avg_loss_points": -1157.8,
+        "t_stat": -2.58,
+        "significant_at_95": true,
+        "avg_bars_held": 6.9,
+        "exit_mix": {
+          "tp": 3,
+          "sl": 11,
+          "timeout": 1
+        },
+        "symbols": 6,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.27,
+        "symbol_cluster_threshold_95": 2.571,
+        "symbol_cluster_significant": false,
+        "entry_dates": 14,
+        "obs_per_date": 1.07,
+        "t_stat_clustered_by_date": -2.35,
+        "mean_per_date": -622.33,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.179,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 3,
+          "win_rate": 0.3333,
+          "expectancy_points_net": -327.07,
+          "t_stat": -0.57
+        },
+        "EURUSD": {
+          "trades": 5,
+          "win_rate": 0.4,
+          "expectancy_points_net": -292.42,
+          "t_stat": -0.4
+        },
+        "GBPUSD": {
+          "trades": 8,
+          "win_rate": 0.375,
+          "expectancy_points_net": -312.16,
+          "t_stat": -0.63
+        },
+        "NZDUSD": {
+          "trades": 9,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 304.36,
+          "t_stat": 1.15
+        },
+        "USDCAD": {
+          "trades": 6,
+          "win_rate": 0.1667,
+          "expectancy_points_net": -693.66,
+          "t_stat": -2.12
+        },
+        "USDCHF": {
+          "trades": 4,
+          "win_rate": 0.5,
+          "expectancy_points_net": -192.83,
+          "t_stat": -0.23
+        },
+        "USDJPY": {
+          "trades": 4,
+          "win_rate": 0.75,
+          "expectancy_points_net": 1164.92,
+          "t_stat": 1.09
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 1,
+          "win_rate": 0.0,
+          "expectancy_points_net": -911.39,
+          "t_stat": 0.0
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 16,
+          "win_rate": 0.6875,
+          "expectancy_points_net": 617.78,
+          "t_stat": 2.2
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 10,
+          "win_rate": 0.5,
+          "expectancy_points_net": -230.07,
+          "t_stat": -0.42
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 12,
+          "win_rate": 0.1667,
+          "expectancy_points_net": -762.28,
+          "t_stat": -3.38
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -911.39,
+          617.78,
+          -230.07,
+          -762.28
+        ],
+        "min_block_expectancy": -911.39,
+        "max_block_expectancy": 617.78
+      }
+    },
+    {
+      "name": "ema_50_200",
+      "family": "ma_cross",
+      "in_sample": {
+        "trades": 27,
+        "win_rate": 0.5185,
+        "expectancy_points_net": 59.74,
+        "expectancy_points_gross": 63.26,
+        "profit_factor": 1.106,
+        "total_points_net": 1613.0,
+        "avg_win_points": 1198.1,
+        "avg_loss_points": -1166.1,
+        "t_stat": 0.23,
+        "significant_at_95": false,
+        "avg_bars_held": 5.9,
+        "exit_mix": {
+          "tp": 14,
+          "sl": 13,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 0.4,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 25,
+        "obs_per_date": 1.08,
+        "t_stat_clustered_by_date": 0.34,
+        "mean_per_date": 86.48,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.086,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 14,
+        "win_rate": 0.3571,
+        "expectancy_points_net": -318.79,
+        "expectancy_points_gross": -315.86,
+        "profit_factor": 0.502,
+        "total_points_net": -4463.1,
+        "avg_win_points": 898.5,
+        "avg_loss_points": -995.1,
+        "t_stat": -1.21,
+        "significant_at_95": false,
+        "avg_bars_held": 7.2,
+        "exit_mix": {
+          "tp": 5,
+          "sl": 9,
+          "timeout": 0
+        },
+        "symbols": 6,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.21,
+        "symbol_cluster_threshold_95": 2.571,
+        "symbol_cluster_significant": false,
+        "entry_dates": 14,
+        "obs_per_date": 1.0,
+        "t_stat_clustered_by_date": -1.21,
+        "mean_per_date": -318.79,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.179,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 4,
+          "win_rate": 0.5,
+          "expectancy_points_net": 60.18,
+          "t_stat": 0.11
+        },
+        "EURUSD": {
+          "trades": 5,
+          "win_rate": 0.2,
+          "expectancy_points_net": -549.86,
+          "t_stat": -1.14
+        },
+        "GBPUSD": {
+          "trades": 6,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 357.54,
+          "t_stat": 0.69
+        },
+        "NZDUSD": {
+          "trades": 12,
+          "win_rate": 0.4167,
+          "expectancy_points_net": -110.3,
+          "t_stat": -0.45
+        },
+        "USDCAD": {
+          "trades": 6,
+          "win_rate": 0.5,
+          "expectancy_points_net": 69.5,
+          "t_stat": 0.17
+        },
+        "USDCHF": {
+          "trades": 4,
+          "win_rate": 0.75,
+          "expectancy_points_net": 478.1,
+          "t_stat": 0.86
+        },
+        "USDJPY": {
+          "trades": 4,
+          "win_rate": 0.25,
+          "expectancy_points_net": -873.12,
+          "t_stat": -0.66
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 3,
+          "win_rate": 0.3333,
+          "expectancy_points_net": -359.89,
+          "t_stat": -0.65
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 17,
+          "win_rate": 0.5294,
+          "expectancy_points_net": 159.97,
+          "t_stat": 0.49
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 10,
+          "win_rate": 0.4,
+          "expectancy_points_net": -328.93,
+          "t_stat": -0.74
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 11,
+          "win_rate": 0.4545,
+          "expectancy_points_net": -109.15,
+          "t_stat": -0.37
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -359.89,
+          159.97,
+          -328.93,
+          -109.15
+        ],
+        "min_block_expectancy": -359.89,
+        "max_block_expectancy": 159.97
+      }
+    },
+    {
+      "name": "sma_10_50_inv",
+      "family": "ma_cross_inv",
+      "in_sample": {
+        "trades": 86,
+        "win_rate": 0.4651,
+        "expectancy_points_net": -160.23,
+        "expectancy_points_gross": -156.85,
+        "profit_factor": 0.758,
+        "total_points_net": -13779.9,
+        "avg_win_points": 1080.5,
+        "avg_loss_points": -1239.1,
+        "t_stat": -1.18,
+        "significant_at_95": false,
+        "avg_bars_held": 8.2,
+        "exit_mix": {
+          "tp": 40,
+          "sl": 46,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -2.34,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 74,
+        "obs_per_date": 1.16,
+        "t_stat_clustered_by_date": -0.96,
+        "mean_per_date": -138.33,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 46,
+        "win_rate": 0.3043,
+        "expectancy_points_net": -287.44,
+        "expectancy_points_gross": -283.81,
+        "profit_factor": 0.566,
+        "total_points_net": -13222.1,
+        "avg_win_points": 1232.0,
+        "avg_loss_points": -952.2,
+        "t_stat": -1.81,
+        "significant_at_95": false,
+        "avg_bars_held": 6.2,
+        "exit_mix": {
+          "tp": 14,
+          "sl": 31,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.35,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 37,
+        "obs_per_date": 1.24,
+        "t_stat_clustered_by_date": -1.59,
+        "mean_per_date": -276.55,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 21,
+          "win_rate": 0.4762,
+          "expectancy_points_net": -65.15,
+          "t_stat": -0.31
+        },
+        "EURUSD": {
+          "trades": 19,
+          "win_rate": 0.4211,
+          "expectancy_points_net": -163.8,
+          "t_stat": -0.7
+        },
+        "GBPUSD": {
+          "trades": 19,
+          "win_rate": 0.3158,
+          "expectancy_points_net": -495.65,
+          "t_stat": -1.81
+        },
+        "NZDUSD": {
+          "trades": 20,
+          "win_rate": 0.4,
+          "expectancy_points_net": -184.22,
+          "t_stat": -0.9
+        },
+        "USDCAD": {
+          "trades": 17,
+          "win_rate": 0.2941,
+          "expectancy_points_net": -379.68,
+          "t_stat": -1.5
+        },
+        "USDCHF": {
+          "trades": 18,
+          "win_rate": 0.4444,
+          "expectancy_points_net": -116.48,
+          "t_stat": -0.56
+        },
+        "USDJPY": {
+          "trades": 18,
+          "win_rate": 0.5,
+          "expectancy_points_net": -48.27,
+          "t_stat": -0.1
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 29,
+          "win_rate": 0.5172,
+          "expectancy_points_net": -33.18,
+          "t_stat": -0.16
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 30,
+          "win_rate": 0.3333,
+          "expectancy_points_net": -426.96,
+          "t_stat": -1.91
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 33,
+          "win_rate": 0.5758,
+          "expectancy_points_net": 64.07,
+          "t_stat": 0.27
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 40,
+          "win_rate": 0.25,
+          "expectancy_points_net": -383.64,
+          "t_stat": -2.32
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -33.18,
+          -426.96,
+          64.07,
+          -383.64
+        ],
+        "min_block_expectancy": -426.96,
+        "max_block_expectancy": 64.07
+      }
+    },
+    {
+      "name": "sma_20_100_inv",
+      "family": "ma_cross_inv",
+      "in_sample": {
+        "trades": 47,
+        "win_rate": 0.4681,
+        "expectancy_points_net": -53.98,
+        "expectancy_points_gross": -50.25,
+        "profit_factor": 0.908,
+        "total_points_net": -2536.9,
+        "avg_win_points": 1131.5,
+        "avg_loss_points": -1097.2,
+        "t_stat": -0.29,
+        "significant_at_95": false,
+        "avg_bars_held": 7.1,
+        "exit_mix": {
+          "tp": 22,
+          "sl": 25,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": -0.33,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 41,
+        "obs_per_date": 1.15,
+        "t_stat_clustered_by_date": -0.44,
+        "mean_per_date": -90.06,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 33,
+        "win_rate": 0.5455,
+        "expectancy_points_net": 144.6,
+        "expectancy_points_gross": 148.21,
+        "profit_factor": 1.331,
+        "total_points_net": 4772.0,
+        "avg_win_points": 1067.2,
+        "avg_loss_points": -962.4,
+        "t_stat": 0.76,
+        "significant_at_95": false,
+        "avg_bars_held": 6.5,
+        "exit_mix": {
+          "tp": 18,
+          "sl": 15,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 1.11,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 29,
+        "obs_per_date": 1.14,
+        "t_stat_clustered_by_date": 0.78,
+        "mean_per_date": 161.63,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.086,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 11,
+          "win_rate": 0.6364,
+          "expectancy_points_net": 196.51,
+          "t_stat": 0.74
+        },
+        "EURUSD": {
+          "trades": 15,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 260.19,
+          "t_stat": 1.1
+        },
+        "GBPUSD": {
+          "trades": 12,
+          "win_rate": 0.25,
+          "expectancy_points_net": -553.25,
+          "t_stat": -1.6
+        },
+        "NZDUSD": {
+          "trades": 13,
+          "win_rate": 0.3077,
+          "expectancy_points_net": -282.1,
+          "t_stat": -1.32
+        },
+        "USDCAD": {
+          "trades": 11,
+          "win_rate": 0.4545,
+          "expectancy_points_net": -206.79,
+          "t_stat": -0.68
+        },
+        "USDCHF": {
+          "trades": 9,
+          "win_rate": 0.5556,
+          "expectancy_points_net": 76.26,
+          "t_stat": 0.25
+        },
+        "USDJPY": {
+          "trades": 9,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 896.13,
+          "t_stat": 1.19
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 16,
+          "win_rate": 0.5,
+          "expectancy_points_net": 124.44,
+          "t_stat": 0.41
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 20,
+          "win_rate": 0.6,
+          "expectancy_points_net": 226.21,
+          "t_stat": 0.82
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 15,
+          "win_rate": 0.2,
+          "expectancy_points_net": -757.13,
+          "t_stat": -2.7
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 29,
+          "win_rate": 0.5862,
+          "expectancy_points_net": 244.03,
+          "t_stat": 1.19
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 3,
+        "expectancy_by_block": [
+          124.44,
+          226.21,
+          -757.13,
+          244.03
+        ],
+        "min_block_expectancy": -757.13,
+        "max_block_expectancy": 244.03
+      }
+    },
+    {
+      "name": "donchian_brk_20",
+      "family": "breakout",
+      "in_sample": {
+        "trades": 262,
+        "win_rate": 0.4466,
+        "expectancy_points_net": -87.04,
+        "expectancy_points_gross": -83.49,
+        "profit_factor": 0.868,
+        "total_points_net": -22805.6,
+        "avg_win_points": 1277.0,
+        "avg_loss_points": -1187.7,
+        "t_stat": -1.05,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 117,
+          "sl": 145,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -1.32,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 150,
+        "obs_per_date": 1.75,
+        "t_stat_clustered_by_date": -0.09,
+        "mean_per_date": -9.11,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 131,
+        "win_rate": 0.4656,
+        "expectancy_points_net": -110.17,
+        "expectancy_points_gross": -106.78,
+        "profit_factor": 0.805,
+        "total_points_net": -14432.3,
+        "avg_win_points": 974.3,
+        "avg_loss_points": -1055.2,
+        "t_stat": -1.18,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 60,
+          "sl": 70,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.28,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 73,
+        "obs_per_date": 1.79,
+        "t_stat_clustered_by_date": -0.82,
+        "mean_per_date": -101.38,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 51,
+          "win_rate": 0.4314,
+          "expectancy_points_net": -139.85,
+          "t_stat": -1.09
+        },
+        "EURUSD": {
+          "trades": 63,
+          "win_rate": 0.4603,
+          "expectancy_points_net": -78.15,
+          "t_stat": -0.53
+        },
+        "GBPUSD": {
+          "trades": 56,
+          "win_rate": 0.4286,
+          "expectancy_points_net": -174.61,
+          "t_stat": -0.97
+        },
+        "NZDUSD": {
+          "trades": 52,
+          "win_rate": 0.4615,
+          "expectancy_points_net": -67.09,
+          "t_stat": -0.56
+        },
+        "USDCAD": {
+          "trades": 53,
+          "win_rate": 0.4717,
+          "expectancy_points_net": -98.1,
+          "t_stat": -0.68
+        },
+        "USDCHF": {
+          "trades": 57,
+          "win_rate": 0.4211,
+          "expectancy_points_net": -162.57,
+          "t_stat": -1.24
+        },
+        "USDJPY": {
+          "trades": 61,
+          "win_rate": 0.4918,
+          "expectancy_points_net": 41.81,
+          "t_stat": 0.16
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 78,
+          "win_rate": 0.4103,
+          "expectancy_points_net": -216.57,
+          "t_stat": -1.71
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 110,
+          "win_rate": 0.5,
+          "expectancy_points_net": 78.33,
+          "t_stat": 0.62
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 95,
+          "win_rate": 0.4,
+          "expectancy_points_net": -210.01,
+          "t_stat": -1.4
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 110,
+          "win_rate": 0.4818,
+          "expectancy_points_net": -81.91,
+          "t_stat": -0.81
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -216.57,
+          78.33,
+          -210.01,
+          -81.91
+        ],
+        "min_block_expectancy": -216.57,
+        "max_block_expectancy": 78.33
+      }
+    },
+    {
+      "name": "donchian_fade_20",
+      "family": "breakout_fade",
+      "in_sample": {
+        "trades": 262,
+        "win_rate": 0.5458,
+        "expectancy_points_net": 59.07,
+        "expectancy_points_gross": 62.62,
+        "profit_factor": 1.101,
+        "total_points_net": 15475.5,
+        "avg_win_points": 1178.0,
+        "avg_loss_points": -1285.5,
+        "t_stat": 0.71,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 143,
+          "sl": 119,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 6,
+        "t_stat_clustered_by_symbol": 0.72,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 150,
+        "obs_per_date": 1.75,
+        "t_stat_clustered_by_date": -0.22,
+        "mean_per_date": -22.83,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 131,
+        "win_rate": 0.5344,
+        "expectancy_points_net": 103.39,
+        "expectancy_points_gross": 106.78,
+        "profit_factor": 1.226,
+        "total_points_net": 13544.3,
+        "avg_win_points": 1048.3,
+        "avg_loss_points": -981.0,
+        "t_stat": 1.11,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 70,
+          "sl": 60,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 1.2,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 73,
+        "obs_per_date": 1.79,
+        "t_stat_clustered_by_date": 0.76,
+        "mean_per_date": 95.03,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 51,
+          "win_rate": 0.5686,
+          "expectancy_points_net": 131.85,
+          "t_stat": 1.02
+        },
+        "EURUSD": {
+          "trades": 63,
+          "win_rate": 0.5397,
+          "expectancy_points_net": 62.15,
+          "t_stat": 0.42
+        },
+        "GBPUSD": {
+          "trades": 56,
+          "win_rate": 0.5714,
+          "expectancy_points_net": 170.61,
+          "t_stat": 0.94
+        },
+        "NZDUSD": {
+          "trades": 52,
+          "win_rate": 0.5385,
+          "expectancy_points_net": 61.09,
+          "t_stat": 0.51
+        },
+        "USDCAD": {
+          "trades": 53,
+          "win_rate": 0.5283,
+          "expectancy_points_net": 94.1,
+          "t_stat": 0.65
+        },
+        "USDCHF": {
+          "trades": 57,
+          "win_rate": 0.5789,
+          "expectancy_points_net": 156.57,
+          "t_stat": 1.19
+        },
+        "USDJPY": {
+          "trades": 61,
+          "win_rate": 0.4754,
+          "expectancy_points_net": -135.45,
+          "t_stat": -0.53
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 78,
+          "win_rate": 0.5769,
+          "expectancy_points_net": 176.62,
+          "t_stat": 1.38
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 110,
+          "win_rate": 0.4909,
+          "expectancy_points_net": -111.53,
+          "t_stat": -0.88
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 95,
+          "win_rate": 0.6,
+          "expectancy_points_net": 202.77,
+          "t_stat": 1.35
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 110,
+          "win_rate": 0.5182,
+          "expectancy_points_net": 74.99,
+          "t_stat": 0.74
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 3,
+        "expectancy_by_block": [
+          176.62,
+          -111.53,
+          202.77,
+          74.99
+        ],
+        "min_block_expectancy": -111.53,
+        "max_block_expectancy": 202.77
+      }
+    },
+    {
+      "name": "donchian_brk_55",
+      "family": "breakout",
+      "in_sample": {
+        "trades": 172,
+        "win_rate": 0.3895,
+        "expectancy_points_net": -239.04,
+        "expectancy_points_gross": -235.56,
+        "profit_factor": 0.676,
+        "total_points_net": -41115.3,
+        "avg_win_points": 1279.4,
+        "avg_loss_points": -1208.0,
+        "t_stat": -2.35,
+        "significant_at_95": true,
+        "avg_bars_held": 6.5,
+        "exit_mix": {
+          "tp": 67,
+          "sl": 105,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -5.49,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 104,
+        "obs_per_date": 1.65,
+        "t_stat_clustered_by_date": -1.7,
+        "mean_per_date": -203.95,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 65,
+        "win_rate": 0.3538,
+        "expectancy_points_net": -395.65,
+        "expectancy_points_gross": -392.39,
+        "profit_factor": 0.447,
+        "total_points_net": -25717.1,
+        "avg_win_points": 904.7,
+        "avg_loss_points": -1107.7,
+        "t_stat": -3.09,
+        "significant_at_95": true,
+        "avg_bars_held": 6.2,
+        "exit_mix": {
+          "tp": 22,
+          "sl": 42,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -4.36,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 38,
+        "obs_per_date": 1.71,
+        "t_stat_clustered_by_date": -2.18,
+        "mean_per_date": -368.61,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 33,
+          "win_rate": 0.3636,
+          "expectancy_points_net": -253.67,
+          "t_stat": -1.58
+        },
+        "EURUSD": {
+          "trades": 34,
+          "win_rate": 0.3824,
+          "expectancy_points_net": -237.28,
+          "t_stat": -1.1
+        },
+        "GBPUSD": {
+          "trades": 35,
+          "win_rate": 0.3429,
+          "expectancy_points_net": -395.16,
+          "t_stat": -1.76
+        },
+        "NZDUSD": {
+          "trades": 29,
+          "win_rate": 0.3793,
+          "expectancy_points_net": -205.26,
+          "t_stat": -1.28
+        },
+        "USDCAD": {
+          "trades": 30,
+          "win_rate": 0.3333,
+          "expectancy_points_net": -326.2,
+          "t_stat": -1.76
+        },
+        "USDCHF": {
+          "trades": 38,
+          "win_rate": 0.4737,
+          "expectancy_points_net": -78.17,
+          "t_stat": -0.47
+        },
+        "USDJPY": {
+          "trades": 38,
+          "win_rate": 0.3684,
+          "expectancy_points_net": -469.84,
+          "t_stat": -1.49
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 53,
+          "win_rate": 0.3585,
+          "expectancy_points_net": -345.47,
+          "t_stat": -2.35
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 72,
+          "win_rate": 0.4028,
+          "expectancy_points_net": -195.06,
+          "t_stat": -1.28
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 61,
+          "win_rate": 0.3934,
+          "expectancy_points_net": -213.01,
+          "t_stat": -1.08
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 51,
+          "win_rate": 0.3529,
+          "expectancy_points_net": -421.27,
+          "t_stat": -2.95
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -345.47,
+          -195.06,
+          -213.01,
+          -421.27
+        ],
+        "min_block_expectancy": -421.27,
+        "max_block_expectancy": -195.06
+      }
+    },
+    {
+      "name": "donchian_fade_55",
+      "family": "breakout_fade",
+      "in_sample": {
+        "trades": 172,
+        "win_rate": 0.5988,
+        "expectancy_points_net": 200.29,
+        "expectancy_points_gross": 203.77,
+        "profit_factor": 1.387,
+        "total_points_net": 34449.1,
+        "avg_win_points": 1197.8,
+        "avg_loss_points": -1288.8,
+        "t_stat": 1.96,
+        "significant_at_95": true,
+        "avg_bars_held": 6.5,
+        "exit_mix": {
+          "tp": 103,
+          "sl": 69,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 7,
+        "t_stat_clustered_by_symbol": 4.66,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 104,
+        "obs_per_date": 1.65,
+        "t_stat_clustered_by_date": 1.34,
+        "mean_per_date": 161.07,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 65,
+        "win_rate": 0.6462,
+        "expectancy_points_net": 389.13,
+        "expectancy_points_gross": 392.39,
+        "profit_factor": 2.207,
+        "total_points_net": 25293.1,
+        "avg_win_points": 1101.2,
+        "avg_loss_points": -911.3,
+        "t_stat": 3.04,
+        "significant_at_95": true,
+        "avg_bars_held": 6.2,
+        "exit_mix": {
+          "tp": 42,
+          "sl": 22,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 7,
+        "t_stat_clustered_by_symbol": 4.27,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 38,
+        "obs_per_date": 1.71,
+        "t_stat_clustered_by_date": 2.15,
+        "mean_per_date": 362.42,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 33,
+          "win_rate": 0.6364,
+          "expectancy_points_net": 245.67,
+          "t_stat": 1.53
+        },
+        "EURUSD": {
+          "trades": 34,
+          "win_rate": 0.6176,
+          "expectancy_points_net": 221.28,
+          "t_stat": 1.02
+        },
+        "GBPUSD": {
+          "trades": 35,
+          "win_rate": 0.6571,
+          "expectancy_points_net": 391.16,
+          "t_stat": 1.74
+        },
+        "NZDUSD": {
+          "trades": 29,
+          "win_rate": 0.6207,
+          "expectancy_points_net": 199.26,
+          "t_stat": 1.24
+        },
+        "USDCAD": {
+          "trades": 30,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 322.2,
+          "t_stat": 1.74
+        },
+        "USDCHF": {
+          "trades": 38,
+          "win_rate": 0.5263,
+          "expectancy_points_net": 72.17,
+          "t_stat": 0.43
+        },
+        "USDJPY": {
+          "trades": 38,
+          "win_rate": 0.5789,
+          "expectancy_points_net": 321.94,
+          "t_stat": 1.0
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 53,
+          "win_rate": 0.6226,
+          "expectancy_points_net": 290.32,
+          "t_stat": 1.95
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 72,
+          "win_rate": 0.5833,
+          "expectancy_points_net": 148.09,
+          "t_stat": 0.97
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 61,
+          "win_rate": 0.6066,
+          "expectancy_points_net": 205.77,
+          "t_stat": 1.05
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 51,
+          "win_rate": 0.6471,
+          "expectancy_points_net": 414.52,
+          "t_stat": 2.9
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 4,
+        "expectancy_by_block": [
+          290.32,
+          148.09,
+          205.77,
+          414.52
+        ],
+        "min_block_expectancy": 148.09,
+        "max_block_expectancy": 414.52
+      }
+    },
+    {
+      "name": "donchian_brk_100",
+      "family": "breakout",
+      "in_sample": {
+        "trades": 96,
+        "win_rate": 0.375,
+        "expectancy_points_net": -307.45,
+        "expectancy_points_gross": -303.87,
+        "profit_factor": 0.62,
+        "total_points_net": -29515.1,
+        "avg_win_points": 1336.1,
+        "avg_loss_points": -1293.6,
+        "t_stat": -2.12,
+        "significant_at_95": true,
+        "avg_bars_held": 7.7,
+        "exit_mix": {
+          "tp": 36,
+          "sl": 60,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -3.01,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 62,
+        "obs_per_date": 1.55,
+        "t_stat_clustered_by_date": -1.68,
+        "mean_per_date": -272.89,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 39,
+        "win_rate": 0.2821,
+        "expectancy_points_net": -532.17,
+        "expectancy_points_gross": -529.07,
+        "profit_factor": 0.32,
+        "total_points_net": -20754.7,
+        "avg_win_points": 888.3,
+        "avg_loss_points": -1090.2,
+        "t_stat": -3.48,
+        "significant_at_95": true,
+        "avg_bars_held": 6.3,
+        "exit_mix": {
+          "tp": 10,
+          "sl": 28,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -3.79,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 28,
+        "obs_per_date": 1.39,
+        "t_stat_clustered_by_date": -2.61,
+        "mean_per_date": -483.71,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.086,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 19,
+          "win_rate": 0.2105,
+          "expectancy_points_net": -599.73,
+          "t_stat": -3.44
+        },
+        "EURUSD": {
+          "trades": 20,
+          "win_rate": 0.45,
+          "expectancy_points_net": -58.26,
+          "t_stat": -0.18
+        },
+        "GBPUSD": {
+          "trades": 18,
+          "win_rate": 0.3333,
+          "expectancy_points_net": -413.19,
+          "t_stat": -1.27
+        },
+        "NZDUSD": {
+          "trades": 13,
+          "win_rate": 0.3846,
+          "expectancy_points_net": -321.08,
+          "t_stat": -1.27
+        },
+        "USDCAD": {
+          "trades": 19,
+          "win_rate": 0.2632,
+          "expectancy_points_net": -405.12,
+          "t_stat": -1.75
+        },
+        "USDCHF": {
+          "trades": 24,
+          "win_rate": 0.4167,
+          "expectancy_points_net": -180.13,
+          "t_stat": -0.8
+        },
+        "USDJPY": {
+          "trades": 22,
+          "win_rate": 0.3636,
+          "expectancy_points_net": -639.91,
+          "t_stat": -1.52
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 15,
+          "win_rate": 0.4,
+          "expectancy_points_net": -232.21,
+          "t_stat": -0.89
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 49,
+          "win_rate": 0.3878,
+          "expectancy_points_net": -279.54,
+          "t_stat": -1.51
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 41,
+          "win_rate": 0.3415,
+          "expectancy_points_net": -396.95,
+          "t_stat": -1.55
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 30,
+          "win_rate": 0.2667,
+          "expectancy_points_net": -560.47,
+          "t_stat": -3.43
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -232.21,
+          -279.54,
+          -396.95,
+          -560.47
+        ],
+        "min_block_expectancy": -560.47,
+        "max_block_expectancy": -232.21
+      }
+    },
+    {
+      "name": "donchian_fade_100",
+      "family": "breakout_fade",
+      "in_sample": {
+        "trades": 96,
+        "win_rate": 0.6146,
+        "expectancy_points_net": 270.04,
+        "expectancy_points_gross": 273.62,
+        "profit_factor": 1.52,
+        "total_points_net": 25923.6,
+        "avg_win_points": 1284.0,
+        "avg_loss_points": -1346.8,
+        "t_stat": 1.86,
+        "significant_at_95": false,
+        "avg_bars_held": 7.7,
+        "exit_mix": {
+          "tp": 59,
+          "sl": 37,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 6,
+        "t_stat_clustered_by_symbol": 2.81,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 62,
+        "obs_per_date": 1.55,
+        "t_stat_clustered_by_date": 1.34,
+        "mean_per_date": 219.26,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 39,
+        "win_rate": 0.7179,
+        "expectancy_points_net": 525.97,
+        "expectancy_points_gross": 529.07,
+        "profit_factor": 3.086,
+        "total_points_net": 20512.7,
+        "avg_win_points": 1083.9,
+        "avg_loss_points": -894.1,
+        "t_stat": 3.44,
+        "significant_at_95": true,
+        "avg_bars_held": 6.3,
+        "exit_mix": {
+          "tp": 28,
+          "sl": 10,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 7,
+        "t_stat_clustered_by_symbol": 3.76,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 28,
+        "obs_per_date": 1.39,
+        "t_stat_clustered_by_date": 2.58,
+        "mean_per_date": 477.87,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.086,
+        "date_cluster_significant": true
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 19,
+          "win_rate": 0.7895,
+          "expectancy_points_net": 591.73,
+          "t_stat": 3.4
+        },
+        "EURUSD": {
+          "trades": 20,
+          "win_rate": 0.55,
+          "expectancy_points_net": 42.26,
+          "t_stat": 0.13
+        },
+        "GBPUSD": {
+          "trades": 18,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 409.19,
+          "t_stat": 1.25
+        },
+        "NZDUSD": {
+          "trades": 13,
+          "win_rate": 0.6154,
+          "expectancy_points_net": 315.08,
+          "t_stat": 1.25
+        },
+        "USDCAD": {
+          "trades": 19,
+          "win_rate": 0.7368,
+          "expectancy_points_net": 401.12,
+          "t_stat": 1.73
+        },
+        "USDCHF": {
+          "trades": 24,
+          "win_rate": 0.5833,
+          "expectancy_points_net": 174.13,
+          "t_stat": 0.77
+        },
+        "USDJPY": {
+          "trades": 22,
+          "win_rate": 0.5909,
+          "expectancy_points_net": 503.93,
+          "t_stat": 1.17
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 15,
+          "win_rate": 0.6,
+          "expectancy_points_net": 225.41,
+          "t_stat": 0.87
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 49,
+          "win_rate": 0.5918,
+          "expectancy_points_net": 213.67,
+          "t_stat": 1.14
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 41,
+          "win_rate": 0.6585,
+          "expectancy_points_net": 389.54,
+          "t_stat": 1.52
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 30,
+          "win_rate": 0.7333,
+          "expectancy_points_net": 553.81,
+          "t_stat": 3.4
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 4,
+        "expectancy_by_block": [
+          225.41,
+          213.67,
+          389.54,
+          553.81
+        ],
+        "min_block_expectancy": 213.67,
+        "max_block_expectancy": 553.81
+      }
+    },
+    {
+      "name": "boll_fade_20_2.0",
+      "family": "bollinger_fade",
+      "in_sample": {
+        "trades": 278,
+        "win_rate": 0.5432,
+        "expectancy_points_net": 51.11,
+        "expectancy_points_gross": 54.6,
+        "profit_factor": 1.087,
+        "total_points_net": 14207.9,
+        "avg_win_points": 1179.7,
+        "avg_loss_points": -1290.7,
+        "t_stat": 0.64,
+        "significant_at_95": false,
+        "avg_bars_held": 6.4,
+        "exit_mix": {
+          "tp": 151,
+          "sl": 127,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 4,
+        "t_stat_clustered_by_symbol": 1.07,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 164,
+        "obs_per_date": 1.7,
+        "t_stat_clustered_by_date": -0.57,
+        "mean_per_date": -57.9,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 123,
+        "win_rate": 0.5122,
+        "expectancy_points_net": 58.63,
+        "expectancy_points_gross": 62.17,
+        "profit_factor": 1.12,
+        "total_points_net": 7211.8,
+        "avg_win_points": 1064.5,
+        "avg_loss_points": -997.5,
+        "t_stat": 0.6,
+        "significant_at_95": false,
+        "avg_bars_held": 6.5,
+        "exit_mix": {
+          "tp": 63,
+          "sl": 59,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 4,
+        "t_stat_clustered_by_symbol": 0.73,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 72,
+        "obs_per_date": 1.71,
+        "t_stat_clustered_by_date": 0.2,
+        "mean_per_date": 25.33,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 55,
+          "win_rate": 0.5636,
+          "expectancy_points_net": 144.39,
+          "t_stat": 1.19
+        },
+        "EURUSD": {
+          "trades": 64,
+          "win_rate": 0.5312,
+          "expectancy_points_net": 13.9,
+          "t_stat": 0.1
+        },
+        "GBPUSD": {
+          "trades": 58,
+          "win_rate": 0.5172,
+          "expectancy_points_net": 39.58,
+          "t_stat": 0.22
+        },
+        "NZDUSD": {
+          "trades": 49,
+          "win_rate": 0.5714,
+          "expectancy_points_net": 123.7,
+          "t_stat": 1.0
+        },
+        "USDCAD": {
+          "trades": 52,
+          "win_rate": 0.5385,
+          "expectancy_points_net": 84.75,
+          "t_stat": 0.56
+        },
+        "USDCHF": {
+          "trades": 62,
+          "win_rate": 0.5,
+          "expectancy_points_net": -16.32,
+          "t_stat": -0.13
+        },
+        "USDJPY": {
+          "trades": 61,
+          "win_rate": 0.5246,
+          "expectancy_points_net": 13.72,
+          "t_stat": 0.05
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 82,
+          "win_rate": 0.5854,
+          "expectancy_points_net": 193.53,
+          "t_stat": 1.51
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 114,
+          "win_rate": 0.4825,
+          "expectancy_points_net": -98.82,
+          "t_stat": -0.8
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 100,
+          "win_rate": 0.61,
+          "expectancy_points_net": 187.48,
+          "t_stat": 1.3
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 105,
+          "win_rate": 0.4762,
+          "expectancy_points_net": -18.41,
+          "t_stat": -0.18
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          193.53,
+          -98.82,
+          187.48,
+          -18.41
+        ],
+        "min_block_expectancy": -98.82,
+        "max_block_expectancy": 193.53
+      }
+    },
+    {
+      "name": "boll_ride_20_2.0",
+      "family": "bollinger_ride",
+      "in_sample": {
+        "trades": 278,
+        "win_rate": 0.4532,
+        "expectancy_points_net": -68.54,
+        "expectancy_points_gross": -65.05,
+        "profit_factor": 0.895,
+        "total_points_net": -19055.5,
+        "avg_win_points": 1282.3,
+        "avg_loss_points": -1188.3,
+        "t_stat": -0.85,
+        "significant_at_95": false,
+        "avg_bars_held": 6.4,
+        "exit_mix": {
+          "tp": 126,
+          "sl": 152,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": -1.45,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 164,
+        "obs_per_date": 1.7,
+        "t_stat_clustered_by_date": 0.33,
+        "mean_per_date": 33.45,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 123,
+        "win_rate": 0.4878,
+        "expectancy_points_net": -65.71,
+        "expectancy_points_gross": -62.17,
+        "profit_factor": 0.88,
+        "total_points_net": -8081.8,
+        "avg_win_points": 990.7,
+        "avg_loss_points": -1071.8,
+        "t_stat": -0.67,
+        "significant_at_95": false,
+        "avg_bars_held": 6.5,
+        "exit_mix": {
+          "tp": 59,
+          "sl": 63,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": -0.81,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 72,
+        "obs_per_date": 1.71,
+        "t_stat_clustered_by_date": -0.26,
+        "mean_per_date": -32.1,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 55,
+          "win_rate": 0.4364,
+          "expectancy_points_net": -152.39,
+          "t_stat": -1.26
+        },
+        "EURUSD": {
+          "trades": 64,
+          "win_rate": 0.4688,
+          "expectancy_points_net": -29.9,
+          "t_stat": -0.21
+        },
+        "GBPUSD": {
+          "trades": 58,
+          "win_rate": 0.4828,
+          "expectancy_points_net": -43.58,
+          "t_stat": -0.24
+        },
+        "NZDUSD": {
+          "trades": 49,
+          "win_rate": 0.4286,
+          "expectancy_points_net": -129.7,
+          "t_stat": -1.05
+        },
+        "USDCAD": {
+          "trades": 52,
+          "win_rate": 0.4615,
+          "expectancy_points_net": -88.75,
+          "t_stat": -0.59
+        },
+        "USDCHF": {
+          "trades": 62,
+          "win_rate": 0.5,
+          "expectancy_points_net": 10.32,
+          "t_stat": 0.08
+        },
+        "USDJPY": {
+          "trades": 61,
+          "win_rate": 0.459,
+          "expectancy_points_net": -65.32,
+          "t_stat": -0.25
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 82,
+          "win_rate": 0.4146,
+          "expectancy_points_net": -200.6,
+          "t_stat": -1.57
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 114,
+          "win_rate": 0.5088,
+          "expectancy_points_net": 66.57,
+          "t_stat": 0.53
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 100,
+          "win_rate": 0.39,
+          "expectancy_points_net": -194.52,
+          "t_stat": -1.35
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 105,
+          "win_rate": 0.5238,
+          "expectancy_points_net": 11.19,
+          "t_stat": 0.11
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          -200.6,
+          66.57,
+          -194.52,
+          11.19
+        ],
+        "min_block_expectancy": -200.6,
+        "max_block_expectancy": 66.57
+      }
+    },
+    {
+      "name": "boll_fade_20_2.5",
+      "family": "bollinger_fade",
+      "in_sample": {
+        "trades": 165,
+        "win_rate": 0.5758,
+        "expectancy_points_net": 126.91,
+        "expectancy_points_gross": 130.48,
+        "profit_factor": 1.224,
+        "total_points_net": 20940.8,
+        "avg_win_points": 1203.5,
+        "avg_loss_points": -1334.2,
+        "t_stat": 1.19,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 95,
+          "sl": 70,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 1.94,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 101,
+        "obs_per_date": 1.63,
+        "t_stat_clustered_by_date": 0.36,
+        "mean_per_date": 47.29,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 76,
+        "win_rate": 0.5132,
+        "expectancy_points_net": 90.08,
+        "expectancy_points_gross": 93.55,
+        "profit_factor": 1.178,
+        "total_points_net": 6845.9,
+        "avg_win_points": 1159.0,
+        "avg_loss_points": -1036.6,
+        "t_stat": 0.68,
+        "significant_at_95": false,
+        "avg_bars_held": 5.5,
+        "exit_mix": {
+          "tp": 39,
+          "sl": 36,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 4,
+        "t_stat_clustered_by_symbol": 0.42,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 45,
+        "obs_per_date": 1.69,
+        "t_stat_clustered_by_date": 0.23,
+        "mean_per_date": 39.9,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 30,
+          "win_rate": 0.5667,
+          "expectancy_points_net": 163.39,
+          "t_stat": 0.99
+        },
+        "EURUSD": {
+          "trades": 41,
+          "win_rate": 0.5122,
+          "expectancy_points_net": -64.4,
+          "t_stat": -0.35
+        },
+        "GBPUSD": {
+          "trades": 34,
+          "win_rate": 0.6176,
+          "expectancy_points_net": 312.57,
+          "t_stat": 1.33
+        },
+        "NZDUSD": {
+          "trades": 30,
+          "win_rate": 0.6,
+          "expectancy_points_net": 202.5,
+          "t_stat": 1.32
+        },
+        "USDCAD": {
+          "trades": 29,
+          "win_rate": 0.5862,
+          "expectancy_points_net": 166.71,
+          "t_stat": 0.79
+        },
+        "USDCHF": {
+          "trades": 35,
+          "win_rate": 0.5143,
+          "expectancy_points_net": 21.57,
+          "t_stat": 0.12
+        },
+        "USDJPY": {
+          "trades": 42,
+          "win_rate": 0.5238,
+          "expectancy_points_net": 76.99,
+          "t_stat": 0.24
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 48,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 361.38,
+          "t_stat": 2.14
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 68,
+          "win_rate": 0.5,
+          "expectancy_points_net": 0.68,
+          "t_stat": 0.0
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 65,
+          "win_rate": 0.6308,
+          "expectancy_points_net": 188.06,
+          "t_stat": 1.03
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 60,
+          "win_rate": 0.45,
+          "expectancy_points_net": -30.49,
+          "t_stat": -0.2
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 3,
+        "expectancy_by_block": [
+          361.38,
+          0.68,
+          188.06,
+          -30.49
+        ],
+        "min_block_expectancy": -30.49,
+        "max_block_expectancy": 361.38
+      }
+    },
+    {
+      "name": "boll_ride_20_2.5",
+      "family": "bollinger_ride",
+      "in_sample": {
+        "trades": 165,
+        "win_rate": 0.4182,
+        "expectancy_points_net": -151.65,
+        "expectancy_points_gross": -148.08,
+        "profit_factor": 0.785,
+        "total_points_net": -25022.4,
+        "avg_win_points": 1325.3,
+        "avg_loss_points": -1213.2,
+        "t_stat": -1.42,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 69,
+          "sl": 96,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -2.51,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 101,
+        "obs_per_date": 1.63,
+        "t_stat_clustered_by_date": -0.64,
+        "mean_per_date": -82.97,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 76,
+        "win_rate": 0.4868,
+        "expectancy_points_net": -97.02,
+        "expectancy_points_gross": -93.55,
+        "profit_factor": 0.838,
+        "total_points_net": -7373.9,
+        "avg_win_points": 1029.2,
+        "avg_loss_points": -1165.5,
+        "t_stat": -0.73,
+        "significant_at_95": false,
+        "avg_bars_held": 5.5,
+        "exit_mix": {
+          "tp": 36,
+          "sl": 39,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": -0.48,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 45,
+        "obs_per_date": 1.69,
+        "t_stat_clustered_by_date": -0.27,
+        "mean_per_date": -46.58,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 30,
+          "win_rate": 0.4333,
+          "expectancy_points_net": -171.39,
+          "t_stat": -1.04
+        },
+        "EURUSD": {
+          "trades": 41,
+          "win_rate": 0.4878,
+          "expectancy_points_net": 48.4,
+          "t_stat": 0.26
+        },
+        "GBPUSD": {
+          "trades": 34,
+          "win_rate": 0.3824,
+          "expectancy_points_net": -316.57,
+          "t_stat": -1.35
+        },
+        "NZDUSD": {
+          "trades": 30,
+          "win_rate": 0.4,
+          "expectancy_points_net": -208.5,
+          "t_stat": -1.36
+        },
+        "USDCAD": {
+          "trades": 29,
+          "win_rate": 0.4138,
+          "expectancy_points_net": -170.71,
+          "t_stat": -0.81
+        },
+        "USDCHF": {
+          "trades": 35,
+          "win_rate": 0.4857,
+          "expectancy_points_net": -27.57,
+          "t_stat": -0.16
+        },
+        "USDJPY": {
+          "trades": 42,
+          "win_rate": 0.4524,
+          "expectancy_points_net": -150.13,
+          "t_stat": -0.47
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 48,
+          "win_rate": 0.3333,
+          "expectancy_points_net": -368.3,
+          "t_stat": -2.19
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 68,
+          "win_rate": 0.4853,
+          "expectancy_points_net": -50.26,
+          "t_stat": -0.31
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 65,
+          "win_rate": 0.3692,
+          "expectancy_points_net": -195.45,
+          "t_stat": -1.07
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 60,
+          "win_rate": 0.55,
+          "expectancy_points_net": 23.39,
+          "t_stat": 0.16
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -368.3,
+          -50.26,
+          -195.45,
+          23.39
+        ],
+        "min_block_expectancy": -368.3,
+        "max_block_expectancy": 23.39
+      }
+    },
+    {
+      "name": "boll_fade_50_2.0",
+      "family": "bollinger_fade",
+      "in_sample": {
+        "trades": 189,
+        "win_rate": 0.5503,
+        "expectancy_points_net": 101.02,
+        "expectancy_points_gross": 104.43,
+        "profit_factor": 1.175,
+        "total_points_net": 19092.8,
+        "avg_win_points": 1232.9,
+        "avg_loss_points": -1283.8,
+        "t_stat": 1.0,
+        "significant_at_95": false,
+        "avg_bars_held": 6.4,
+        "exit_mix": {
+          "tp": 104,
+          "sl": 85,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 1.76,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 122,
+        "obs_per_date": 1.55,
+        "t_stat_clustered_by_date": 0.76,
+        "mean_per_date": 88.11,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 84,
+        "win_rate": 0.5595,
+        "expectancy_points_net": 217.75,
+        "expectancy_points_gross": 220.96,
+        "profit_factor": 1.493,
+        "total_points_net": 18291.4,
+        "avg_win_points": 1178.6,
+        "avg_loss_points": -1002.8,
+        "t_stat": 1.72,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 47,
+          "sl": 36,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 2.17,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 51,
+        "obs_per_date": 1.65,
+        "t_stat_clustered_by_date": 1.45,
+        "mean_per_date": 242.39,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 38,
+          "win_rate": 0.5526,
+          "expectancy_points_net": 161.03,
+          "t_stat": 1.11
+        },
+        "EURUSD": {
+          "trades": 35,
+          "win_rate": 0.6,
+          "expectancy_points_net": 173.17,
+          "t_stat": 0.82
+        },
+        "GBPUSD": {
+          "trades": 39,
+          "win_rate": 0.641,
+          "expectancy_points_net": 366.35,
+          "t_stat": 1.73
+        },
+        "NZDUSD": {
+          "trades": 34,
+          "win_rate": 0.5588,
+          "expectancy_points_net": 132.77,
+          "t_stat": 0.88
+        },
+        "USDCAD": {
+          "trades": 32,
+          "win_rate": 0.5625,
+          "expectancy_points_net": 127.57,
+          "t_stat": 0.66
+        },
+        "USDCHF": {
+          "trades": 48,
+          "win_rate": 0.4792,
+          "expectancy_points_net": -11.27,
+          "t_stat": -0.07
+        },
+        "USDJPY": {
+          "trades": 47,
+          "win_rate": 0.5106,
+          "expectancy_points_net": 60.87,
+          "t_stat": 0.2
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 58,
+          "win_rate": 0.5862,
+          "expectancy_points_net": 237.73,
+          "t_stat": 1.53
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 74,
+          "win_rate": 0.4865,
+          "expectancy_points_net": -64.62,
+          "t_stat": -0.4
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 73,
+          "win_rate": 0.5753,
+          "expectancy_points_net": 146.63,
+          "t_stat": 0.82
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 68,
+          "win_rate": 0.5735,
+          "expectancy_points_net": 259.89,
+          "t_stat": 1.9
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 3,
+        "expectancy_by_block": [
+          237.73,
+          -64.62,
+          146.63,
+          259.89
+        ],
+        "min_block_expectancy": -64.62,
+        "max_block_expectancy": 259.89
+      }
+    },
+    {
+      "name": "boll_ride_50_2.0",
+      "family": "bollinger_ride",
+      "in_sample": {
+        "trades": 189,
+        "win_rate": 0.4444,
+        "expectancy_points_net": -123.21,
+        "expectancy_points_gross": -119.8,
+        "profit_factor": 0.821,
+        "total_points_net": -23286.3,
+        "avg_win_points": 1275.0,
+        "avg_loss_points": -1241.8,
+        "t_stat": -1.22,
+        "significant_at_95": false,
+        "avg_bars_held": 6.4,
+        "exit_mix": {
+          "tp": 84,
+          "sl": 105,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -2.25,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 122,
+        "obs_per_date": 1.55,
+        "t_stat_clustered_by_date": -1.02,
+        "mean_per_date": -118.51,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 84,
+        "win_rate": 0.4405,
+        "expectancy_points_net": -224.16,
+        "expectancy_points_gross": -220.96,
+        "profit_factor": 0.662,
+        "total_points_net": -18829.4,
+        "avg_win_points": 996.7,
+        "avg_loss_points": -1185.3,
+        "t_stat": -1.77,
+        "significant_at_95": false,
+        "avg_bars_held": 6.7,
+        "exit_mix": {
+          "tp": 36,
+          "sl": 47,
+          "timeout": 1
+        },
+        "symbols": 7,
+        "symbols_positive": 1,
+        "t_stat_clustered_by_symbol": -2.22,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 51,
+        "obs_per_date": 1.65,
+        "t_stat_clustered_by_date": -1.49,
+        "mean_per_date": -248.47,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 38,
+          "win_rate": 0.4474,
+          "expectancy_points_net": -169.03,
+          "t_stat": -1.17
+        },
+        "EURUSD": {
+          "trades": 35,
+          "win_rate": 0.4,
+          "expectancy_points_net": -189.17,
+          "t_stat": -0.89
+        },
+        "GBPUSD": {
+          "trades": 39,
+          "win_rate": 0.359,
+          "expectancy_points_net": -370.35,
+          "t_stat": -1.75
+        },
+        "NZDUSD": {
+          "trades": 34,
+          "win_rate": 0.4412,
+          "expectancy_points_net": -138.77,
+          "t_stat": -0.92
+        },
+        "USDCAD": {
+          "trades": 32,
+          "win_rate": 0.4375,
+          "expectancy_points_net": -131.57,
+          "t_stat": -0.68
+        },
+        "USDCHF": {
+          "trades": 48,
+          "win_rate": 0.5208,
+          "expectancy_points_net": 5.27,
+          "t_stat": 0.03
+        },
+        "USDJPY": {
+          "trades": 47,
+          "win_rate": 0.4681,
+          "expectancy_points_net": -126.65,
+          "t_stat": -0.41
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 58,
+          "win_rate": 0.4138,
+          "expectancy_points_net": -244.18,
+          "t_stat": -1.57
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 74,
+          "win_rate": 0.5,
+          "expectancy_points_net": 18.76,
+          "t_stat": 0.12
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 73,
+          "win_rate": 0.4247,
+          "expectancy_points_net": -153.62,
+          "t_stat": -0.86
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 68,
+          "win_rate": 0.4265,
+          "expectancy_points_net": -266.57,
+          "t_stat": -1.95
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -244.18,
+          18.76,
+          -153.62,
+          -266.57
+        ],
+        "min_block_expectancy": -266.57,
+        "max_block_expectancy": 18.76
+      }
+    },
+    {
+      "name": "mom_24",
+      "family": "momentum",
+      "in_sample": {
+        "trades": 158,
+        "win_rate": 0.462,
+        "expectancy_points_net": -57.14,
+        "expectancy_points_gross": -53.81,
+        "profit_factor": 0.909,
+        "total_points_net": -9028.6,
+        "avg_win_points": 1233.0,
+        "avg_loss_points": -1165.2,
+        "t_stat": -0.55,
+        "significant_at_95": false,
+        "avg_bars_held": 6.9,
+        "exit_mix": {
+          "tp": 73,
+          "sl": 85,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": -0.59,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 114,
+        "obs_per_date": 1.39,
+        "t_stat_clustered_by_date": -0.02,
+        "mean_per_date": -1.91,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 77,
+        "win_rate": 0.5584,
+        "expectancy_points_net": 123.94,
+        "expectancy_points_gross": 127.35,
+        "profit_factor": 1.288,
+        "total_points_net": 9543.2,
+        "avg_win_points": 993.1,
+        "avg_loss_points": -975.3,
+        "t_stat": 1.03,
+        "significant_at_95": false,
+        "avg_bars_held": 6.2,
+        "exit_mix": {
+          "tp": 41,
+          "sl": 34,
+          "timeout": 2
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 1.64,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 52,
+        "obs_per_date": 1.48,
+        "t_stat_clustered_by_date": 0.22,
+        "mean_per_date": 30.76,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 40,
+          "win_rate": 0.475,
+          "expectancy_points_net": -7.56,
+          "t_stat": -0.05
+        },
+        "EURUSD": {
+          "trades": 29,
+          "win_rate": 0.6897,
+          "expectancy_points_net": 380.42,
+          "t_stat": 2.06
+        },
+        "GBPUSD": {
+          "trades": 34,
+          "win_rate": 0.5588,
+          "expectancy_points_net": 206.36,
+          "t_stat": 0.9
+        },
+        "NZDUSD": {
+          "trades": 33,
+          "win_rate": 0.4242,
+          "expectancy_points_net": -125.29,
+          "t_stat": -0.83
+        },
+        "USDCAD": {
+          "trades": 35,
+          "win_rate": 0.4,
+          "expectancy_points_net": -205.31,
+          "t_stat": -1.15
+        },
+        "USDCHF": {
+          "trades": 33,
+          "win_rate": 0.4242,
+          "expectancy_points_net": -157.83,
+          "t_stat": -1.02
+        },
+        "USDJPY": {
+          "trades": 31,
+          "win_rate": 0.5161,
+          "expectancy_points_net": -22.67,
+          "t_stat": -0.06
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 50,
+          "win_rate": 0.46,
+          "expectancy_points_net": 2.36,
+          "t_stat": 0.01
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 54,
+          "win_rate": 0.5185,
+          "expectancy_points_net": 50.07,
+          "t_stat": 0.28
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 68,
+          "win_rate": 0.3971,
+          "expectancy_points_net": -223.91,
+          "t_stat": -1.41
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 63,
+          "win_rate": 0.6032,
+          "expectancy_points_net": 205.07,
+          "t_stat": 1.51
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 3,
+        "expectancy_by_block": [
+          2.36,
+          50.07,
+          -223.91,
+          205.07
+        ],
+        "min_block_expectancy": -223.91,
+        "max_block_expectancy": 205.07
+      }
+    },
+    {
+      "name": "mom_24_inv",
+      "family": "momentum_inv",
+      "in_sample": {
+        "trades": 158,
+        "win_rate": 0.538,
+        "expectancy_points_net": 50.47,
+        "expectancy_points_gross": 53.81,
+        "profit_factor": 1.088,
+        "total_points_net": 7974.6,
+        "avg_win_points": 1158.9,
+        "avg_loss_points": -1240.1,
+        "t_stat": 0.49,
+        "significant_at_95": false,
+        "avg_bars_held": 6.9,
+        "exit_mix": {
+          "tp": 85,
+          "sl": 73,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 4,
+        "t_stat_clustered_by_symbol": 0.51,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 114,
+        "obs_per_date": 1.39,
+        "t_stat_clustered_by_date": -0.04,
+        "mean_per_date": -4.76,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 77,
+        "win_rate": 0.4416,
+        "expectancy_points_net": -130.77,
+        "expectancy_points_gross": -127.35,
+        "profit_factor": 0.766,
+        "total_points_net": -10069.2,
+        "avg_win_points": 969.2,
+        "avg_loss_points": -1000.5,
+        "t_stat": -1.09,
+        "significant_at_95": false,
+        "avg_bars_held": 6.2,
+        "exit_mix": {
+          "tp": 34,
+          "sl": 41,
+          "timeout": 2
+        },
+        "symbols": 7,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -1.69,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 52,
+        "obs_per_date": 1.48,
+        "t_stat_clustered_by_date": -0.26,
+        "mean_per_date": -37.36,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 40,
+          "win_rate": 0.525,
+          "expectancy_points_net": -0.44,
+          "t_stat": -0.0
+        },
+        "EURUSD": {
+          "trades": 29,
+          "win_rate": 0.3103,
+          "expectancy_points_net": -396.42,
+          "t_stat": -2.14
+        },
+        "GBPUSD": {
+          "trades": 34,
+          "win_rate": 0.4412,
+          "expectancy_points_net": -210.36,
+          "t_stat": -0.92
+        },
+        "NZDUSD": {
+          "trades": 33,
+          "win_rate": 0.5758,
+          "expectancy_points_net": 119.29,
+          "t_stat": 0.79
+        },
+        "USDCAD": {
+          "trades": 35,
+          "win_rate": 0.6,
+          "expectancy_points_net": 201.31,
+          "t_stat": 1.13
+        },
+        "USDCHF": {
+          "trades": 33,
+          "win_rate": 0.5758,
+          "expectancy_points_net": 151.83,
+          "t_stat": 0.98
+        },
+        "USDJPY": {
+          "trades": 31,
+          "win_rate": 0.4839,
+          "expectancy_points_net": 18.67,
+          "t_stat": 0.05
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 50,
+          "win_rate": 0.54,
+          "expectancy_points_net": -8.8,
+          "t_stat": -0.05
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 54,
+          "win_rate": 0.4815,
+          "expectancy_points_net": -56.73,
+          "t_stat": -0.32
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 68,
+          "win_rate": 0.6029,
+          "expectancy_points_net": 216.77,
+          "t_stat": 1.37
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 63,
+          "win_rate": 0.3968,
+          "expectancy_points_net": -211.61,
+          "t_stat": -1.55
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 1,
+        "expectancy_by_block": [
+          -8.8,
+          -56.73,
+          216.77,
+          -211.61
+        ],
+        "min_block_expectancy": -211.61,
+        "max_block_expectancy": 216.77
+      }
+    },
+    {
+      "name": "mom_72",
+      "family": "momentum",
+      "in_sample": {
+        "trades": 103,
+        "win_rate": 0.5243,
+        "expectancy_points_net": 52.68,
+        "expectancy_points_gross": 56.28,
+        "profit_factor": 1.104,
+        "total_points_net": 5426.0,
+        "avg_win_points": 1069.2,
+        "avg_loss_points": -1067.6,
+        "t_stat": 0.47,
+        "significant_at_95": false,
+        "avg_bars_held": 6.0,
+        "exit_mix": {
+          "tp": 54,
+          "sl": 49,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 4,
+        "t_stat_clustered_by_symbol": 0.05,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 76,
+        "obs_per_date": 1.36,
+        "t_stat_clustered_by_date": 0.72,
+        "mean_per_date": 91.97,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 69,
+        "win_rate": 0.5797,
+        "expectancy_points_net": 63.68,
+        "expectancy_points_gross": 67.42,
+        "profit_factor": 1.144,
+        "total_points_net": 4393.6,
+        "avg_win_points": 874.5,
+        "avg_loss_points": -1054.7,
+        "t_stat": 0.51,
+        "significant_at_95": false,
+        "avg_bars_held": 6.8,
+        "exit_mix": {
+          "tp": 39,
+          "sl": 27,
+          "timeout": 3
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": -0.12,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 57,
+        "obs_per_date": 1.21,
+        "t_stat_clustered_by_date": -0.12,
+        "mean_per_date": -16.54,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 30,
+          "win_rate": 0.6,
+          "expectancy_points_net": 198.02,
+          "t_stat": 1.26
+        },
+        "EURUSD": {
+          "trades": 29,
+          "win_rate": 0.5172,
+          "expectancy_points_net": 61.13,
+          "t_stat": 0.34
+        },
+        "GBPUSD": {
+          "trades": 28,
+          "win_rate": 0.6071,
+          "expectancy_points_net": 303.09,
+          "t_stat": 1.26
+        },
+        "NZDUSD": {
+          "trades": 29,
+          "win_rate": 0.5862,
+          "expectancy_points_net": 101.58,
+          "t_stat": 0.68
+        },
+        "USDCAD": {
+          "trades": 19,
+          "win_rate": 0.5263,
+          "expectancy_points_net": 83.05,
+          "t_stat": 0.37
+        },
+        "USDCHF": {
+          "trades": 22,
+          "win_rate": 0.5455,
+          "expectancy_points_net": 28.27,
+          "t_stat": 0.16
+        },
+        "USDJPY": {
+          "trades": 15,
+          "win_rate": 0.3333,
+          "expectancy_points_net": -768.4,
+          "t_stat": -1.51
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 35,
+          "win_rate": 0.4,
+          "expectancy_points_net": -226.01,
+          "t_stat": -1.15
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 39,
+          "win_rate": 0.5897,
+          "expectancy_points_net": 202.63,
+          "t_stat": 1.24
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 42,
+          "win_rate": 0.6429,
+          "expectancy_points_net": 259.7,
+          "t_stat": 1.51
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 56,
+          "win_rate": 0.5357,
+          "expectancy_points_net": -19.28,
+          "t_stat": -0.13
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          -226.01,
+          202.63,
+          259.7,
+          -19.28
+        ],
+        "min_block_expectancy": -226.01,
+        "max_block_expectancy": 259.7
+      }
+    },
+    {
+      "name": "mom_72_inv",
+      "family": "momentum_inv",
+      "in_sample": {
+        "trades": 103,
+        "win_rate": 0.4757,
+        "expectancy_points_net": -59.88,
+        "expectancy_points_gross": -56.28,
+        "profit_factor": 0.894,
+        "total_points_net": -6168.0,
+        "avg_win_points": 1060.3,
+        "avg_loss_points": -1076.4,
+        "t_stat": -0.53,
+        "significant_at_95": false,
+        "avg_bars_held": 6.0,
+        "exit_mix": {
+          "tp": 49,
+          "sl": 54,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 3,
+        "t_stat_clustered_by_symbol": -0.11,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 76,
+        "obs_per_date": 1.36,
+        "t_stat_clustered_by_date": -0.78,
+        "mean_per_date": -99.24,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "out_of_sample": {
+        "trades": 69,
+        "win_rate": 0.4203,
+        "expectancy_points_net": -71.15,
+        "expectancy_points_gross": -67.42,
+        "profit_factor": 0.861,
+        "total_points_net": -4909.6,
+        "avg_win_points": 1047.3,
+        "avg_loss_points": -882.0,
+        "t_stat": -0.57,
+        "significant_at_95": false,
+        "avg_bars_held": 6.8,
+        "exit_mix": {
+          "tp": 27,
+          "sl": 39,
+          "timeout": 3
+        },
+        "symbols": 7,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": 0.09,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 57,
+        "obs_per_date": 1.21,
+        "t_stat_clustered_by_date": 0.07,
+        "mean_per_date": 9.06,
+        "signs_disagree": true,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 30,
+          "win_rate": 0.4,
+          "expectancy_points_net": -206.02,
+          "t_stat": -1.31
+        },
+        "EURUSD": {
+          "trades": 29,
+          "win_rate": 0.4828,
+          "expectancy_points_net": -77.13,
+          "t_stat": -0.43
+        },
+        "GBPUSD": {
+          "trades": 28,
+          "win_rate": 0.3929,
+          "expectancy_points_net": -307.09,
+          "t_stat": -1.28
+        },
+        "NZDUSD": {
+          "trades": 29,
+          "win_rate": 0.4138,
+          "expectancy_points_net": -107.58,
+          "t_stat": -0.72
+        },
+        "USDCAD": {
+          "trades": 19,
+          "win_rate": 0.4737,
+          "expectancy_points_net": -87.05,
+          "t_stat": -0.39
+        },
+        "USDCHF": {
+          "trades": 22,
+          "win_rate": 0.4545,
+          "expectancy_points_net": -34.27,
+          "t_stat": -0.19
+        },
+        "USDJPY": {
+          "trades": 15,
+          "win_rate": 0.6667,
+          "expectancy_points_net": 764.4,
+          "t_stat": 1.5
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 35,
+          "win_rate": 0.6,
+          "expectancy_points_net": 218.36,
+          "t_stat": 1.11
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 39,
+          "win_rate": 0.4103,
+          "expectancy_points_net": -209.97,
+          "t_stat": -1.29
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 42,
+          "win_rate": 0.3571,
+          "expectancy_points_net": -267.22,
+          "t_stat": -1.56
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 56,
+          "win_rate": 0.4643,
+          "expectancy_points_net": 12.36,
+          "t_stat": 0.08
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 2,
+        "expectancy_by_block": [
+          218.36,
+          -209.97,
+          -267.22,
+          12.36
+        ],
+        "min_block_expectancy": -267.22,
+        "max_block_expectancy": 218.36
+      }
+    },
+    {
+      "name": "mom_168",
+      "family": "momentum",
+      "in_sample": {
+        "trades": 86,
+        "win_rate": 0.3488,
+        "expectancy_points_net": -329.87,
+        "expectancy_points_gross": -326.14,
+        "profit_factor": 0.579,
+        "total_points_net": -28369.1,
+        "avg_win_points": 1299.5,
+        "avg_loss_points": -1202.8,
+        "t_stat": -2.23,
+        "significant_at_95": true,
+        "avg_bars_held": 5.9,
+        "exit_mix": {
+          "tp": 30,
+          "sl": 56,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 2,
+        "t_stat_clustered_by_symbol": -2.46,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": true,
+        "entry_dates": 64,
+        "obs_per_date": 1.34,
+        "t_stat_clustered_by_date": -2.1,
+        "mean_per_date": -347.04,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 57,
+        "win_rate": 0.4386,
+        "expectancy_points_net": -143.32,
+        "expectancy_points_gross": -139.79,
+        "profit_factor": 0.759,
+        "total_points_net": -8169.2,
+        "avg_win_points": 1031.9,
+        "avg_loss_points": -1061.5,
+        "t_stat": -0.99,
+        "significant_at_95": false,
+        "avg_bars_held": 5.5,
+        "exit_mix": {
+          "tp": 25,
+          "sl": 31,
+          "timeout": 1
+        },
+        "symbols": 6,
+        "symbols_positive": 0,
+        "t_stat_clustered_by_symbol": -3.94,
+        "symbol_cluster_threshold_95": 2.571,
+        "symbol_cluster_significant": true,
+        "entry_dates": 48,
+        "obs_per_date": 1.19,
+        "t_stat_clustered_by_date": -0.82,
+        "mean_per_date": -128.69,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 14,
+          "win_rate": 0.3571,
+          "expectancy_points_net": -275.25,
+          "t_stat": -1.24
+        },
+        "EURUSD": {
+          "trades": 28,
+          "win_rate": 0.25,
+          "expectancy_points_net": -458.78,
+          "t_stat": -2.41
+        },
+        "GBPUSD": {
+          "trades": 23,
+          "win_rate": 0.4783,
+          "expectancy_points_net": -70.7,
+          "t_stat": -0.23
+        },
+        "NZDUSD": {
+          "trades": 18,
+          "win_rate": 0.3889,
+          "expectancy_points_net": -213.47,
+          "t_stat": -1.11
+        },
+        "USDCAD": {
+          "trades": 22,
+          "win_rate": 0.5,
+          "expectancy_points_net": -6.49,
+          "t_stat": -0.03
+        },
+        "USDCHF": {
+          "trades": 22,
+          "win_rate": 0.3636,
+          "expectancy_points_net": -222.52,
+          "t_stat": -1.18
+        },
+        "USDJPY": {
+          "trades": 16,
+          "win_rate": 0.375,
+          "expectancy_points_net": -583.27,
+          "t_stat": -0.95
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 12,
+          "win_rate": 0.25,
+          "expectancy_points_net": -443.47,
+          "t_stat": -2.04
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 49,
+          "win_rate": 0.3673,
+          "expectancy_points_net": -282.7,
+          "t_stat": -1.53
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 28,
+          "win_rate": 0.3571,
+          "expectancy_points_net": -399.3,
+          "t_stat": -1.26
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 54,
+          "win_rate": 0.4444,
+          "expectancy_points_net": -114.52,
+          "t_stat": -0.77
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 0,
+        "expectancy_by_block": [
+          -443.47,
+          -282.7,
+          -399.3,
+          -114.52
+        ],
+        "min_block_expectancy": -443.47,
+        "max_block_expectancy": -114.52
+      }
+    },
+    {
+      "name": "mom_168_inv",
+      "family": "momentum_inv",
+      "in_sample": {
+        "trades": 86,
+        "win_rate": 0.6512,
+        "expectancy_points_net": 322.41,
+        "expectancy_points_gross": 326.14,
+        "profit_factor": 1.708,
+        "total_points_net": 27727.1,
+        "avg_win_points": 1194.7,
+        "avg_loss_points": -1305.9,
+        "t_stat": 2.18,
+        "significant_at_95": true,
+        "avg_bars_held": 5.9,
+        "exit_mix": {
+          "tp": 56,
+          "sl": 30,
+          "timeout": 0
+        },
+        "symbols": 7,
+        "symbols_positive": 5,
+        "t_stat_clustered_by_symbol": 2.41,
+        "symbol_cluster_threshold_95": 2.447,
+        "symbol_cluster_significant": false,
+        "entry_dates": 64,
+        "obs_per_date": 1.34,
+        "t_stat_clustered_by_date": 2.05,
+        "mean_per_date": 339.65,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": true
+      },
+      "out_of_sample": {
+        "trades": 57,
+        "win_rate": 0.5614,
+        "expectancy_points_net": 136.27,
+        "expectancy_points_gross": 139.79,
+        "profit_factor": 1.299,
+        "total_points_net": 7767.2,
+        "avg_win_points": 1054.0,
+        "avg_loss_points": -1038.4,
+        "t_stat": 0.94,
+        "significant_at_95": false,
+        "avg_bars_held": 5.5,
+        "exit_mix": {
+          "tp": 31,
+          "sl": 25,
+          "timeout": 1
+        },
+        "symbols": 6,
+        "symbols_positive": 6,
+        "t_stat_clustered_by_symbol": 3.93,
+        "symbol_cluster_threshold_95": 2.571,
+        "symbol_cluster_significant": true,
+        "entry_dates": 48,
+        "obs_per_date": 1.19,
+        "t_stat_clustered_by_date": 0.78,
+        "mean_per_date": 121.82,
+        "signs_disagree": false,
+        "date_cluster_threshold_95": 2.042,
+        "date_cluster_significant": false
+      },
+      "per_symbol": {
+        "AUDUSD": {
+          "trades": 14,
+          "win_rate": 0.6429,
+          "expectancy_points_net": 267.25,
+          "t_stat": 1.2
+        },
+        "EURUSD": {
+          "trades": 28,
+          "win_rate": 0.75,
+          "expectancy_points_net": 442.78,
+          "t_stat": 2.32
+        },
+        "GBPUSD": {
+          "trades": 23,
+          "win_rate": 0.5217,
+          "expectancy_points_net": 66.7,
+          "t_stat": 0.22
+        },
+        "NZDUSD": {
+          "trades": 18,
+          "win_rate": 0.6111,
+          "expectancy_points_net": 207.47,
+          "t_stat": 1.07
+        },
+        "USDCAD": {
+          "trades": 22,
+          "win_rate": 0.5,
+          "expectancy_points_net": 2.49,
+          "t_stat": 0.01
+        },
+        "USDCHF": {
+          "trades": 22,
+          "win_rate": 0.6364,
+          "expectancy_points_net": 216.52,
+          "t_stat": 1.15
+        },
+        "USDJPY": {
+          "trades": 16,
+          "win_rate": 0.625,
+          "expectancy_points_net": 579.27,
+          "t_stat": 0.94
+        }
+      },
+      "blocks": [
+        {
+          "block": 1,
+          "from": "2023-07-03T00:00:00",
+          "to": "2024-04-19T12:00:00",
+          "trades": 12,
+          "win_rate": 0.75,
+          "expectancy_points_net": 436.64,
+          "t_stat": 2.0
+        },
+        {
+          "block": 2,
+          "from": "2024-04-19T12:00:00",
+          "to": "2025-02-05T00:00:00",
+          "trades": 49,
+          "win_rate": 0.6327,
+          "expectancy_points_net": 274.98,
+          "t_stat": 1.49
+        },
+        {
+          "block": 3,
+          "from": "2025-02-05T00:00:00",
+          "to": "2025-11-23T12:00:00",
+          "trades": 28,
+          "win_rate": 0.6429,
+          "expectancy_points_net": 392.23,
+          "t_stat": 1.24
+        },
+        {
+          "block": 4,
+          "from": "2025-11-23T12:00:00",
+          "to": "2026-09-11T00:00:00",
+          "trades": 54,
+          "win_rate": 0.5556,
+          "expectancy_points_net": 107.37,
+          "t_stat": 0.72
+        }
+      ],
+      "block_summary": {
+        "blocks_graded": 4,
+        "blocks_positive": 4,
+        "expectancy_by_block": [
+          436.64,
+          274.98,
+          392.23,
+          107.37
+        ],
+        "min_block_expectancy": 107.37,
+        "max_block_expectancy": 436.64
+      }
+    }
+  ],
+  "verdict": {
+    "candidates_judged": 31,
+    "bonferroni_z_threshold": 3.154,
+    "best_candidate": "mom_168_inv",
+    "best_in_sample_t": 2.18,
+    "best_out_of_sample_t": 0.94,
+    "best_out_of_sample_expectancy": 136.27,
+    "permutation_null_best_t_per_round": [
+      2.04,
+      2.87,
+      2.22
+    ],
+    "permutation_null_best_t_mean": 2.38,
+    "beats_bonferroni": false,
+    "beats_permutation_null": false,
+    "holds_out_of_sample": false,
+    "candidates_positive_out_of_sample_at_1_96": [
+      "rsi_rev_14_30_70",
+      "donchian_fade_55",
+      "donchian_fade_100"
+    ],
+    "expected_by_chance_at_1_96": 0.8,
+    "best_out_of_sample_t_clustered_by_date": 0.78,
+    "best_survives_date_clustering": false,
+    "best_out_of_sample_signs_disagree": false,
+    "best_out_of_sample_obs_per_date": 1.19,
+    "best_out_of_sample_t_clustered_by_symbol": 3.93,
+    "best_symbols_positive_out_of_sample": 6,
+    "best_block_summary": {
+      "blocks_graded": 4,
+      "blocks_positive": 4,
+      "expectancy_by_block": [
+        436.64,
+        274.98,
+        392.23,
+        107.37
+      ],
+      "min_block_expectancy": 107.37,
+      "max_block_expectancy": 436.64
+    },
+    "walk_forward": {
+      "folds": [
+        {
+          "test_block": 2,
+          "trained_on_blocks": "1-1",
+          "selected": "donchian_fade_55",
+          "train_t": 1.95,
+          "train_trades": 53,
+          "test_trades": 72,
+          "test_expectancy_points_net": 148.09,
+          "test_t": 0.97
+        },
+        {
+          "test_block": 3,
+          "trained_on_blocks": "1-2",
+          "selected": "ema_10_50",
+          "train_t": 3.48,
+          "train_trades": 54,
+          "test_trades": 37,
+          "test_expectancy_points_net": -343.56,
+          "test_t": -1.74
+        },
+        {
+          "test_block": 4,
+          "trained_on_blocks": "1-3",
+          "selected": "mom_168_inv",
+          "train_t": 2.31,
+          "train_trades": 89,
+          "test_trades": 54,
+          "test_expectancy_points_net": 107.37,
+          "test_t": 0.72
+        }
+      ],
+      "folds_graded": 3,
+      "folds_profitable": 2,
+      "mean_test_expectancy_points_net": -29.37,
+      "note": "Each fold ranks every candidate on the blocks before the test block and trades only the winner through it, so the selection never sees the era it is judged on."
+    },
+    "reading": "A candidate counts as evidence only if it clears the Bonferroni threshold, exceeds the best the permutation null reached over the same number of candidates, AND holds out of sample. The permutation null trades exactly as often as the real candidate and pays the same spread, so it isolates timing skill. Candidates passing 1.96 out of sample should be compared against expected_by_chance before being read as survivors. Two further checks sit alongside those. Clustering by entry date collapses the trades one shared dollar move opens across seven pairs into a single observation, which is the correction that applies here; the by-symbol figure is a consistency check and goes UP when every pair agrees, so it is not evidence. The era blocks and the walk-forward ask whether a result predates the most recent regime: a single sequential split cannot, because its holdout is always the present."
+  }
+}
