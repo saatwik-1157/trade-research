@@ -286,6 +286,42 @@ are counts of tests, not of covered lines.
 
 ---
 
+## 10. `test_observability` can fail intermittently on a loaded runner
+
+`tests/test_observability.py::test_a_component_that_was_not_collected_answers_404`
+failed once in CI with `PendingRollbackError` on `/v1/monitoring/collect`:
+
+    sqlalchemy.exc.PendingRollbackError: Can't reconnect until invalid
+    transaction is rolled back.
+
+**It is not a regression, and that is established rather than assumed.** The
+backend job passed on the run before it and the run after it with byte-identical
+backend code -- the commit between them only added JSON files to git, which
+cannot affect a database test. It has never reproduced locally; the most recent
+attempt was a clean 3,159.
+
+**The mechanism, as far as it is understood.** Each probe runs inside
+`asyncio.timeout(probe_timeout_seconds)`, which is **3.0s**. A probe cancelled
+mid-query leaves the connection invalidated, and `collect()`'s caller then calls
+`db.commit()`, which refuses to revalidate until someone rolls back. The
+traceback supports this -- it goes through `_revalidate_connection`, which is a
+connection that was invalidated, not a statement that was rejected. Load
+dependence explains why it appears on a shared runner and not here.
+
+This is a hypothesis with evidence, not a diagnosis. One earlier explanation --
+that the FK enforcement added on 2026-09-12 was poisoning the session with an
+IntegrityError -- was tested and is WRONG: after an IntegrityError the session
+reports `is_active == True` and commits without complaint. Anyone picking this
+up should not spend time there again.
+
+**The defect underneath, whatever the trigger.** `collect()` documents itself as
+"One pass. Never raises; a broken probe becomes an UNKNOWN component." It keeps
+that promise for the exception and not for the SESSION: the pass survives, the
+transaction does not, and the caller's commit fails instead of the probe. A fix
+belongs at that seam -- but it needs a reproduction first, because a rollback on
+every probe failure would discard the state transitions earlier probes in the
+same pass recorded, and that is a real behaviour change to make blind.
+
 ## What is NOT a limitation
 
 Worth stating, because these look like gaps and are not:
