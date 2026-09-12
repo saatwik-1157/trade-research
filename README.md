@@ -62,6 +62,35 @@ mechanism explained under [Why the win rate lies](#why-the-win-rate-lies).
 
 ---
 
+## One executable
+
+`python build_exe.py` freezes the whole toolkit behind a single entry point, so
+it runs on a machine with no Python installed:
+
+```bash
+dist/trade-research/trade-research.exe                     # the 24 commands
+dist/trade-research/trade-research.exe account --days 30
+dist/trade-research/trade-research.exe track-record --merge
+dist/trade-research/trade-research.exe <command> --help    # the tool's own help
+```
+
+It finds `data/` and `reports/` by searching upward from the working directory,
+then from the executable, so it acts on the project you are standing in and
+falls back to the one it was built from. `TRADE_RESEARCH_ROOT` overrides both.
+
+A **directory** rather than a single file, and that is measured rather than
+preferred. PyInstaller's onefile mode unpacks the whole bundle to a temporary
+directory on every invocation:
+
+| build | startup | on disk |
+| --- | --- | --- |
+| `--onefile` | 5,400 ms | 38 MB |
+| default (onedir) | 1,000 ms | 71 MB |
+| from source | 410 ms | — |
+
+Five seconds per command is not a startup cost, it is a different tool. Pass
+`--onefile` when one portable file matters more than speed.
+
 ## Why it is built this way
 
 The common pattern for an "AI stock analyst" is to web-search a ticker and let

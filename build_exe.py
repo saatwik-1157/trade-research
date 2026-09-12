@@ -45,15 +45,26 @@ def hidden_imports() -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Freeze the toolkit into one executable.")
     ap.add_argument("--clean", action="store_true", help="discard the previous build tree")
-    ap.add_argument("--onedir", action="store_true",
-                    help="a directory rather than one file; starts faster")
+    # A directory by default, because onefile unpacks the whole bundle to a
+    # temporary directory on EVERY invocation and deletes it afterwards.
+    # Measured on this machine, `--help` alone:
+    #
+    #     onefile   5,400 ms     38 MB on disk
+    #     onedir    1,000 ms     71 MB on disk
+    #     source      410 ms
+    #
+    # Five seconds per command is not a startup cost, it is a different tool.
+    # 33 MB buys it back. `--onefile` stays available for when one portable
+    # file matters more than speed -- copying it to another machine, say.
+    ap.add_argument("--onefile", action="store_true",
+                    help="a single portable file instead of a directory; ~5x slower to start")
     args = ap.parse_args()
 
     modules = hidden_imports()
     command = [
         sys.executable, "-m", "PyInstaller",
         "--noconfirm",
-        "--onedir" if args.onedir else "--onefile",
+        "--onefile" if args.onefile else "--onedir",
         "--console",
         "--name", NAME,
         "--paths", TOOLS,
@@ -72,12 +83,19 @@ def main() -> int:
     if completed.returncode != 0:
         return completed.returncode
 
-    built = os.path.join(ROOT, "dist", NAME + (".exe" if os.name == "nt" else ""))
-    if not args.onedir and not os.path.exists(built):
+    # Where the executable lands differs by mode, and checking the wrong path
+    # would report a build that did not happen as a success.
+    exe = NAME + (".exe" if os.name == "nt" else "")
+    built = (os.path.join(ROOT, "dist", exe) if args.onefile
+             else os.path.join(ROOT, "dist", NAME, exe))
+    if not os.path.exists(built):
         print(f"PyInstaller reported success but {built} is not there", file=sys.stderr)
         return 1
-    if os.path.exists(built):
-        print(f"built {built}  ({os.path.getsize(built) / 1_048_576:.1f} MB)")
+
+    size = os.path.getsize(built) / 1_048_576
+    print(f"built {built}  ({size:.1f} MB)")
+    if not args.onefile:
+        print("  run it from this directory; the files beside it are the bundle")
     return 0
 
 
