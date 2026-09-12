@@ -665,7 +665,7 @@ class FakeMT5:
             deal=self.deal, price=self.fill)
 
 
-def _place(fake, side="sell", risk_usd=None):
+def _place(fake, side="sell", risk_usd=None, sl_atr=1.5, tp_atr=1.5):
     """Run place() against the fake with the trade log stubbed out.
 
     `APPROVED_UPSTREAM` rather than a real gate, because these tests are about
@@ -678,7 +678,7 @@ def _place(fake, side="sell", risk_usd=None):
     real_log = mt5_paper._log
     mt5_paper._log = logged.append
     try:
-        out = mt5_paper.place(fake, "NZDUSD", side, 0.01, 1.5, 1.5, live=True,
+        out = mt5_paper.place(fake, "NZDUSD", side, 0.01, sl_atr, tp_atr, live=True,
                               risk_usd=risk_usd,
                               gate=risk_gate.APPROVED_UPSTREAM)
     finally:
@@ -691,6 +691,12 @@ def test_bracket_must_straddle_the_fill():
 
     check("a normal long is sane", mt5_paper.bracket_is_sane(True, 1.0, 0.9, 1.1), True)
     check("a normal short is sane", mt5_paper.bracket_is_sane(False, 1.0, 1.1, 0.9), True)
+    # The shape that actually reached the server on 2026-09-07: a bracket of
+    # zero width, every exit sitting on the entry.
+    check("a zero-width bracket is not sane",
+          mt5_paper.bracket_is_sane(True, 1.0, 1.0, 1.0), False)
+    check("nor is it sane for a short",
+          mt5_paper.bracket_is_sane(False, 1.0, 1.0, 1.0), False)
 
     # Position 10200315596: sell quoted 0.59752 with tp 0.59638, filled 0.59473.
     check("the live NZDUSD fill is caught",
@@ -713,6 +719,36 @@ def test_place_records_the_fill_not_the_quote():
     check("a sane bracket is left alone", out.get("bracket_repaired"), None)
     check("only the entry order was sent", len(fake.sent), 1)
     close_to("the log carries the fill", logged[0]["fill_price"], 0.59750, 1e-9)
+
+
+def test_a_zero_multiple_means_no_bracket_not_a_zero_width_one():
+    """2026-09-07 04:52 UTC, EURUSD: sl == tp == entry reached the server.
+
+    `price - 0.0 * atr` is `price`, so computing the levels unconditionally
+    sends a bracket of zero width -- both exits on the entry, every outcome a
+    loss. It happened once, live, when the platform adapter passed 0.0/0.0
+    meaning "I will set the levels myself". `bracket_is_sane` caught it, the
+    repair recomputed the same zero width, the modify came back 10025
+    NO_CHANGES, and the fallback closed the position. The fail-safe worked and
+    the order should never have been built.
+
+    Asserted on what reaches the server, because that is what was wrong: the
+    levels are transmitted as absolute prices, and 0.0 is how MT5 spells
+    "not set".
+    """
+    print("\nZero ATR multiple - 0.0 means no bracket, never a bracket of zero width")
+
+    fake = FakeMT5(fill=0.59752)          # filled exactly at the quote
+    out, _ = _place(fake, sl_atr=0.0, tp_atr=0.0)
+
+    sent = fake.sent[0]
+    check("the stop is sent as not-set", sent["sl"], 0.0)
+    check("the target is sent as not-set", sent["tp"], 0.0)
+    check("no level equals the entry", sent["sl"] == sent["price"], False)
+    check("nothing was repaired, because nothing was wrong",
+          out.get("bracket_repaired"), None)
+    check("and nothing was closed out", out.get("bracket_repair_failed_closed"), None)
+    check("only the entry order was sent", len(fake.sent), 1)
 
 
 def test_inverted_bracket_is_repaired_from_the_fill():
@@ -1869,6 +1905,7 @@ def main():
     test_walk_forward_cannot_see_its_test_era()
     test_bracket_must_straddle_the_fill()
     test_place_records_the_fill_not_the_quote()
+    test_a_zero_multiple_means_no_bracket_not_a_zero_width_one()
     test_inverted_bracket_is_repaired_from_the_fill()
     test_unrepairable_bracket_is_closed_not_held()
     test_lot_is_sized_off_the_stop_distance()
