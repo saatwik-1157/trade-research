@@ -583,13 +583,10 @@ async def _enable_bot(app: FastAPI, **over: object) -> None:
     from decimal import Decimal as D
 
     from app.auth.models import Role, User
-    from app.models.accounts import PaperAccount, RoleRow
+    from app.models.accounts import PaperAccount
     from app.models.bots import Bot
 
     async with app.state.session_factory() as db:
-        for rank, role in enumerate(Role):
-            db.add(RoleRow(name=str(role), rank=rank, description=str(role)))
-        await db.flush()
         db.add(User(id="u1", email="a@b.io", password_hash="x", role=str(Role.admin)))
         db.add(
             PaperAccount(

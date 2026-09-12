@@ -51,6 +51,12 @@ class PnL:
     realized_trades: int = 0
     open_positions: int = 0
     unrealized_unavailable: tuple[str, ...] = ()
+    #: The same figure as `realized_today` over the trading week. Read by the
+    #: risk engine's weekly-loss veto, which treats None as a veto rather than
+    #: as zero. Defaulted so a caller that has not computed it says "unknown"
+    #: instead of claiming a flat week.
+    realized_week: Decimal | None = None
+    week_start: datetime | None = None
 
     @property
     def total(self) -> Decimal | None:
@@ -72,7 +78,9 @@ class PnL:
             "trades_today": self.trades_today,
             "realized_trades": self.realized_trades,
             "open_positions": self.open_positions,
+            "realized_week": _money(self.realized_week),
             "day_start": self.day_start.isoformat() if self.day_start else None,
+            "week_start": self.week_start.isoformat() if self.week_start else None,
             "unrealized_unavailable": list(self.unrealized_unavailable),
             "sources": {
                 "realized": "the trade journal (L19) -- what a venue confirmed",

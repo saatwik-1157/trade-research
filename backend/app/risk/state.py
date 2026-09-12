@@ -39,6 +39,10 @@ class RiskState(StrEnum):
     normal = "NORMAL"
     warning = "WARNING"
     daily_loss_locked = "DAILY_LOSS_LOCKED"
+    #: Its own state, not a reuse of the daily one. `refresh()` clears a
+    #: daily lock when the DAY ends, so a week latched there would
+    #: release itself overnight while the week was still breached.
+    weekly_loss_locked = "WEEKLY_LOSS_LOCKED"
     drawdown_locked = "DRAWDOWN_LOCKED"
     emergency_stop = "EMERGENCY_STOP"
     disabled = "DISABLED"
@@ -47,6 +51,7 @@ class RiskState(StrEnum):
 # States in which no new order may be created, and the code each one reports.
 BLOCKING: dict[RiskState, RejectionCode] = {
     RiskState.daily_loss_locked: RejectionCode.daily_loss_locked,
+    RiskState.weekly_loss_locked: RejectionCode.weekly_loss_locked,
     RiskState.drawdown_locked: RejectionCode.drawdown_locked,
     RiskState.emergency_stop: RejectionCode.emergency_stop,
     RiskState.disabled: RejectionCode.account_disabled,
@@ -54,8 +59,19 @@ BLOCKING: dict[RiskState, RejectionCode] = {
 
 # States that only an authorised human clears. A drawdown lock is deliberately
 # here and not on a timer: the drawdown is still there tomorrow.
+# A weekly lock is in here and a daily one is not, and the difference is
+# that `refresh()` can prove a DAY has ended. It cannot prove a week has:
+# it would have to know which day the broker's week starts on, and that
+# varies by venue. So the weekly lock is released by a person who has
+# looked, which is the right amount of friction for a limit that took a
+# week to breach.
 NEEDS_AUTHORISED_RESET = frozenset(
-    {RiskState.drawdown_locked, RiskState.emergency_stop, RiskState.disabled}
+    {
+        RiskState.weekly_loss_locked,
+        RiskState.drawdown_locked,
+        RiskState.emergency_stop,
+        RiskState.disabled,
+    }
 )
 
 
@@ -81,6 +97,22 @@ def day_start(now: datetime, *, boundary_hour: int = 0) -> datetime:
     if moment < start:
         start -= timedelta(days=1)
     return start
+
+
+def week_start(now: datetime, *, boundary_hour: int = 0) -> datetime:
+    """The start of the current trading week, in UTC.
+
+    Monday, because this project already treats Saturday and Sunday as the
+    venue weekend (`run_overnight.weekend_deadline`), so a week that began on
+    any other day would cut a trading week in half. `boundary_hour` shifts it
+    for the same reason `day_start` takes one -- the broker's rollover -- and
+    is a configured number, never read from the machine.
+
+    One definition, used from both sides of the tz-awareness line (§21), the
+    same rule `day_start` follows.
+    """
+    start = day_start(now, boundary_hour=boundary_hour)
+    return start - timedelta(days=start.weekday())
 
 
 @dataclass

@@ -5489,17 +5489,241 @@ refactor across 45 call sites, not a rename, so both now carry a comment
 pointing at the other rather than being merged carelessly at the end of a long
 session.
 
+## 2026-09-11 -- the night a session finished
+
+The harness had never once reached its own deadline. Eight of eight runs died
+early, which meant the `--flat-by` flush -- the single mechanism that bounds a
+losing tail overnight -- had never executed outside a test. P1b built the crash
+journal, the console guard and `--detach` to make finishing possible; it could
+not prove that finishing happened.
+
+It happened. Session `20260910-224639` started at 22:46 and ran 433 minutes and
+1,298 passes. At 05:59:24 the flush closed all six open positions by name, the
+process exited 0, and the watchdog wrote `the session ended and will NOT be
+restarted: the session finished normally` -- declining to spend a restart, which
+is the branch that matters, because a watchdog that relaunches a completed
+session is worse than no watchdog. `CRASH_REPORTS/session-20260910-224639.json`
+records `status: completed`, `flushed: 6`, `positions_open: 0`.
+
+The night's result: 21 opened, 12 harvested, realised -14.95 on a 100,000
+account. That is not an edge and is not claimed as one.
+
+**One session is evidence that the mechanism works, not a reliability rate.**
+The three artefacts that show it -- the journal record, the log tail, the
+watchdog line -- are what the next long run gets read against, rather than
+assuming the question is now settled.
+
+Two earlier records from the same evening are worth keeping beside it, because
+they are what the journal is for. `20260910-220313` died after 11ms with
+`AttributeError: 'NoneType' object has no attribute 'write'` -- the detached
+launch had no stdout, fixed in `0c0be45`. Without the journal that death would
+have been a log file that simply stopped.
+
+**The ledger was merged again**, on the same terms as before: the harness's own
+tag, and `--exclude` for the nine platform trades that carry it. 247 new trades,
+2 excluded by tag, 9 by id; the ledger stands at **751**. The account split the
+last merge exposed is now printed rather than pooled -- `5055473926` holds 499
+trades at -30.39 from 09-04 to 09-11, and the older 252 at -22.37 remain
+`unrecorded`, because that login is still not knowable from here.
+
+The R-multiple over 741 trades is **-0.014R, t = -0.92**, by date -1.2 and by
+symbol -1.77. 2,599 more trades would be needed to reach a pooled t of 1.96 at
+this effect size. Every read of this sample has said the same thing and this one
+does not differ.
+
+## P2 -- the harness reaches the Risk Engine (2026-09-11)
+
+The audit's first critical finding, and the one its author called "the key
+change": two independent paths to a broker order, with every safety mechanism
+on the path that had never traded. The choice it framed was to fence Path A or
+to retire it. Fencing it, by routing through `RiskEngine`, is what was chosen.
+
+**It was cheap for a reason worth recording.** `app/risk/engine.py` is *pure*:
+stdlib only, synchronous, no SQLAlchemy, no settings object, no session. It
+takes four frozen dataclasses and returns a verdict. So the harness does not
+need the platform running, a database, an event loop or a migration -- it needs
+`backend/` on `sys.path`. `tools/risk_gate.py` is that seam and nothing more:
+it carries the venue's figures in and the verdict back out, and defines no
+limit, threshold or veto code of its own. If the two ever disagree the engine
+is right and the seam has a bug.
+
+Four `order_send` sites, three of which are closes:
+
+| site | what it is | what changed |
+|---|---|---|
+| `mt5_paper.py:485` | the opening order | needs an `Approval`, or nothing is sent |
+| `mt5_paper.py:526` | the bracket repair | an SLTP modify, not an order; unchanged |
+| `mt5_paper.py:540` | the emergency close after a failed repair | recorded, never refused |
+| `mt5_paper.py:644` | `close_own`, including the flush | recorded, never refused |
+
+**The asymmetry between the two is the whole design.** An opening order with no
+risk decision behind it is REFUSED -- including when the engine cannot be
+imported at all, which is the real case on Python 3.10, where `StrEnum` and
+`datetime.UTC` do not exist and CI runs these gates anyway. A fence that
+disappears on the interpreter that cannot load it is not a fence.
+
+A close is the mirror. It is evaluated, recorded, and sent regardless -- by
+`RiskEngine.approve_close`, which says so at length, and by `record_close`,
+which is written so that an unimportable engine, an unreadable volume or an
+unexpected exception all return an approval whose record says the evaluation
+did not happen. Every limit here bounds the risk of TAKING a position, so
+letting one block a close would refuse to reduce exposure at the moment
+exposure is highest. Concretely: the `--flat-by` flush runs through this code,
+and the flush is the one mechanism bounding a losing tail overnight. It does
+not get a new way to fail.
+
+**The platform path is not judged twice.** `app/brokers/mt5.py` calls the same
+`place()`, and it arrives from `app/oms/service.py`, whose `create()` takes an
+`Approval` that only `RiskEngine` can build. A second verdict there would be
+computed from the harness's limits against a different snapshot, and could
+refuse an order the platform had already approved, booked and recorded. So the
+adapter passes `risk_gate.APPROVED_UPSTREAM`, a named exemption rather than a
+hidden one: `place()` refuses when the gate is `None`, proceeds for the
+sentinel, and there is no third way through.
+
+**One thing was deliberately NOT wired, and it looked like free value.**
+`tools/kill_switch.py` exists and the engine has three kill-switch scopes that
+are checked first and cannot be argued with. Feeding the stop file into
+`KillSwitches` would have been two lines. It would also have been a serious
+regression: the harness honours the stop file as a WIND-DOWN -- `run()` breaks
+to the flush with `halted` false -- while the engine's kill switch is a HALT,
+and `run()` skips the flush after a halt, on the reasoning that a daily-loss
+limit firing at 22:00 is not a reason to close hours before the operator asked.
+So the two-line version would have converted an operator stop that flushes into
+one that abandons every open position. The switch stays where it already works.
+
+**What is honestly new here, and what is not.** The engine ruled on 29 checks
+per proposal in a dry run against the live terminal, approving three and
+reporting 22 limits `not_enforced` by name. Of those checks, the daily loss,
+the position cap and one-position-per-symbol were already enforced by `cycle()`
+and are now enforced twice from the same measured inputs -- which cannot
+disagree about a threshold, only about scope: `cycle()` decides whether to keep
+RUNNING, the engine decides about an ORDER. What is genuinely new on this path
+is a required stop loss, a positive-size check, the trading-mode fence, an
+optional `--max-risk-per-trade` that catches the min-lot floor, a decision id
+on every order, and the structural fact that an order can no longer be
+constructed here without a verdict. The rest is defence in depth, which is
+worth having and is not worth overclaiming.
+
+**Weekly loss and correlated exposure are configured nowhere on this path**,
+because neither has a data source here: there is no weekly realised figure and
+`market_bars` holds 705 bars across 2 symbols. They are reported as
+`not_enforced` and named, rather than passed quietly. An unfed limit that
+approved would read in an audit as one that was checked.
+
+Proven three ways: `tests/test_risk_gate.py`, 46 checks, added to CI as the
+ninth toolkit gate and running on 3.10 as well as 3.12 and 3.14; a dry run
+against the live terminal, where the session halt also fired when the daily
+limit was set below what the account had already realised; and the backend's
+own 231 risk, OMS and broker tests, unchanged and still green.
+
+**What P2 does not have is the same thing P1b did not have yesterday.** The
+fence has never ruled on an order that was actually sent. One overnight session
+fixes that, and every order in `data/paper_trades.jsonl` now carries a `risk`
+block to read it by.
+
+## The weekend the flush could not run (2026-09-12)
+
+The first live session behind the P2 fence did two things at once: it proved
+the fence, and it broke a promise nobody had noticed was conditional.
+
+**The fence, proven on orders that were actually sent.** 23 orders reached the
+venue and all 23 carried a RiskEngine decision -- 23 distinct decision ids, 29
+checks each, 23 limits reported `not_enforced` by name, 0 refusals. 51 closes
+were attempted and all 51 were recorded and approved.
+
+**35 of those closes were refused by the venue.** That pair is the strongest
+evidence the design has produced, and the night produced it by accident. Risk
+approved every close; the market took none of them. The asymmetry the whole
+gate turns on -- an entry needs permission, a close is recorded and never
+blocked -- can only be demonstrated by a night where closes fail, and the log
+now names which side said no. Had `record_close` been able to refuse, a failed
+flush would be indistinguishable from a fence that trapped the book.
+
+**What broke.** The session started Friday 22:50 and its deadline was 06:00
+Saturday. The FX week closed at 02:21 local, four hours before. The flush fired
+on seven positions and was refused with 10018 six times, ten seconds apart: 42
+identical refusals, then `POSITIONS ARE STILL OPEN AT THE VENUE`.
+
+Nothing malfunctioned. `--flat-by` promises the account is flat at the
+deadline, and that promise was never conditional in the code even though it has
+always been conditional in fact. Thursday's session proved the mechanism; this
+one proved the mechanism is not the whole story.
+
+### Three fixes, and one deliberate non-fix
+
+**The deadline is checked in the venue's week, not the operator's.** A deadline
+can be Friday on one clock and Saturday on the other, and the venue is the one
+that settles the trade -- so the guard applies the server offset before asking
+what day it is. The test that matters is the Friday-here/Saturday-there case,
+which a local-clock check would wave through.
+
+`--harvest-only` is exempt, and that is not a loophole: it opens nothing, and
+it is the exact command an operator runs to clean up the book the weekend
+caught. Refusing it would block the remedy with a warning about the problem.
+`--force` overrides, for an operator who means it.
+
+**Two assumptions are stated rather than buried.** MetaTrader's Python API
+exposes no session schedule, so "the week runs Sunday evening to Friday night"
+is the calendar rather than a reading. And `server_now()` is the last TICK's
+stamp, not a live clock -- valid at launch, when quotes are arriving. When the
+market is already shut the offset it yields is wrong, but wrong in the
+direction that makes a weekend deadline look like one, so the guard errs toward
+refusing.
+
+That second point produced a bug in the fix itself. The first version printed
+"server is -5.6h from this clock" on a Saturday -- a plausible figure computed
+from a tick seven hours dead. It now samples tick stamps twice, a second and a
+half apart, and when quotes are not arriving it says so instead of quoting an
+offset it cannot stand behind.
+
+**A closed market is no longer retried.** 10031 is a trade server that may come
+back within seconds, which is why the retry loop exists. 10018 is a calendar.
+The flush now stops after one round when every refusal is 10018 and says what
+that means for the positions. A round with a MIXED refusal still uses every
+attempt, because one position refusing with 10031 means a retry can still help.
+
+**A session that fails its flush is not `completed`.** It is `ended_not_flat`,
+and so is one whose open book could not be counted -- unknown is never the good
+case. The 09-12 run recorded `completed, exit code 0` while seven positions sat
+at the venue, which is the same family as the stale `running` record fixed the
+night before, pointing the other way.
+
+**The non-fix: nothing starts the watchdog.** `tools/watchdog.py` exists and is
+tested, and neither `start-trading.bat` nor `run_overnight.py` mentions it.
+Thursday's session had one because it was launched by a hand-typed command that
+included it; this one did not, and I nearly reported Thursday's watchdog line
+as this session's evidence -- the file is still on disk and reads plausibly
+until you check its date. P1b's "watchdog + restart-loop limiting" is a
+component nobody launches. Left alone deliberately: whether the launcher owns a
+supervisor is a design decision, not a defect to patch at the end of a session.
+
 ## Next
 
-**Build the ablation harness.** All three audits reached it independently: it
-is absent (`ablation` matches zero files), unblocked (it needs only
-`app/validation/economics.py`, `app/datasets/splits.py` and
-`app/research/selection.py`, all present), and it answers a question this
-repository has never asked -- do the AI seat, the regime model and the anomaly
-detector improve out-of-sample results at all? Given six searches across six
-universes with nothing clearing its null, the prior is not favourable, which is
-the argument for measuring it. A null result there would apply to all twelve of
-L76's unbuilt engines.
+~~**P2 -- fence the harness path.**~~ **Done**, by routing through the Risk
+Engine; the section above is the record. What it still lacks is a live session
+behind it, which is the next thing to run and the same gap P1b closed
+yesterday.
+
+**Then P5: foreign keys and a Postgres integration job.** It is Critical #3,
+nothing has been done to it, and it is the finding that makes every other test
+result weaker than its count suggests -- SQLite runs with the pragma off and
+only `orders.signal_id` is covered.
+
+~~**Build the ablation harness.**~~ **Built, and run once.**
+`app/validation/ablation.py` with `backend/tests/test_ablation.py`, and
+`reports/ablation_features.json` holds its first result: 8 feature components,
+baseline expectancy +6.04 points clearing its null at a date-clustered t of
+3.00, 2 of 8 components clearing 1.96 against 0.2 expected by chance --
+`ABOVE_CHANCE_NOT_SIGNIFICANT`, since searching 8 candidates raises the bar any
+one must clear to 2.734 and neither `rsi_14` nor `hour_utc` reaches it.
+
+**What it has not yet been pointed at is the question it was written for.**
+The docstring names the AI seat, the regime model and the anomaly detector; the
+one report on file ablates features instead, and nothing outside the module and
+its tests imports it. Running it over the three engines is a separate, small
+job, and its null result -- if that is what it returns -- would still apply to
+all twelve of L76's unbuilt engines.
 
 Then L74 phases 1-2: provenance and the eight-kind taxonomy, followed by
 prediction/outcome tracking -- the only component whose value grows with
@@ -5509,7 +5733,9 @@ permanently lost.
 **The ledger decision was taken and the merge was run.** The operator chose the
 harness's own tag plus `--exclude` for the nine platform trades that carry it,
 so the sample now means exactly "every trade this harness opened". 252 trades
-were added, 2 excluded by tag and 9 by id, and the ledger stands at 504.
+were added, 2 excluded by tag and 9 by id, and the ledger stood at 504. *(The
+2026-09-11 merge repeated those exclusions and took it to 751; see the section
+above.)*
 
 That merge immediately exposed the account defect above: the 504 are **two
 different demo accounts** -- 252 at -22.37 from an earlier one and 252 at

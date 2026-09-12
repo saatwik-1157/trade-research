@@ -439,6 +439,11 @@ async def test_an_open_position_is_reported_and_never_liquidated(
     victim = await _make_user(app, VICTIM)
     async with app.state.session_factory() as db:
         db.add(Symbol(id="sym-eur", code="EURUSD", asset_class="fx", unit_class="points"))
+        # The rows below reference this symbol. SQLAlchemy has no
+        # relationship() to tell it they depend on it, so without this
+        # flush the children can be written first -- an IntegrityError
+        # now that SQLite enforces foreign keys.
+        await db.flush()
         db.add(
             PaperAccount(
                 id="p-victim",
@@ -737,6 +742,11 @@ async def test_the_dashboard_counts_what_is_really_there(app: FastAPI, admin: As
     victim = await _make_user(app, VICTIM)
     async with app.state.session_factory() as db:
         db.add(Symbol(id="sym-eur", code="EURUSD", asset_class="fx", unit_class="points"))
+        # The rows below reference this symbol. SQLAlchemy has no
+        # relationship() to tell it they depend on it, so without this
+        # flush the children can be written first -- an IntegrityError
+        # now that SQLite enforces foreign keys.
+        await db.flush()
         db.add(Bot(id="b1", user_id=victim, name="one", mode="paper", is_enabled=True))
         db.add(Bot(id="b2", user_id=victim, name="two", mode="paper"))
         db.add(

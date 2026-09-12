@@ -19,14 +19,176 @@ REM Close this window or press Ctrl+C to stop the session early.
 title trade-research overnight session
 cd /d "%~dp0"
 
+REM -------------------------------------------------------------- interpreter
+REM `python` is whatever PATH says today, and that is not a stable answer. This
+REM machine lists Python312 ahead of Python314 in the user PATH while the
+REM toolkit's dependencies are installed only on 3.14, so a window opened after
+REM that PATH entry appeared picked 3.12 and the session died on `import numpy`
+REM three imports in -- after printing "Starting overnight harvest session", so
+REM it read like a session that had begun.
+REM
+REM Choose by asking each interpreter whether it can import what the session
+REM needs, rather than by trusting a name. Requirement 3 above is the thing
+REM being checked, so a machine that never met it gets told which package is
+REM missing instead of a traceback from inside a module it has never heard of.
+setlocal
+set "TR_PYTHON="
+for %%C in (
+  "%LOCALAPPDATA%\Programs\Python\Python314\python.exe"
+  "%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
+  "%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+  "%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+  "%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
+) do if not defined TR_PYTHON if exist %%C (
+  %%C -c "import numpy, pandas, requests, MetaTrader5, psutil" >nul 2>&1
+  if not errorlevel 1 set "TR_PYTHON=%%~C"
+)
+if not defined TR_PYTHON (
+  python -c "import numpy, pandas, requests, MetaTrader5, psutil" >nul 2>&1
+  if not errorlevel 1 set "TR_PYTHON=python"
+)
+if not defined TR_PYTHON (
+  echo.
+  echo   NO USABLE PYTHON. Nothing was started and no order was sent.
+  echo.
+  echo   Every interpreter found is missing at least one of numpy, pandas,
+  echo   requests, MetaTrader5 or psutil. Install them into ONE of them and
+  echo   run this again -- the first that can import all five is the one used:
+  echo.
+  echo       "%%LOCALAPPDATA%%\Programs\Python\Python314\python.exe" -m pip install -r requirements.txt
+  echo       "%%LOCALAPPDATA%%\Programs\Python\Python314\python.exe" -m pip install MetaTrader5 psutil
+  echo.
+  echo   psutil is the one worth checking twice: absent, run_overnight.py
+  echo   cannot see a session already running on this machine and proceeds
+  echo   UNGUARDED, and two harvest loops on one account double the risk.
+  echo.
+  pause
+  exit /b 1
+)
+
 echo Starting overnight harvest session - demo account, stops at 06:00
 echo Everything still open at 06:00 is closed at what it is worth.
+echo Python: %TR_PYTHON%
 echo.
 
-python tools\run_overnight.py %*
+REM --detach: run with no console at all.
+REM
+REM Eight sessions in a row ended between one 20-second tick and the next,
+REM with no traceback and no KeyboardInterrupt, and the finally that
+REM releases the keep-awake hold never ran. That is an externally
+REM terminated process, and the most likely outside is this window closing.
+REM
+REM run_overnight.py now installs a console handler, which turns a close
+REM into a wind-down -- but Windows allows only a few seconds for that and
+REM closing seven positions may not fit. Detaching is the stronger fix:
+REM with pythonw there is no console to close, so the event never arrives.
+REM The session log holds everything the window would have shown.
+set "TR_ARGS=%*"
+set "TR_DETACH="
+if not "%TR_ARGS%"=="%TR_ARGS:--detach=%" set "TR_DETACH=1"
+REM Both flags are read HERE, while TR_ARGS still holds the raw argument
+REM string. Reading --dry-run later, after --detach has been stripped out,
+REM asks cmd to do substring replacement on a variable that is by then
+REM UNDEFINED -- and `%VAR:x=y%` on an undefined variable is not an empty
+REM string, it is a parse failure. `start-trading.bat --detach` with no other
+REM argument printed "The syntax of the command is incorrect" and exited 255
+REM AFTER launching the session correctly, so the operator got an error over a
+REM working launch. Measured 2026-09-11 on the first real use.
+set "TR_DRYRUN="
+if not "%TR_ARGS%"=="%TR_ARGS:--dry-run=%" set "TR_DRYRUN=1"
+
+if not defined TR_DETACH goto :attached
+
+REM ------------------------------------------------------------ detached run
+REM FLAT, not inside `if defined TR_DETACH ( ... )`, and that is the fix rather
+REM than a matter of style.
+REM
+REM cmd expands %VAR% in a parenthesised block when it PARSES the block, before
+REM a single line inside it runs. So `call set "TR_PYTHONW=..."` set the
+REM variable at runtime while the `start` two lines below had already been
+REM expanded with the value it held at parse time: nothing. `start` was handed
+REM an EMPTY program name, launched no process, and the script went on to print
+REM "Session launched; it is not tied to this window" and exit 0.
+REM
+REM Measured 2026-09-11, the first time this path was used after it was
+REM written: no pythonw process, an empty detach-launch.log, no session log and
+REM no CRASH_REPORTS record. `setlocal enabledelayedexpansion` with !VAR! would
+REM also fix it; a goto has no second expansion mode to forget about.
+call set "TR_ARGS=%%TR_ARGS:--detach=%%"
+call set "TR_PYTHONW=%%TR_PYTHON:python.exe=pythonw.exe%%"
+if not exist "%TR_PYTHONW%" set "TR_PYTHONW=%TR_PYTHON%"
+for %%I in ("%TR_PYTHONW%") do set "TR_IMAGE=%%~nxI"
+
+echo Starting DETACHED - this window can be closed safely.
+echo Python: %TR_PYTHONW%
+echo.
+REM Redirected, and NOT to NUL. pythonw.exe launched with no valid stdout
+REM handle dies on its first print, and because it has no console the
+REM traceback goes nowhere -- the session log gets its header line and
+REM then nothing. Measured 2026-09-10: a detached launch exited inside 8
+REM seconds and left a one-line log. Giving it a file fixes the handle and
+REM catches any startup failure that happens before logging is up.
+start "trade-research session" /B "%TR_PYTHONW%" tools\run_overnight.py %TR_ARGS% > "logs\detach-launch.log" 2>&1
+
+REM PROVE it started before saying so. The bug above printed a success line
+REM over a launch that started nothing, which is the same failure as a session
+REM log that gets its header and then stops: a report of success is not
+REM evidence of one. Six seconds is past run_overnight's own preflight, so a
+REM process still alive here has got as far as its first pass.
+REM FULL PATHS, and that is not belt-and-braces. Launched from Git Bash --
+REM which is what the `!` prefix in a Claude Code session does -- cmd inherits
+REM a PATH with Git's bin on it, and `timeout` and `find` resolve to the GNU
+REM tools, which reject /t and /I. The check then fails on its own arguments
+REM and reports a session that started fine as one that did not start at all.
+REM Measured 2026-09-11, minutes after the check was written. A false alarm on
+REM every launch is worse than no check, because it teaches the operator to
+REM ignore the one line that matters.
+REM --dry-run resolves the command, prints it and exits without connecting.
+REM It is SUPPOSED to leave nothing running, so checking would report a
+REM failure that is the documented behaviour of the flag.
+if defined TR_DRYRUN goto :detach_launched
+
+REM `ping`, not `timeout`. timeout.exe refuses to run when stdin is not a
+REM console -- "ERROR: Input redirection is not supported" -- and returns
+REM immediately, so the wait silently did not happen and the check ran against
+REM a process that had not had time to fail yet. ping needs no console.
+"%SystemRoot%\System32\ping.exe" -n 7 127.0.0.1 >nul 2>&1
+"%SystemRoot%\System32\tasklist.exe" /FI "IMAGENAME eq %TR_IMAGE%" 2>nul | "%SystemRoot%\System32\find.exe" /I "%TR_IMAGE%" >nul
+if errorlevel 1 goto :detach_failed
+
+:detach_launched
+
+echo Session launched; it is not tied to this window.
+echo     log:    logs\overnight-*.log
+echo     record: CRASH_REPORTS\session-*.json
+echo     stop:   taskkill /IM %TR_IMAGE%
+echo.
+pause
+exit /b 0
+
+:detach_failed
+echo.
+echo   THE SESSION DID NOT START. No %TR_IMAGE% is running, and no order was
+echo   sent. Nothing is holding a position and nothing will flush at 06:00.
+echo.
+echo   Whatever the launch managed to print is in logs\detach-launch.log:
+echo.
+type "logs\detach-launch.log"
+echo.
+pause
+exit /b 1
+
+:attached
+
+echo Closing this window asks the session to wind down rather than killing
+echo it outright. Use --detach to run with no console at all.
+echo.
+"%TR_PYTHON%" tools\run_overnight.py %*
+
+:done
 
 echo.
 echo Session ended. For the read that matters, run:
-echo     python tools\track_record.py --merge
+echo     "%TR_PYTHON%" tools\track_record.py --merge
 echo.
 pause

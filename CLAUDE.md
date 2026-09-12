@@ -529,6 +529,29 @@ record to say which was intended. Round the ratio before flooring. The
 arithmetic was right at every step and the number that reached the server was
 still wrong, which is the same class as reading the quote instead of the fill.
 
+## Before setting a consecutive-loss cap
+
+`--max-consecutive-losses N` pauses NEW entries after N losing trades in a
+row. It is OFF by default, on the same reasoning as `--risk-usd` and
+`--cost-swap`: every figure in the live record was taken without it.
+
+**It pauses; it does not halt.** A halt suppresses the `--flat-by` flush, so
+a streak that halted would leave the positions it produced unmanaged - the
+abandoned book the flush exists to prevent, reached by a different road. Open
+positions keep being harvested and the wind-down still runs.
+
+Choose N from the arithmetic rather than from a round number. The venue record
+over 476 trades runs an 80.5% win rate, so a loss is p=0.195 and three in a row
+is p=0.0074 - about **3.5 occurrences in six days**, a real pause several times
+a week. Five is p=0.00028, roughly one per 3,500 trades, against a longest
+observed run of **7**. So 3 reacts to ordinary variance and 5 reacts to an
+outlier, and neither is wrong as long as which one you asked for is deliberate.
+
+A streak is counted per closed POSITION, not per deal - one position produces
+an entry deal and an exit deal, and an open position already has an entry deal
+sitting in history at profit 0. A break-even breaks the streak: a trade that
+cost nothing is not evidence the rule is failing.
+
 ## Before running an overnight session
 
 `run_overnight.py` wraps `take_profit.py` and is the thing that actually
@@ -587,7 +610,27 @@ construction or history windows in `tools/mt5_paper.py` and
 unit conversion, the night count or the plausibility fence in `tools/swap.py`.
 The bracket-sanity and fill-recording checks are in `test_rule_backtest.py`
 too, since they are order construction.
-All seven run in CI on every push, against Python 3.10, 3.12 and 3.14.
+Run `python tests/test_crash_report.py` after touching
+`tools/crash_report.py`, `tools/console_guard.py`, the PASS_HOOK and
+STOP_REQUESTED wiring in `tools/take_profit.py` and `tools/run_overnight.py`,
+or `run_overnight.weekend_deadline` and `run_overnight.finishing_status` --
+the venue-week guard and the status a finished session records,
+and `python tests/test_risk_gate.py` after touching `tools/risk_gate.py`, the
+`gate` parameter on `mt5_paper.place`, the close recorder in
+`mt5_paper.close_own`, or `APPROVED_UPSTREAM` in `app/brokers/mt5.py`.
+Run `python tests/test_cli.py` after touching `tools/cli.py` or `build_exe.py`
+-- the command table is read by both, and both ways of breaking it are silent:
+a command naming a module that does not exist is fine until someone types it,
+and a module missing from the table is simply absent from the executable with
+no build error.
+All ten run in CI on every push, against Python 3.10, 3.12 and 3.14.
+
+On 3.10 the risk engine cannot be imported at all -- `app/risk/engine.py` uses
+`StrEnum` and `datetime.UTC`, both 3.11 -- so `risk_gate` reports itself
+unavailable there and **refuses every opening order**. That is the intended
+behaviour and the reason the test runs on 3.10 rather than skipping it: a fence
+that disappears on the interpreter that cannot load it is not a fence. A close
+is never refused on any interpreter.
 
 `PROJECT_STATE.json` is **generated, not hand-written**. Run
 `python tools/project_state.py --write` rather than editing it, and

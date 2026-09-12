@@ -1054,8 +1054,37 @@ async def test_a_close_in_an_unsupported_mode_is_still_refused() -> None:
 # =================================================== L21: reconciliation
 
 
+async def ensure_broker_account(db: AsyncSession, account_id: str = "acct-a") -> None:
+    """Make `account_id` a real row, lazily, the way `make_position` does a symbol.
+
+    The reconciler sweeps by this id, so it is asserted on rather than
+    incidental -- and `positions.broker_account_id` is a foreign key, which
+    SQLite now enforces.
+    """
+    from app.auth.models import User
+    from app.models.accounts import BrokerAccount
+
+    if await db.get(BrokerAccount, account_id) is not None:
+        return
+    if await db.get(User, "u1") is None:
+        db.add(User(id="u1", email="a@b.io", password_hash="x", role="admin"))
+        await db.flush()
+    db.add(
+        BrokerAccount(
+            id=account_id,
+            user_id="u1",
+            name="demo",
+            broker="mt5",
+            account_mode="demo",
+            currency="USD",
+        )
+    )
+    await db.flush()
+
+
 async def demo_row(db: AsyncSession, **over: object):  # noqa: ANN201
     """A demo position on account `acct-a`, which is what the sweep scopes by."""
+    await ensure_broker_account(db)
     row = await make_position(db, mode="demo", **over)
     row.paper_account_id = None
     row.broker_account_id = "acct-a"

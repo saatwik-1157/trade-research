@@ -84,6 +84,22 @@ def _import_toolkit() -> tuple[Any, Any]:
     return mt5_paper, mt5_account
 
 
+def _toolkit_risk_gate() -> Any:
+    """`tools/risk_gate.py`, for its `APPROVED_UPSTREAM` marker only.
+
+    The import direction looks backwards and is not: `risk_gate` imports
+    `app.risk.engine`, which is pure stdlib and imports nothing from here. This
+    module already reaches into `tools/` for order construction and reads the
+    marker from the same place, rather than defining a second one that would
+    have to be kept equal to it.
+    """
+    if TOOLS not in sys.path:
+        sys.path.insert(0, TOOLS)
+    import risk_gate
+
+    return risk_gate
+
+
 def _dec(value: object) -> Decimal | None:
     if value is None:
         return None
@@ -316,6 +332,16 @@ class MT5Adapter(BrokerAdapter):
                 # OUR tag, not the toolkit's. It is what stops the harness
                 # harvesting a position this platform opened.
                 MAGIC,
+                # `place()` refuses a live order with no risk decision behind
+                # it -- the P2 fence on Path A. This path is not ungated and
+                # must not be evaluated twice: the caller is `app/oms/service`,
+                # whose `create()` takes an `Approval` that only `RiskEngine`
+                # can build, so the engine has already ruled on this order
+                # against the platform's own limits and portfolio. A second
+                # verdict here would be computed from the harness's limits and
+                # a different snapshot, and could refuse an order already
+                # approved, booked and recorded.
+                gate=_toolkit_risk_gate().APPROVED_UPSTREAM,
             )
         except Exception as exc:  # noqa: BLE001
             # We do not know whether the venue received it. That is UNKNOWN,
