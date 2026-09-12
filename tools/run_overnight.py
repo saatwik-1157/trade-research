@@ -296,6 +296,25 @@ def weekend_deadline(target, server_now, local_now):
     return None
 
 
+def next_viable_deadline(target, offset, limit_days=7):
+    """The first deadline after `target` that lands inside the venue's week.
+
+    A refusal that says only "not tonight" reads as a permanent no, and the
+    operator's next move is --force -- which is the one option here that ends
+    with a book nobody can close. Saying WHEN the answer changes turns the
+    refusal into a plan.
+
+    Same arithmetic as `weekend_deadline` and deliberately so: one definition
+    of the venue's week, walked forward a day at a time.
+    """
+    candidate = target
+    for _ in range(limit_days):
+        candidate += timedelta(days=1)
+        if (candidate + offset).weekday() < 5:
+            return candidate
+    return None
+
+
 def finishing_status(summary, code):
     """How a session that returned should be recorded. (status, reason).
 
@@ -718,6 +737,29 @@ def main() -> int:
         print("    Monday gap. That happened on 2026-09-12: seven positions,")
         print("    six attempts, none closed.")
         print()
+        # Only from a LIVE offset. With the market shut the venue clock comes
+        # from a dead tick -- here it was stamped Sat 05:29 against a local
+        # Sat 22:19, an apparent -16.8h against a true -2.5h -- and walking
+        # days forward on that lands a day late. The first version of this
+        # said Tuesday when Monday was fine, which is worse than saying
+        # nothing: it argues for waiting, and the operator's alternative to
+        # waiting is --force. The refusal three lines above already declines
+        # to quote this offset; so does this.
+        viable = next_viable_deadline(target, offset) if live else None
+        if viable is not None:
+            print(f"    The next {args.until_hour:02d}:00 deadline inside the venue's "
+                  f"week is")
+            print(f"    {viable:%a %d %b %H:%M} your time, so the session can be started "
+                  f"the")
+            print(f"    evening before -- {viable - timedelta(days=1):%a %d %b}.")
+            print()
+        else:
+            print("    The venue's week reopens Sunday 17:00 New York. The first")
+            print("    deadline inside it is the morning after, so a session")
+            print("    started that evening or later is fine. No date is given")
+            print("    here because the only clock available is a dead tick and")
+            print("    a day computed from it would be wrong.")
+            print()
         print("    Nothing was started and no order was sent. Options:")
         print("      - run it on a night whose deadline is inside the week")
         print("      - --until-hour N, with a deadline before the close")

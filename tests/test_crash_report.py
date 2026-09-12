@@ -353,6 +353,43 @@ def test_liveness_is_unknown_rather_than_dead():
               crash_report.process_alive({"pid": "24824"}), None)
 
 
+def test_the_refusal_says_when_the_answer_changes():
+    """A refusal that does not say WHEN reads as a permanent no.
+
+    The operator's alternative to waiting is --force, which is the one option
+    that ends with a book nobody can close. So the refusal names the next
+    deadline inside the venue's week -- but only when the venue's clock was
+    read LIVE.
+    """
+    print()
+    print("The refusal names the next viable night, or declines to guess")
+    from datetime import datetime, timedelta
+
+    import run_overnight as ro
+
+    real = timedelta(hours=-2.5)          # server UTC+3 against local UTC+5:30
+    sunday_deadline = datetime(2026, 9, 13, 6, 0)
+    check("a weekend deadline points at the Monday",
+          ro.next_viable_deadline(sunday_deadline, real).strftime("%a %d %b"),
+          "Mon 14 Sep")
+
+    friday = datetime(2026, 9, 18, 6, 0)
+    check("a Friday deadline skips the whole weekend",
+          ro.next_viable_deadline(friday, real).strftime("%a %d %b"), "Mon 21 Sep")
+
+    # The reason the caller only uses this on a live reading. With the market
+    # shut the venue clock comes from a dead tick -- measured 2026-09-12, a
+    # tick stamped Sat 05:29 against a local Sat 22:19, an apparent -16.8h
+    # against a true -2.5h. Walking days forward on that lands a day late.
+    dead = timedelta(hours=-16.8)
+    check("the dead-tick offset would answer a day late",
+          ro.next_viable_deadline(sunday_deadline, dead).strftime("%a %d %b"),
+          "Tue 15 Sep")
+    check("which is why it disagrees with the live answer",
+          ro.next_viable_deadline(sunday_deadline, dead)
+          != ro.next_viable_deadline(sunday_deadline, real), True)
+
+
 def test_a_weekend_deadline_is_refused_in_the_venues_week_not_ours():
     print()
     print("--flat-by cannot be honoured across the weekend close")
@@ -445,6 +482,7 @@ def main():
     test_a_stuck_record_can_be_resolved_and_only_a_stuck_one()
     test_liveness_is_unknown_rather_than_dead()
     test_a_weekend_deadline_is_refused_in_the_venues_week_not_ours()
+    test_the_refusal_says_when_the_answer_changes()
     test_a_session_that_failed_its_flush_is_not_completed()
 
     if FAILED:
