@@ -8,6 +8,8 @@ Not advice. Nothing here tells you what to buy, and the one honest finding
 running through all of it is that none of the strategies measured here has a
 demonstrable edge.
 
+**Built by Saatwik Sairaam Vasamsetti** · [github.com/saatwik-1157](https://github.com/saatwik-1157)
+
 ---
 
 ## Three things live in this repository
