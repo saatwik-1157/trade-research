@@ -26,6 +26,8 @@ import sys
 
 import numpy as np
 
+import paths as _paths
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from rule_backtest import SYMBOLS, atr_series, connect, fetch_rates
@@ -120,11 +122,13 @@ def main():
 
     mt5.shutdown()
 
-    # Compare the hurdle against what the rules actually managed.
+    # Compare the hurdle against what the rules actually managed. The root
+    # comes from `paths`, not from this file: frozen, `__file__` is under
+    # PyInstaller's extraction directory, where the measured report is not,
+    # so the comparison would silently be skipped. See `kill_switch._root`.
     measured_path = args.measured
     if not os.path.isabs(measured_path):
-        measured_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), measured_path)
+        measured_path = os.path.join(_paths.project_root(), measured_path)
     if os.path.exists(measured_path):
         with open(measured_path, encoding="utf-8") as fh:
             m = json.load(fh)

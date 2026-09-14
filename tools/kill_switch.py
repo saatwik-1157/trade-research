@@ -34,13 +34,26 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
+import paths as _paths
+
 #: Repository root, beside `CRASH_REPORTS/`. Not inside `logs/`, which is
 #: swept, and not in a temp directory, which does not survive a reboot.
 FILENAME = "STOP"
 
 
 def _root() -> str:
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    """The project root, via `paths` rather than this file's own location.
+
+    Deriving it from `__file__` was wrong inside the frozen executable, and
+    wrong in the way that matters most for a kill switch: `__file__` sits under
+    PyInstaller's extraction directory, so `engage()` wrote STOP where no
+    running session was watching and `engaged()` read a path that never had it.
+    The switch would report success and stop nothing.
+
+    Observed 2026-09-14: `kill` answered "not engaged (no
+    dist/trade-research/STOP)" while a session was live.
+    """
+    return _paths.project_root()
 
 
 def path() -> str:
