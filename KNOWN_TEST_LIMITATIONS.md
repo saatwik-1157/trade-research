@@ -322,6 +322,72 @@ belongs at that seam -- but it needs a reproduction first, because a rollback on
 every probe failure would discard the state transitions earlier probes in the
 same pass recorded, and that is a real behaviour change to make blind.
 
+## 11. The suite spends most of its time rebuilding the schema, not testing
+
+A profiling run on 2026-09-12 measured the full backend suite at:
+
+    2985 passed, 11 skipped, 2 warnings in 992.71s (0:16:32)
+
+**Where it goes.** 18 of the slowest 30 durations are `setup`, not `call` --
+the time is in fixtures, not assertions. The top 30 sum to only 133.9s, so
+there is no single hot test to fix; the cost is spread thin across thousands
+of setups. Measured separately, the per-test schema rebuild (56 tables,
+created and dropped for each of ~2,266 tests) accounts for roughly 79% of the
+wall clock. Restoring from a binary SQLite `backup()` of a once-built schema
+benchmarked **517x faster** than re-running `create_all`, which projects to a
+saving of about **594s** -- a 16:32 suite becoming roughly 6:40.
+
+The slowest 30, from that run:
+
+```
+16.08s setup    tests/test_trade_journal.py::test_the_analysis_route_separates_recorded_from_recomputed
+14.23s setup    tests/test_risk.py::test_the_preview_explains_a_rejection
+10.28s setup    tests/test_realtime.py::test_a_bad_frame_closes_the_socket[not json]
+8.71s setup    tests/test_observability.py::test_detailed_monitoring_requires_authorization
+8.55s setup    tests/test_marketdata.py::test_stored_route_says_it_is_a_cache
+6.93s call     tests/test_health.py::test_an_optional_dependency_down_is_degraded_not_unhealthy
+5.76s setup    tests/test_brokers.py::test_order_submission_is_still_the_only_door_and_no_venue_is_behind_it
+5.60s call     tests/test_autonomy.py::test_the_trading_mode_is_never_reassigned_after_construction
+4.70s call     tests/test_auth_hardening.py::test_repeated_failed_logins_are_rate_limited
+3.88s call     tests/test_health.py::test_the_platform_starts_when_the_event_bus_will_not_answer
+3.59s setup    tests/test_analytics.py::test_an_unknown_period_is_a_422
+3.00s call     tests/test_auth.py::test_register_sets_httponly_cookie_and_me_works
+2.90s call     tests/test_cors.py::test_dev_ui_origin_is_allowed
+2.88s setup    tests/test_admin.py::test_the_audit_summary_states_the_retention_position
+2.84s setup    tests/test_admin.py::test_the_dashboard_shows_the_environment_first_and_plainly
+2.81s setup    tests/test_admin.py::test_user_search_filters_by_role_and_status
+2.64s call     tests/test_autonomy.py::test_no_autonomous_path_can_change_what_is_permitted
+2.56s call     tests/test_security.py::test_hsts_is_production_only
+2.45s setup    tests/test_admin.py::test_revoking_sessions_leaves_the_account_active
+2.42s call     tests/test_webhooks.py::test_rate_limiting_protects_the_endpoint
+2.22s call     tests/test_scenario_intelligence.py::test_the_safety_architecture_does_not_depend_on_the_scenario_engine
+2.20s setup    tests/test_admin.py::test_the_last_administrator_cannot_be_deactivated
+2.15s call     tests/test_safety_invariants.py::test_only_the_oms_reaches_a_venue_to_write
+2.12s setup    tests/test_strategy_builder.py::test_a_new_version_is_created_not_an_overwrite
+2.11s setup    tests/test_strategy_builder.py::test_a_validated_version_cannot_be_edited_in_place
+2.09s call     tests/test_discord.py::test_discord_retries_are_bounded
+2.08s setup    tests/test_security.py::test_a_dangerous_admin_action_needs_the_password_again
+2.07s setup    tests/test_strategy_builder.py::test_the_catalogue_lists_only_supported_indicators
+2.05s setup    tests/test_admin.py::test_an_open_position_is_reported_and_never_liquidated
+2.02s setup    tests/test_security.py::test_the_wrong_password_does_not_issue_a_grant_over_http
+```
+
+**This is measured and NOT implemented.** The change touches 21 fixtures, and
+a half-converted suite is worse than an uncoverted one: fixtures that still
+call `create_all` against a database another fixture restored by `backup()`
+would silently share state, which is exactly the class of bug the per-test
+rebuild exists to prevent. It should be done in one pass or not at all.
+
+**A caveat on the projection.** The 517x figure is a microbenchmark of schema
+creation alone. It does not include the cost of the restore's file I/O at
+suite scale, so 594s is an upper bound on the saving, not a promise. The first
+run after converting should be timed before anyone quotes the improvement.
+
+*The raw pytest dumps this came from (`perf1.txt`, `perf2.txt`) were removed --
+`perf1.txt` was a contaminated run, discarded because two PyInstaller builds
+and a Next.js build were competing for the CPU while it ran. The durations
+table above is the whole of what `perf2.txt` contained that mattered.*
+
 ## What is NOT a limitation
 
 Worth stating, because these look like gaps and are not:
