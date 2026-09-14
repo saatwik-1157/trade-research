@@ -61,8 +61,18 @@ import sys
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+import paths as _paths
+
+# The engine lives in `backend/app`, which is NOT inside the frozen bundle --
+# it is imported from the checkout on disk. So the root has to come from
+# `paths`, which searches for it, and not from `__file__`, which when frozen
+# points into PyInstaller's extraction directory.
+#
+# Getting this wrong is not a crash. The import below fails,
+# `ENGINE_IMPORT_ERROR` is set, and every open is refused with RISK_VETO while
+# the session otherwise appears to run normally. Observed 2026-09-14: 27
+# consecutive vetoes, no orders sent, and the session still exited 0.
+ROOT = _paths.project_root()
 BACKEND = os.path.join(ROOT, "backend")
 
 if BACKEND not in sys.path:

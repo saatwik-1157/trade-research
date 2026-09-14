@@ -96,11 +96,38 @@ def session_alive() -> bool:
     for proc in psutil.process_iter(["pid", "cmdline"]):
         if proc.info["pid"] == me:
             continue
-        cmdline = " ".join(proc.info.get("cmdline") or [])
-        if "take_profit.py" in cmdline or "run_overnight.py" in cmdline:
-            if "--dry-run" in cmdline or "watchdog.py" in cmdline:
-                continue
+        if _is_session(" ".join(proc.info.get("cmdline") or [])):
             return True
+    return False
+
+
+#: Subcommands of the frozen executable that send orders. `paper` is absent on
+#: purpose: `paper --close-all` is a flush, not a session, and treating it as
+#: one would stop the watchdog from replacing a session that had really died.
+TRADING_SUBCOMMANDS = ("overnight", "harvest")
+
+
+def _is_session(cmdline: str) -> bool:
+    """Whether this command line is an order-sending session.
+
+    Matching only `take_profit.py` / `run_overnight.py` was right from a
+    checkout and blind to the frozen executable, where those file names never
+    appear -- the session is `trade-research.exe overnight --until-hour 6`.
+    Blind in the worse direction, too: `session_alive()` answered False while a
+    session WAS running, so the watchdog would have started a second harvest
+    loop on the same account, which is the one thing this module says it exists
+    to prevent. Observed 2026-09-14.
+
+    The executable's name is checked rather than `sys.executable` so that a
+    watchdog running from source still sees a frozen session, and vice versa.
+    """
+    if "--dry-run" in cmdline or "watchdog" in cmdline:
+        return False
+    if "take_profit.py" in cmdline or "run_overnight.py" in cmdline:
+        return True
+    lowered = cmdline.lower()
+    if "trade-research.exe" in lowered or "trade-research " in lowered:
+        return any(token in TRADING_SUBCOMMANDS for token in cmdline.split())
     return False
 
 
@@ -150,18 +177,30 @@ def start_session(until_hour: int, extra: list[str]) -> subprocess.Popen:
     2026-09-10.
     """
     root = _root()
-    exe = sys.executable
-    pythonw = exe.replace("python.exe", "pythonw.exe")
-    if os.path.exists(pythonw):
-        exe = pythonw
 
     logs = os.path.join(root, "logs")
     os.makedirs(logs, exist_ok=True)
     capture = open(
         os.path.join(logs, "watchdog-launch.log"), "a", encoding="utf-8"
     )
-    cmd = [exe, os.path.join(root, "tools", "run_overnight.py"),
-           "--until-hour", str(until_hour), *extra]
+
+    if getattr(sys, "frozen", False):
+        # Frozen, `sys.executable` IS the toolkit, and the scripts are its
+        # subcommands -- there is no `tools/run_overnight.py` to hand it.
+        # Passing the path anyway made the CLI treat it as an unknown command,
+        # print its help into watchdog-launch.log and exit 0. The watchdog then
+        # saw a process that ended within seconds, counted it double against
+        # the restart budget as "failed to start", and never launched anything.
+        # Observed 2026-09-14: a full help listing where a session should be.
+        cmd = [sys.executable, "overnight", "--until-hour", str(until_hour), *extra]
+    else:
+        exe = sys.executable
+        pythonw = exe.replace("python.exe", "pythonw.exe")
+        if os.path.exists(pythonw):
+            exe = pythonw
+        cmd = [exe, os.path.join(root, "tools", "run_overnight.py"),
+               "--until-hour", str(until_hour), *extra]
+
     return subprocess.Popen(cmd, cwd=root, stdout=capture, stderr=capture)
 
 

@@ -37,6 +37,8 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
+import paths as _paths
+
 #: Directory holding one file per session. Beside the code rather than in the
 #: log directory, because `logs/` is swept and this is the record that says
 #: what a swept log was doing.
@@ -48,7 +50,13 @@ STALE_SECONDS = 120.0
 
 
 def _root() -> str:
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    """The project root, via `paths` rather than this file's own location.
+
+    Frozen, `__file__` is under PyInstaller's extraction directory, which is
+    deleted when the process exits -- so a crash report written there would be
+    destroyed by the very exit it exists to explain. See `kill_switch._root`.
+    """
+    return _paths.project_root()
 
 
 def directory() -> str:

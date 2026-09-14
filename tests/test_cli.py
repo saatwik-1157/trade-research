@@ -17,6 +17,7 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
@@ -141,9 +142,154 @@ def test_the_project_root_survives_freezing() -> None:
             os.environ["TRADE_RESEARCH_ROOT"] = override
 
 
+#: The call chain that made four modules wrong when frozen. `paths` is the one
+#: place entitled to it, because it IS the answer to the question.
+OWN_ROOT = "os.path.dirname(os.path.dirname(os.path.abspath(__file__)))"
+
+
+def test_only_paths_derives_its_own_root() -> None:
+    """No tool may compute the project root from its own `__file__`.
+
+    The previous check proves `paths` is right. It says nothing about whether
+    anyone USES it, and on 2026-09-14 four modules did not: `risk_gate`,
+    `kill_switch`, `crash_report` and `cost_hurdle` each kept a private copy of
+    the broken calculation. The suite was green throughout, because every test
+    ran from a checkout where the broken and correct answers are identical.
+
+    The failures were silent and expensive. `risk_gate` could not import the
+    engine, so a live session refused all 27 of its entries and exited 0.
+    `kill_switch` wrote STOP where no session was watching -- a stop that
+    reported success and stopped nothing.
+
+    So this is structural rather than behavioural: it asserts the mistake is
+    not present in the source, which is the only form that catches the FIFTH
+    module before it is written.
+    """
+    print("\nRoot resolution is not reimplemented anywhere")
+    tools = os.path.join(ROOT, "tools")
+    offenders = []
+    for name in sorted(os.listdir(tools)):
+        if not name.endswith(".py") or name == "paths.py":
+            continue
+        with open(os.path.join(tools, name), encoding="utf-8") as fh:
+            for number, line in enumerate(fh, 1):
+                bare = line.strip()
+                if bare.startswith("#"):
+                    continue  # a comment explaining the bug is not the bug
+                if OWN_ROOT in bare:
+                    offenders.append(f"{name}:{number}")
+    check("no module outside paths.py derives its own root", offenders, [])
+
+
+def test_the_frozen_root_reaches_its_callers() -> None:
+    """The modules that need the root must get the RIGHT one when frozen.
+
+    **`__file__` is moved, and that is the whole point.** Setting `sys.frozen`
+    alone does not reproduce the bug: from a checkout,
+    `dirname(dirname(kill_switch.__file__))` IS the real root, so the broken
+    calculation and the correct one agree and the check passes either way. That
+    accidental agreement is exactly why the suite stayed green for months while
+    four modules were wrong, and a negative control caught this test making the
+    same mistake on 2026-09-14.
+
+    So the extraction directory is simulated too. Under PyInstaller `__file__`
+    points into a temporary tree that is deleted on exit; here it points at one
+    that never existed. Anything deriving a root from it now lands outside the
+    checkout and fails, while `paths.project_root()` still finds the real one.
+    """
+    print("\nFrozen root, as the callers see it")
+    import crash_report
+    import kill_switch
+
+    real = os.path.abspath(ROOT)
+    meipass = os.path.join(tempfile.gettempdir(), "_MEI_not_a_real_checkout")
+    saved = (getattr(sys, "frozen", False), sys.executable, os.getcwd(),
+             os.environ.get("TRADE_RESEARCH_ROOT"),
+             kill_switch.__file__, crash_report.__file__)
+    try:
+        sys.frozen = True  # type: ignore[attr-defined]
+        sys.executable = os.path.join(real, "dist", "trade-research", "trade-research.exe")
+        os.environ.pop("TRADE_RESEARCH_ROOT", None)
+        kill_switch.__file__ = os.path.join(meipass, "tools", "kill_switch.py")
+        crash_report.__file__ = os.path.join(meipass, "tools", "crash_report.py")
+        # Stand somewhere with no project, so a root taken from the working
+        # directory would be visibly wrong rather than accidentally right.
+        os.chdir(os.path.dirname(real))
+
+        check("STOP sits in the checkout, not the extraction directory",
+              os.path.abspath(kill_switch.path()),
+              os.path.join(real, kill_switch.FILENAME))
+        check("crash reports sit in the checkout, not the extraction directory",
+              os.path.abspath(crash_report.directory()),
+              os.path.join(real, crash_report.DIRNAME))
+    finally:
+        (frozen, executable, cwd, override,
+         kill_file, crash_file) = saved
+        if frozen:
+            sys.frozen = True  # type: ignore[attr-defined]
+        elif hasattr(sys, "frozen"):
+            del sys.frozen  # type: ignore[attr-defined]
+        sys.executable = executable
+        kill_switch.__file__ = kill_file
+        crash_report.__file__ = crash_file
+        os.chdir(cwd)
+        os.environ.pop("TRADE_RESEARCH_ROOT", None)
+        if override is not None:
+            os.environ["TRADE_RESEARCH_ROOT"] = override
+
+
+def test_the_watchdog_recognises_a_frozen_session() -> None:
+    """A frozen session must be visible to the watchdog that would replace it.
+
+    Matching only on `take_profit.py` and `run_overnight.py` was blind to the
+    frozen build, where the command line is `trade-research.exe overnight`.
+    Blind in the dangerous direction: it reported no session while one was
+    running, and the next restart would have put two harvest loops on one
+    account.
+    """
+    print("\nWatchdog session detection")
+    import watchdog
+
+    cases = [
+        ("trade-research.exe overnight --until-hour 6", True, "frozen session"),
+        ("trade-research.exe harvest --minutes 60 --live", True, "frozen harvest"),
+        ("trade-research.exe watchdog --until-hour 6", False, "the watchdog itself"),
+        ("trade-research.exe paper --close-all --live", False, "a flush, not a session"),
+        ("trade-research.exe track-record --merge", False, "read-only"),
+        ("python tools/take_profit.py --live", True, "source session"),
+        ("python tools/run_overnight.py --until-hour 6", True, "source overnight"),
+        ("python tools/take_profit.py --dry-run", False, "a dry run trades nothing"),
+        ("trade-research.exe harvest --minutes 1 --dry-run", False, "frozen dry run"),
+    ]
+    for cmdline, want, why in cases:
+        check(f"{why}: {'a session' if want else 'not a session'}",
+              watchdog._is_session(cmdline), want)
+
+
+def test_every_check_in_this_file_runs() -> None:
+    """`main()` names its checks by hand, so one can be written and forgotten.
+
+    That has happened here before: a check was defined, never called, and the
+    file reported "all checks passed" without running it. A test nobody runs is
+    worse than no test, because it also buys false confidence.
+    """
+    print("\nEvery check is registered")
+    import inspect
+
+    body = inspect.getsource(main)
+    missing = [name for name, obj in sorted(globals().items())
+               if name.startswith("test_") and inspect.isfunction(obj)
+               and f"{name}()" not in body]
+    check("every test_ function is called by main", missing, [])
+
+
 def main() -> int:
     print("cli dispatcher checks")
     test_the_project_root_survives_freezing()
+    test_only_paths_derives_its_own_root()
+    test_the_frozen_root_reaches_its_callers()
+    test_the_watchdog_recognises_a_frozen_session()
+    test_every_check_in_this_file_runs()
     test_every_command_resolves()
     test_the_groups_and_the_table_agree()
     test_the_usage_text_states_what_this_is_not()
