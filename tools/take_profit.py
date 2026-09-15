@@ -31,6 +31,7 @@ import argparse
 import contextlib
 import ctypes
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
@@ -74,10 +75,48 @@ STOP_REQUESTED = False
 
 ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x00000001
+ES_DISPLAY_REQUIRED = 0x00000002
+
+
+def modern_standby() -> bool | None:
+    """Whether this machine sleeps the S0 way. None when it cannot be told.
+
+    It matters because `ES_SYSTEM_REQUIRED` does not hold an S0 machine awake.
+    The call SUCCEEDS -- it returns a non-zero previous state, so the session
+    prints "holding the machine awake" -- and the system enters low-power idle
+    anyway. Measured 2026-09-15: two gaps of almost exactly three hours in a
+    session that had reported the hold, on AC, with the AC idle timeout set to
+    "never".
+
+    `powercfg /a` is asked rather than the registry: `CsEnabled` is absent on
+    this machine even though S0 is the only standby it has.
+    """
+    if os.name != "nt":
+        return False
+    try:
+        out = subprocess.run(["powercfg", "/a"], capture_output=True, text=True,
+                             timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    return parse_standby(out.stdout)
+
+
+def parse_standby(text: str) -> bool:
+    """Whether `powercfg /a` output says S0 low power idle is AVAILABLE.
+
+    Only the available half counts. S0 is named in the unavailable half too --
+    as the REASON S1, S2 and S3 are disabled -- so a plain substring search
+    over the whole output answers True on an S3-only machine as well, which is
+    exactly backwards.
+    """
+    head, _, _ = text.partition("The following sleep states are not available")
+    return "S0 Low Power Idle" in head
 
 
 @contextlib.contextmanager
-def keep_awake():
+def keep_awake(need_the_deadline: bool = False):
     """Hold the machine awake for as long as the session runs.
 
     A session told to be flat by 06:00 cannot close anything while the laptop
@@ -92,23 +131,39 @@ def keep_awake():
     machine changed after the loop, and a laptop that never sleeps again is a
     worse bug than the one being fixed.
 
-    It holds the SYSTEM awake and deliberately not the DISPLAY -- the screen
-    should still go dark. It does not defeat closing the lid or an explicit
-    sleep, neither of which is an idle timeout, so a lid closed at midnight
-    still suspends the session. Windows only; elsewhere it is a no-op and says
-    so rather than pretending.
+    **The display is held too on an S0 machine, and that is not a stylistic
+    choice.** Holding only the SYSTEM was correct for S3 and is useless under
+    Modern Standby, where the transition follows the screen going off rather
+    than an idle timer: `ES_SYSTEM_REQUIRED` alone returns success and the
+    machine idles anyway. It happened twice on the night of 2026-09-14, and the
+    cost was the whole point of the session -- S0 disconnects the network, so
+    the 06:00 flush met `retcode=10031` six times, gave up with seven positions
+    open, and five of them then stopped out unmanaged for -21.56.
+
+    So on S0 the screen stays lit. That is worse to look at and better than a
+    wind-down that does not run, and `need_the_deadline` keeps the cost where
+    the benefit is: a session with no `--flat-by` holds the system only, as
+    before. It still does not defeat closing the lid or an explicit sleep,
+    neither of which is an idle timeout. Windows only; elsewhere it is a no-op
+    and says so rather than pretending.
     """
+    s0 = modern_standby() if need_the_deadline else False
+    flags = ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+    if s0 is not False and need_the_deadline:
+        # None (undetermined) is treated as S0. A lit screen is recoverable;
+        # a flush that never runs is not.
+        flags |= ES_DISPLAY_REQUIRED
+
     held = 0
     try:
-        held = ctypes.windll.kernel32.SetThreadExecutionState(  # type: ignore[attr-defined]
-            ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+        held = ctypes.windll.kernel32.SetThreadExecutionState(flags)  # type: ignore[attr-defined]
     except (AttributeError, OSError):
         held = 0
     if not held:
         print("  note: could not hold the machine awake - if it sleeps before the "
               "deadline, nothing closes and the session simply stops")
     try:
-        yield bool(held)
+        yield (bool(held), s0, bool(flags & ES_DISPLAY_REQUIRED))
     finally:
         if held:
             try:
@@ -306,9 +361,27 @@ def run(mt5, args) -> dict:
         )
     start_balance = opening.balance
 
+    # A suspended session leaves no error, only a hole between two pass lines.
+    # On the night of 2026-09-14 there were two of nearly three hours each and
+    # nothing in the log named them -- they had to be found by reading
+    # timestamps by hand, after the damage. The venue also disconnects across
+    # an S0 standby, so the gap explains the `retcode=10031` that follows it.
+    # Naming it costs one comparison a pass.
+    last_pass_at = time.monotonic()
+
     while time.monotonic() < deadline:
         passes += 1
         stamp = datetime.now().strftime("%H:%M:%S")
+
+        now_mono = time.monotonic()
+        overslept = now_mono - last_pass_at
+        if overslept > max(3 * args.interval, args.interval + 60):
+            print(f"  [{stamp}] THE MACHINE SLEPT: {overslept / 60:.0f} minutes passed "
+                  f"between passes, not {args.interval}s. Nothing was managed in that "
+                  f"window and the venue connection may need to re-establish",
+                  flush=True)
+        last_pass_at = now_mono
+
         remaining = flat_at - time.monotonic()
 
         if args.flat_by is not None and remaining <= 0:
@@ -638,10 +711,17 @@ def main() -> int:
     print()
 
     try:
-        with keep_awake() as awake:
+        with keep_awake(need_the_deadline=bool(args.flat_by)) as (awake, s0, screen):
             if awake and args.flat_by:
-                print("  holding the machine awake until the session ends "
-                      "(the display may still sleep)\n")
+                if screen:
+                    reason = ("this machine only has S0 standby" if s0
+                              else "the standby type could not be determined")
+                    print(f"  holding the machine AND THE SCREEN awake until the session "
+                          f"ends -- {reason}, and holding the system alone does not "
+                          f"work there\n")
+                else:
+                    print("  holding the machine awake until the session ends "
+                          "(the display may still sleep)\n")
             out = run(mt5, args)
             # The heartbeat's last state is the last PASS, taken before the
             # flush. A completed session whose record still says 7 open is
