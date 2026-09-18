@@ -7,11 +7,14 @@ every account figure below is the last one a session managed to observe.
 **Current Status:** `HARNESS_FENCED` → `SOAK_REQUIRED`, and the soak is not
 producing clean evidence because the host keeps falling asleep.
 
-> **THE ACCOUNT HAS NOT BEEN READ SINCE 2026-09-16 08:46.** Session
-> `20260916-082522` lost the venue mid-flight, gave up by design, and recorded
-> the book as UNKNOWN rather than flat. Seven positions were open at the last
-> pass it could read. Nothing has managed them for two days. **Check the
-> terminal before starting anything.**
+> **RESOLVED 2026-09-18 16:10: the account is FLAT.** It had been unreadable
+> since 09-16 08:46, when session `20260916-082522` lost the venue mid-flight,
+> gave up by design, and recorded the book as UNKNOWN rather than flat — seven
+> positions open at its last readable pass. The terminal now reports **0 open
+> positions, equity equal to balance at 99,919.45**. Those seven closed
+> themselves server-side across the two days nothing was watching, which is
+> luck rather than a wind-down, and is the third time this month the venue has
+> finished a job the harness could not.
 
 Four sessions have run since the last update. One reached its deadline and
 flushed. One missed its deadline by 2h35m and abandoned seven positions. One
@@ -27,7 +30,7 @@ and the fix that was supposed to prevent it does not work.**
 | | |
 |---|---|
 | **Trading Mode** | `paper` — `live_trading: false`, 12 live blockers, `assert_demo` in code |
-| **Account** | `5055473926 @ MetaQuotes-Demo` **[DEMO]** · **UNKNOWN since 09-16 08:46** — 7 positions open at the last readable pass, closing balance unread. Last observed balance 99,914.31 USD at that session's start |
+| **Account** | `5055473926 @ MetaQuotes-Demo` **[DEMO]** · **FLAT** as of 09-18 16:10 — 0 open positions, 0 pending, balance 99,919.45 USD, equity the same. 632 closed trades on the venue, 09-04 to 09-17, net −80.55 |
 | **Running processes** | none. **MT5 terminal is not running either**, which is why the book cannot be checked from here |
 | **TradingView Status** | gateway built (hmac, age check, idempotency, body cap). **Never exercised end to end** — no broker account registered |
 | **MT5 Status** | one adapter, one `order_send` on the platform path; 4 on the harness path, all four behind the Risk Engine — the opening order needs an `Approval`, the three closing ones are recorded and never refused |
@@ -182,35 +185,45 @@ this week.
 
 ## The ledger
 
-**869 trades** (`data/track_record.jsonl`), merged 2026-09-16 08:18 — **stale by
-one session**, because `20260916-082522`'s 13 opens and 6 harvests closed after
-that merge and have never been pulled in. Run `python tools/track_record.py
---merge` once the terminal is up.
+**882 trades** (`data/track_record.jsonl`), merged 2026-09-18 16:1x — current.
+The 09-16 session's trades are in: 13 new of 630 pulled, with 2 excluded that
+this tool did not open.
 
-Account `5055473926`: **617 trades, net −85.55**, 09-04 to 09-16, win rate
-78.1%. The older 252 stay `unrecorded` at −22.37.
+Account `5055473926`: **630 trades, net −80.41**, 09-04 to 09-17. The venue
+reports the account **flat** — 0 open positions, equity equal to balance — so
+the seven that were unreadable on 09-16 closed themselves server-side over the
+two days nothing was watching. The older 252 stay `unrecorded` at −22.37.
 
-The R-multiple read has moved, and not in the project's favour:
+| | n | mean R | t by date | t by symbol |
+|---|---|---|---|---|
+| Pooled R | 863 | −0.0247 | −1.57 (thr 2.131) | −2.34 (thr 2.447) |
+| Regime 1.0 | 832 | −0.127 | **−2.58 (thr 2.131) ✗** | **−2.58 (thr 2.447) ✗** |
+| Account 5055473926 | 630 | −0.1276 | −2.14 (thr 2.306) | −1.93 (thr 2.447) |
 
-| | n | mean R | t pooled | t by date | t by symbol |
-|---|---|---|---|---|---|
-| Pooled | 850 | **−0.0265** | −1.87 | −1.75 (thr 2.131) | **−2.53 (thr 2.447) ✗** |
-| Regime 1.0 | 819 | −0.1353 | −2.23 | **−2.57 (thr 2.131) ✗** | **−2.80 (thr 2.447) ✗** |
+**The previous version of this row was wrong within thirteen trades, and that
+is the most useful thing on this page.** On 09-18 it recorded the pooled
+symbol-clustered t at −2.53 against a 2.447 threshold and called the result
+"significant under symbol clustering". One merge later, at n=863, the same
+statistic is **−2.34 and does not cross**. Nothing changed but the sample.
 
-At the 09-12 update this was n=741, mean −0.014R, t=−0.92 — indistinguishable
-from zero. It is now mean −0.0265R with the symbol-clustered t crossing its
-threshold, and in the dominant bracket regime both clustered tests cross.
-Pooled and date-clustered still do not, and 89 more trades are needed for the
-pooled t to reach 1.96, so the honest statement is narrow:
+`CLAUDE.md` already contains this exact warning, from the 20-trade era: *"On
+20 trades this account scored +4.60 at a pooled t of 3.27; seven trades later
+it was +3.24 at 1.15. Nothing changed except that the sample grew. Do not
+quote a live t-stat without saying how many trades it rests on."* The lesson
+was written down and then not applied to the very next reading.
 
-**This is no longer "no measurable edge". It is a negative result that is
-significant under symbol clustering and not yet under the others.** Which is
-the expected direction — the spread has to be paid either way, and
-`cost-hurdle` has said so from the beginning.
+So the supportable statement is narrower than last time, not wider:
+
+- **Pooled, the result is not significant under any clustering.** 213 more
+  trades are needed for the pooled t to reach 1.96 at this effect size.
+- **In regime 1.0 — 832 of the 863, so nearly all of it — it is significantly
+  negative under both date and symbol clustering.** That is the reading to
+  quote, and it is the expected direction: the spread is paid either way, and
+  `cost-hurdle` has said so from the beginning.
 
 Standing caveats from the report: two bracket regimes (reward:risk 0.2 to 1.0),
 so quote `by_regime` or the R-multiple and never the pooled net; two sources
-merged, so quote `by_account`; R available for 850 of 869; 1 bracket inverted
+merged, so quote `by_account`; R available for 863 of 882; 1 bracket inverted
 at fill; max absolute slippage 14.0 points.
 
 ## Completed
@@ -235,8 +248,14 @@ at fill; max absolute slippage 14.0 points.
 
 ## In Progress
 
-Nothing is running. The open item is not work, it is an unattended book:
-**7 positions believed open at `5055473926`, unmanaged since 09-16 08:46.**
+Nothing is running and the account is flat, so for the first time this month
+there is no unattended book. What is open is **evidence, not construction**:
+Criticals 1 and 2 are fixed in code and neither has survived a night yet.
+
+The next session is **Sunday 20 September**, for a Monday 06:00 deadline. A
+Friday-night run was refused by the venue-week guard when it was dry-run at
+16:12 today, which is the guard working: *"the next 06:00 deadline inside the
+venue's week is Mon 21 Sep."*
 
 ## Blocked
 
@@ -373,9 +392,14 @@ disconnect this project has already hit. Bound it on the time left to
 
 Do not train a model. `ModelTrainingNeedAssessment` = **DO_NOT_TRAIN**: six
 search families across five universes have already failed to clear their own
-permutation nulls, and the live ledger has now gone from "no edge" to
-"significantly negative under symbol clustering". A model would search the same
-space with more parameters.
+permutation nulls, and in the bracket regime holding 832 of the 863 live
+trades the measured result is significantly negative under both clusterings.
+A model would search the same space with more parameters.
+
+The pooled figure is deliberately not quoted there. It crossed its threshold
+on 09-18 and stopped crossing it thirteen trades later, which is the strongest
+argument on this page for not reading a live t-stat as a verdict — including
+when it says what you expected.
 
 ## Working tree
 
