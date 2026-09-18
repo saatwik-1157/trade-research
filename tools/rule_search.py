@@ -181,6 +181,31 @@ def build_candidates():
     return c
 
 
+def _call_signal(fn, m):
+    """Call a candidate, passing volume only to the ones that ask for it.
+
+    Two shapes exist. Every family searched before this took `(o, h, l, c)`,
+    and the volume families take `(o, h, l, c, v)`. Rather than widen fifteen
+    refuted families -- and invite the question of whether their results still
+    stand after the edit -- the arity is inspected and the right call is made.
+
+    A five-argument rule on a market with no volume gets None, not a
+    substitute. MT5 reports `real_volume` as 0 on spot FX and `tick_volume` as
+    a count of quote updates rather than size, so anything synthesised here
+    would be a different quantity wearing the same name -- structurally the
+    metals-points error. The rule is expected to return an all-zero signal and
+    the search then records it as having no trades, which is the honest
+    outcome for a question this data cannot answer.
+    """
+    try:
+        n_args = fn.__code__.co_argcount
+    except AttributeError:
+        n_args = 4
+    if n_args >= 5:
+        return fn(m["o"], m["h"], m["l"], m["c"], m.get("v"))
+    return fn(m["o"], m["h"], m["l"], m["c"])
+
+
 def permute(sig, seed):
     """Shuffle a signal array: same count and mix, timing destroyed."""
     rng = np.random.default_rng(seed)
@@ -599,8 +624,18 @@ def search_market(market, result, args):
     rows, null_rounds = [], [[] for _ in range(args.null_rounds)]
     trades_by_name = {}
     for idx, (name, family, fn) in enumerate(candidates):
+        # Volume is passed as an OPTIONAL fifth argument, so the ~15 existing
+        # four-argument candidate factories keep working untouched. Widening
+        # their signatures instead would have meant editing every family this
+        # project has already refuted, and a diff that touches a refuted
+        # family invites the question of whether its result still stands.
+        #
+        # `_call_signal` inspects arity and passes volume only to the rules
+        # that declare it. A market with no volume -- every MT5 source -- gets
+        # None, and a volume rule handed None is expected to return an
+        # all-zero signal rather than substitute something.
         sigs = {s: np.where(m["entry_blocked"], 0,
-                            fn(m["o"], m["h"], m["l"], m["c"]))
+                            _call_signal(fn, m))
                 for s, m in market.items()}
         tr = collect_trades(market, sigs, args.sl_atr, args.tp_atr)
         trades_by_name[name] = tr

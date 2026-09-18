@@ -82,11 +82,23 @@ def to_market(rows, fee_bps):
     """
     a = np.array(rows, dtype=float)
     t, o, h, l, c = a[:, 0] / 1000.0, a[:, 1], a[:, 2], a[:, 3], a[:, 4]
+    # Column 5 is REAL TRADED VOLUME, and it was being fetched and thrown away.
+    #
+    # Worth carrying because it is the one input this project has never
+    # searched. Every refuted family -- RSI, MA crosses, Donchian, Bollinger,
+    # momentum, candle shape, volatility regime, the exits, the hour filter --
+    # is a pure function of OHLC. CLAUDE.md records volume as untested and
+    # gives MT5's limitation as the reason: `real_volume` is 0 on spot FX and
+    # `tick_volume` counts quote updates rather than size, so a volume rule
+    # there would silently mean something else. That reasoning is right about
+    # MT5 and does not apply here. A ccxt exchange reports size actually
+    # traded, so on this universe the question is answerable.
+    v = a[:, 5] if a.shape[1] > 5 else np.full(len(c), np.nan)
     point = float(np.median(c)) / 100.0
     # A taker fee is paid on notional at entry and exit; at these bracket sizes
     # the round trip is what a spread would have been.
     spread = float(np.median(c) * (fee_bps / 10000.0) * 2)
-    return {"o": o, "h": h, "l": l, "c": c, "time": t.astype("int64"),
+    return {"o": o, "h": h, "l": l, "c": c, "v": v, "time": t.astype("int64"),
             "point": point, "spread": spread, "n": len(c),
             "from": str(np.datetime64(int(t[0]), "s")),
             "to": str(np.datetime64(int(t[-1]), "s"))}
