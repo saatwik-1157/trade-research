@@ -611,6 +611,107 @@ def run_continuous(args) -> int:
         restore()
 
 
+def wants_watchdog(harvest_only: bool, no_watchdog: bool) -> str:
+    """Should this session be supervised? The decision, with no I/O.
+
+    Separated from the launch for the same reason `weekend_deadline` is
+    separated from the venue read: the interesting part is the rule, and a
+    rule that can only be exercised by starting a real session beside a real
+    terminal is one that gets asserted in a docstring instead of tested.
+
+    Returns "" to supervise, or the reason not to.
+    """
+    if no_watchdog:
+        return "asked not to (--no-watchdog)"
+    if harvest_only:
+        # The one case that must never be restarted. A wind-down opens
+        # nothing and exists to empty a book; relaunching one that died would
+        # re-enter the book it was clearing, which makes the supervisor the
+        # hazard it was added to prevent.
+        return ("a wind-down is not restarted if it dies, because restarting "
+                "it would open the book it is emptying")
+    return ""
+
+
+def start_watchdog(until_hour: int):
+    """Start `tools/watchdog.py --adopt` beside this session. **P1b, closed.**
+
+    The watchdog has existed, tested, since P1b, and nothing launched it.
+    `grep -i watchdog start-trading.bat tools/run_overnight.py` returned
+    nothing, so the restart budget, the fast-exit cost and the refusal table
+    were all written for a process that was never started. The one launch
+    attempt in the logs is 2026-09-14 23:16, by hand, and it failed on its own
+    arguments. Three of the four sessions that followed ended in a state a
+    supervisor would have acted on.
+
+    **Here rather than in `start-trading.bat`**, for two reasons. The batch
+    file is not the only entry point -- the frozen executable runs
+    `trade-research.exe overnight` and never touches it -- and the hour has
+    already been parsed and validated here, where getting it out of `%*` in
+    cmd means the delayed-expansion trap this project has already been bitten
+    by twice.
+
+    **`--adopt`, because the session is this process.** Left to start one
+    itself the watchdog would launch a second harvest loop on the same
+    account. `session_alive()` matches `run_overnight.py` in a command line
+    and excludes anything with `watchdog` in it, so the first poll 20 seconds
+    from now sees this process and adopts it; there is no window in which it
+    can decide the session is missing.
+
+    Detached on purpose. A supervisor that dies with the thing it supervises
+    is not one, and the session dying is the entire case it exists for.
+
+    Returns the handle, or None when it could not be started -- never raises.
+    A session that trades is worth more than its supervisor, so a watchdog
+    that will not start is reported and stepped over, not fatal.
+    """
+    import subprocess
+
+    root = _paths.project_root()
+    script = os.path.join(root, "tools", "watchdog.py")
+    if not os.path.exists(script) and not getattr(sys, "frozen", False):
+        print("  note: tools/watchdog.py is missing; the session runs unsupervised")
+        return None
+
+    if getattr(sys, "frozen", False):
+        cmd = [sys.executable, "watchdog", "--adopt", "--until-hour", str(until_hour)]
+    else:
+        exe = sys.executable
+        # pythonw where we have it: the watchdog outlives this process and a
+        # console window left behind after the session ends is a window the
+        # operator closes, which on Windows is a signal to whatever owns it.
+        cand = exe.replace("python.exe", "pythonw.exe")
+        if cand != exe and os.path.exists(cand):
+            exe = cand
+        cmd = [exe, script, "--adopt", "--until-hour", str(until_hour)]
+
+    logs = os.path.join(root, "logs")
+    os.makedirs(logs, exist_ok=True)
+    out_path = os.path.join(logs, "watchdog.log")
+
+    # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP. Without the new group a
+    # Ctrl-C or console-close aimed at the session reaches the watchdog too,
+    # and it would be gone at the moment it was needed.
+    flags = 0
+    if os.name == "nt":
+        flags = 0x00000008 | 0x00000200
+
+    try:
+        handle = open(out_path, "a", encoding="utf-8")
+        proc = subprocess.Popen(cmd, cwd=root, stdout=handle, stderr=handle,
+                                stdin=subprocess.DEVNULL, creationflags=flags)
+    except (OSError, ValueError) as exc:
+        print(f"  note: the watchdog would not start ({type(exc).__name__}: {exc}); "
+              f"the session runs unsupervised")
+        return None
+
+    print(f"  watchdog: pid {proc.pid}, adopting this session until "
+          f"{until_hour:02d}:00 (log logs/watchdog.log)")
+    print("  it will NOT restart past a risk halt, a deliberate stop or the "
+          "kill switch")
+    return proc
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -654,6 +755,9 @@ def main() -> int:
                     help="with --continuous, minutes per leg before a fresh one "
                          "starts (default 240). A leg is a CRASH BOUNDARY, not a "
                          "deadline: nothing is closed when one ends")
+    ap.add_argument("--no-watchdog", action="store_true",
+                    help="do not start tools/watchdog.py beside the session; "
+                         "a full session supervises itself by default")
     ap.add_argument("--no-merge", action="store_true",
                     help="with --continuous, skip the ledger merge between legs. "
                          "The merge is what keeps data/track_record.jsonl "
@@ -808,6 +912,23 @@ def main() -> int:
 
         if args.dry_run:
             return 0
+
+        # FULL SESSIONS ONLY, and --harvest-only is the case that matters.
+        # A wind-down opens nothing and exists to empty a book; restarting one
+        # that died would re-enter the book it was deliberately clearing,
+        # which turns a supervisor into the thing it is supposed to protect
+        # against. --continuous never reaches here (it returns above) and it
+        # has no fixed deadline for a watchdog to preserve anyway.
+        # Deliberately not held and deliberately not killed on the way out.
+        # A `finally` that terminated it would fire on exactly the exception
+        # that makes a restart worth having, and the watchdog already stands
+        # down by itself: `refuses_restart` reads `completed` off the record
+        # and exits, and the poll loop ends at the deadline regardless.
+        skip = wants_watchdog(args.harvest_only, args.no_watchdog)
+        if skip:
+            print(f"  no watchdog: {skip}")
+        else:
+            start_watchdog(args.until_hour)
 
         import take_profit
 

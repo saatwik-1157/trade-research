@@ -12,6 +12,7 @@ are about what survives rather than what is computed:
 from __future__ import annotations
 
 import json
+import inspect
 import os
 import shutil
 import sys
@@ -465,6 +466,73 @@ def test_a_session_that_failed_its_flush_is_not_completed():
     check("and an empty summary does not invent a failure", status, "completed")
 
 
+def test_a_full_session_is_supervised_and_a_wind_down_is_not():
+    """P1b's last loose end: the watchdog nobody launched.
+
+    `tools/watchdog.py` has had a restart budget, a fast-exit cost and a
+    refusal table since P1b, and `grep -i watchdog start-trading.bat
+    tools/run_overnight.py` returned nothing -- so none of it ever ran. The
+    only launch attempt in the logs is 2026-09-14 23:16, by hand, and it
+    failed on its own arguments. Three of the four sessions after that ended
+    in a state a supervisor would have acted on.
+
+    The rule is deliberately narrow. A FULL session is supervised; a
+    `--harvest-only` wind-down is NOT, because it opens nothing and exists to
+    empty a book -- restarting one that died would re-enter the book it was
+    clearing, making the supervisor the hazard it was added to prevent.
+    """
+    print()
+    print("Watchdog wiring - a full session is supervised, a wind-down is not")
+
+    check("a full session is supervised",
+          run_overnight.wants_watchdog(harvest_only=False, no_watchdog=False), "")
+
+    skip = run_overnight.wants_watchdog(harvest_only=True, no_watchdog=False)
+    check("a wind-down is not", bool(skip), True)
+    check("and the reason says why, not just that it was skipped",
+          "emptying" in skip, True)
+
+    opt_out = run_overnight.wants_watchdog(harvest_only=False, no_watchdog=True)
+    check("the operator can still decline it", bool(opt_out), True)
+    check("naming the flag that did it", "--no-watchdog" in opt_out, True)
+
+    # --harvest-only wins over the opt-out rather than racing it: both mean
+    # "no watchdog", and the wind-down reason is the one worth reporting.
+    both = run_overnight.wants_watchdog(harvest_only=True, no_watchdog=True)
+    check("both together still means no watchdog", bool(both), True)
+
+
+def test_the_watchdog_adopts_rather_than_starting_a_second_session():
+    """The launch must not put two harvest loops on one account.
+
+    `start_session()` would start a session of its own; this one is already
+    running, because the process doing the launching IS the session. So the
+    command has to carry `--adopt`, and `session_alive()` has to be able to
+    see the parent -- it matches `run_overnight.py` in a command line and
+    excludes anything with `watchdog` in it, which is what makes the first
+    poll adopt instead of replace.
+    """
+    print()
+    print("Watchdog wiring - it adopts this session, never starts a rival")
+
+    check("a run_overnight command line reads as a live session",
+          watchdog._is_session("pythonw.exe S:/x/tools/run_overnight.py --until-hour 6"),
+          True)
+    check("and the watchdog's own command line does NOT",
+          watchdog._is_session("pythonw.exe S:/x/tools/watchdog.py --adopt --until-hour 6"),
+          False)
+    check("nor does a dry run",
+          watchdog._is_session("python tools/run_overnight.py --dry-run"), False)
+
+    # The flag the launcher must pass. Without it the watchdog starts one.
+    src = inspect.getsource(run_overnight.start_watchdog)
+    check("the launcher passes --adopt", "--adopt" in src, True)
+    check("and hands over the parsed hour, not a default",
+          "str(until_hour)" in src, True)
+    check("and never lets a failed launch end the session",
+          "return None" in src, True)
+
+
 def main():
     print("crash journal and console guard checks")
     test_a_record_is_written_and_readable()
@@ -484,6 +552,8 @@ def main():
     test_a_weekend_deadline_is_refused_in_the_venues_week_not_ours()
     test_the_refusal_says_when_the_answer_changes()
     test_a_session_that_failed_its_flush_is_not_completed()
+    test_a_full_session_is_supervised_and_a_wind_down_is_not()
+    test_the_watchdog_adopts_rather_than_starting_a_second_session()
 
     if FAILED:
         print(f"\n{len(FAILED)} check(s) failed")
