@@ -1,0 +1,21 @@
+# Batch files MUST check out with CRLF, on every platform.
+#
+# This is not a tidiness rule. cmd.exe reads a .bat by seeking through it, and
+# with bare LF line endings its label resolution is unreliable: `goto :label`
+# lands somewhere other than the label and execution falls into whatever
+# follows. It does not error. Nothing in the output says a jump was missed.
+#
+# Measured here on 2026-09-18. run.bat was written LF-only and, given an empty
+# stdin, its menu ran option 2 -- a live ledger merge that reads the venue and
+# writes two files -- three times, while its own guard correctly reported that
+# no input had been received. The guard logic was right; the goto that should
+# have returned to the menu simply did not happen. Converting the file to CRLF
+# fixed it with no change to a single statement.
+#
+# start-trading.bat has always been CRLF and has never shown this, which is
+# why the difference went unnoticed until a second .bat was added.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# PowerShell has the same seek-based reader.
+*.ps1 text eol=crlf

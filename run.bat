@@ -108,6 +108,14 @@ echo                                    the live MT5 record, same stats
 echo     11  Alert log                  summarise webhook alerts received
 echo     12  Start the alert receiver   records alerts, NEVER trades
 echo.
+echo   ---------------------------------------------------------------
+echo     SEARCH - does a rule work? every one so far has said no
+echo   ---------------------------------------------------------------
+echo     13  Volume        crypto D1, with unweighted controls  ~2 min
+echo     14  Supertrend    FX H1, the one rule from outside     ~3 min
+echo     15  Rule search   the 41-candidate baseline            ~5 min
+echo     16  Cost hurdle   the win rate the spread demands      ~1 min
+echo.
 echo     0   Exit
 echo.
 set "CHOICE="
@@ -141,6 +149,10 @@ if "%CHOICE%"=="9" goto :logs
 if "%CHOICE%"=="10" goto :tvimport
 if "%CHOICE%"=="11" goto :tvalerts
 if "%CHOICE%"=="12" goto :tvserve
+if "%CHOICE%"=="13" goto :svolume
+if "%CHOICE%"=="14" goto :ssuper
+if "%CHOICE%"=="15" goto :srules
+if "%CHOICE%"=="16" goto :scost
 if "%CHOICE%"=="0" goto :done
 echo.
 echo   "%CHOICE%" is not on the menu.
@@ -381,6 +393,111 @@ if defined TVSEC set "TVSEC=%TVSEC:"=%"
 if not defined TVSEC goto :menu
 cls
 "%TR_PYTHON%" tools\tv_webhook.py --secret "%TVSEC%"
+echo.
+pause
+goto :menu
+
+REM ---------------------------------------------------------------- search
+REM HOW TO READ ANY OF THESE. A candidate is evidence only if it clears the
+REM Bonferroni threshold, beats the permutation null -- a shuffle of its OWN
+REM signals, so it trades as often and pays the same spread -- AND holds out
+REM of sample. Eight searches across five universes have now run and not one
+REM candidate has cleared all three. A big in-sample number is the normal
+REM appearance of nothing: the highest t this project ever produced was 6.59,
+REM and it went to -1.82 out of sample.
+
+:svolume
+cls
+echo   Volume search - crypto D1, seven Binance pairs, 3000 bars.
+echo.
+echo   The last untested input. Two of the six candidates IGNORE volume and
+echo   are there as controls: the return leg alone is momentum, which is
+echo   already refuted, so without them a positive could not be credited to
+echo   volume rather than to momentum.
+echo.
+echo   Needs a network connection. Takes about two minutes.
+echo.
+"%TR_PYTHON%" tools\volume_search.py --symbols "BTC/USDT,ETH/USDT,BNB/USDT,XRP/USDT,ADA/USDT,DOGE/USDT,SOL/USDT" --bars 3000 --out reports\volume_search_d1.json
+echo.
+if errorlevel 1 goto :search_failed
+echo   Written to reports\volume_search_d1.json
+echo.
+echo   Last run: the weighting made it WORSE than the control at both
+echo   quantiles, and the permutation null beat every real candidate.
+echo.
+pause
+goto :menu
+
+:ssuper
+cls
+echo   Supertrend search - FX majors, H1.
+echo.
+echo   The only concrete strategy in three public trading repositories.
+echo   Supertrend is not a rename of a searched family: its band ratchets,
+echo   so the flip level carries state from every bar since the last flip.
+echo.
+echo   Needs MetaTrader 5 open for the bars. Takes about three minutes.
+echo.
+if not defined TR_MT5 goto :need_mt5
+"%TR_PYTHON%" tools\supertrend_search.py --timeframe H1 --out reports\supertrend_search_h1.json
+echo.
+if errorlevel 1 goto :search_failed
+echo   Written to reports\supertrend_search_h1.json
+echo.
+echo   Last run: significantly NEGATIVE - the source rule scores -2.27 in
+echo   sample and -4.07 out, and loses in all seven pairs.
+echo.
+pause
+goto :menu
+
+:srules
+cls
+echo   Rule search - the 41-candidate baseline across ten families.
+echo.
+echo   RSI, MA crosses, Donchian, Bollinger, momentum and the inverse of
+echo   each. This is the run every later search is compared against.
+echo.
+echo   Needs MetaTrader 5 open. Takes about five minutes.
+echo.
+REM Writes to _rerun, NOT over reports\rule_search.json. That file is the
+REM canonical baseline and CLAUDE.md quotes its figures by name throughout --
+REM best in-sample t 1.29, the null's 0.74, zero of 41 clearing 1.96 out of
+REM sample. A menu option that silently replaced it would make every one of
+REM those citations refer to a different run than the one they were written
+REM about, and nothing would flag it.
+if not defined TR_MT5 goto :need_mt5
+"%TR_PYTHON%" tools\rule_search.py --timeframe H1 --out reports\rule_search_rerun.json
+echo.
+if errorlevel 1 goto :search_failed
+echo   Written to reports\rule_search_rerun.json
+echo.
+echo   Deliberately NOT written over reports\rule_search.json - that is the
+echo   baseline CLAUDE.md quotes by number. Compare the two rather than
+echo   replacing one with the other.
+echo.
+pause
+goto :menu
+
+:scost
+cls
+echo   Cost hurdle - the win rate the spread demands before any strategy.
+echo.
+echo   This is the question that comes BEFORE "does the rule work", and the
+echo   answer is a property of the broker and the bracket rather than of any
+echo   strategy, so it is computed exactly rather than searched for.
+echo.
+if not defined TR_MT5 goto :need_mt5
+"%TR_PYTHON%" tools\cost_hurdle.py
+echo.
+if errorlevel 1 goto :search_failed
+pause
+goto :menu
+
+:search_failed
+echo.
+echo   The search did not finish, so no report was written. The usual causes
+echo   are no network (the crypto search fetches from an exchange) or
+echo   MetaTrader 5 being closed (every FX search reads its bars).
 echo.
 pause
 goto :menu
