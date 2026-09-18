@@ -288,13 +288,14 @@ Nothing is running. The open item is not work, it is an unattended book:
 
 ## High Issues
 
-- **Nothing starts `tools/watchdog.py`.** Unchanged, and now with evidence: the
-  one launch attempt in the logs (09-14 23:16) failed with
-  `unknown command 'S:\PROJECTS\trade-research\tools\run_overnight.py'`, which
-  is what prompted `76dbc70` a minute later. The frozen-mode bug is fixed;
-  **the wiring still does not exist** — `grep -i watchdog start-trading.bat
-  tools/run_overnight.py` returns nothing. A supervisor nobody launches would
-  have restarted three of the last four sessions.
+- ~~**Nothing starts `tools/watchdog.py`.**~~ **Closed 2026-09-18.**
+  `run_overnight.py` now starts it with `--adopt` for every full session —
+  in Python rather than in `start-trading.bat`, because the frozen executable
+  never touches the batch file and the hour is already parsed here. **Full
+  sessions only:** a `--harvest-only` wind-down is deliberately unsupervised,
+  since restarting one that died would re-enter the book it was emptying.
+  `--no-watchdog` opts out. Verified by starting a real one and watching it
+  adopt rather than launch a rival, which is the check the P1b work never had.
 - ~~**A refused escape close was recorded as a close that happened.**~~
   **Fixed 2026-09-18.** When a bracket repair fails, both exits are against
   the position and holding it is a guaranteed loss, so `place()` fires one
@@ -353,11 +354,8 @@ declared working on the strength of an API return value; this one is not
 believed until a session proves it. Run it **on mains** — on battery the
 power request lapses by design and the run is worthless as evidence.
 
-**4. Then decide whether the launcher starts a watchdog.** It is the last
-loose end from P1b, it stopped being a pure design question this week, and it
-is about an hour of work: `tools/watchdog.py` already has the restart budget,
-the fast-exit cost and the refusal table, and `session_alive()` already
-prevents a double start. Nothing calls it.
+**4.** ~~Decide whether the launcher starts a watchdog.~~ **Done 2026-09-18** —
+see High Issues. Full sessions are supervised; wind-downs are not.
 
 **5. Then the MT5 retcode table** — `tools/mt5_retcodes.py`, mapping the codes
 this project has actually observed (10018, 10031, 10030, `TRADE_RETCODE_DONE`)
