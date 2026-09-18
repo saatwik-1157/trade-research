@@ -26,6 +26,8 @@ package inside connect() rather than at module scope.
 from __future__ import annotations
 
 import calendar
+import contextlib
+import io
 import math
 import os
 import sys
@@ -784,6 +786,97 @@ def test_unrepairable_bracket_is_closed_not_held():
     check("closing a short is a buy", fake.sent[2]["type"], FakeMT5.ORDER_TYPE_BUY)
 
 
+def test_an_escape_close_the_venue_refused_is_not_recorded_as_closed():
+    """The worst place in the codebase to assume success, and it did.
+
+    When the bracket repair fails, both exits are against the position and
+    holding it is a guaranteed loss, so `place()` fires one escape close. Its
+    result was DISCARDED and `bracket_repair_failed_closed = True` was then
+    set unconditionally -- so a close the venue REFUSED was written down as a
+    close that happened, on the single order whose entire purpose is to escape
+    a loss with no good branch. The position stayed open and the record said
+    it had been handled.
+    """
+    print()
+    print("Bracket repair - a refused escape close is a refusal, not a rescue")
+
+    class RefusesTheEscape(FakeMT5):
+        """Fails the SLTP repair, then refuses the close that follows it."""
+
+        def order_send(self, request):
+            self.sent.append(request)
+            if request["action"] == self.TRADE_ACTION_SLTP:
+                return types.SimpleNamespace(retcode=10016)
+            if request.get("position") is not None:
+                return types.SimpleNamespace(retcode=10031, order=0, deal=0,
+                                             price=0.0, volume=0.0)
+            return types.SimpleNamespace(
+                retcode=self.TRADE_RETCODE_DONE, order=10200315596,
+                deal=self.deal, price=self.fill)
+
+    fake = RefusesTheEscape(fill=0.59473, sltp_ok=False)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        out, _ = _place(fake)
+
+    check("the escape close is NOT recorded as having happened",
+          out["bracket_repair_failed_closed"], False)
+    check("the venue's refusal is recorded by number",
+          out["bracket_repair_close_retcode"], 10031)
+    check("and the operator is told to close it by hand",
+          "THE ESCAPE CLOSE FAILED" in buf.getvalue(), True)
+
+    # The succeeding case must still say True, or the flag has changed meaning.
+    ok = FakeMT5(fill=0.59473, sltp_ok=False)
+    with contextlib.redirect_stdout(io.StringIO()):
+        out_ok, _ = _place(ok)
+    check("a close the venue accepted still reads True",
+          out_ok["bracket_repair_failed_closed"], True)
+
+
+def test_an_unanswered_order_is_unknown_not_rejected():
+    """REJECTED means nothing was sent. UNKNOWN means it might have been.
+
+    `order_send` was unguarded and `status` read `"SENT" if done else
+    "REJECTED"`, so an IPC error raised here -- or a `None` from a terminal
+    that had gone away -- was recorded as though the VENUE had refused the
+    order. That is the opposite claim, and it is the one that decides whether
+    a retry is safe: a refusal transmitted nothing and can be retried freely,
+    an exception may well have reached the server and a retry can open a
+    second position.
+    """
+    print()
+    print("Order send - an unanswered request is UNKNOWN, never a refusal")
+
+    class Raises(FakeMT5):
+        def order_send(self, request):
+            self.sent.append(request)
+            raise OSError("IPC pipe closed")
+
+    class ReturnsNone(FakeMT5):
+        def order_send(self, request):
+            self.sent.append(request)
+            return None
+
+    class Refuses(FakeMT5):
+        def order_send(self, request):
+            self.sent.append(request)
+            return types.SimpleNamespace(retcode=10031, order=0, deal=0,
+                                         price=0.0, volume=0.0)
+
+    out_raise, _ = _place(Raises(fill=0.59752))
+    check("a raised IPC error is UNKNOWN", out_raise["status"], "UNKNOWN")
+    check("and the error is kept, not just its class",
+          "IPC pipe closed" in out_raise["send_error"], True)
+
+    out_none, _ = _place(ReturnsNone(fill=0.59752))
+    check("a None answer is UNKNOWN too", out_none["status"], "UNKNOWN")
+
+    out_ref, _ = _place(Refuses(fill=0.59752))
+    check("an actual venue refusal is still REJECTED", out_ref["status"], "REJECTED")
+    check("and carries no send_error", "send_error" in out_ref, False)
+
+
 class StampedClock:
     """A terminal reporting one fixed server stamp.
 
@@ -904,6 +997,23 @@ class HarvestMT5(FakeMT5):
 
     def positions_get(self):
         return tuple(self._positions)
+
+    def order_send(self, request):
+        """A successful close REMOVES the position, as a real venue does.
+
+        It used to return DONE and leave the book untouched, which quietly
+        made the fake agree with the bug: `flush_until_flat` now re-reads
+        `own_positions` to confirm, and against a venue that never forgets a
+        closed position that check can never pass. A fake that cannot model
+        "the close worked" cannot test the code that checks whether it did.
+        """
+        res = super().order_send(request)
+        if getattr(res, "retcode", None) == self.TRADE_RETCODE_DONE:
+            ticket = request.get("position")
+            if ticket is not None:
+                self._positions = [p for p in self._positions
+                                   if getattr(p, "ticket", None) != ticket]
+        return res
 
     def account_info(self):
         return types.SimpleNamespace(balance=100_000.0, equity=99_990.0,
@@ -1211,20 +1321,214 @@ def test_a_refused_flush_is_retried_and_named():
     try:
         # Refuses once, then succeeds: the retry is what makes the account flat.
         c = Refusing([pos(1, profit=-2.25)], fails=1)
-        closed, still = take_profit.flush_until_flat(c, live=True, attempts=4, wait=0)
+        closed, still = take_profit.flush_until_flat(c, live=True, attempts=4, wait=0, budget=0)
         check("the retry closed what one attempt could not", closed, 1)
         check("and nothing is left failing", still, [])
         check("it took a second attempt to do it", c.attempts, 2)
 
         # Refuses throughout: the caller must be told, with the retcode.
         c = Refusing([pos(2, profit=-2.25)], fails=99)
-        closed, still = take_profit.flush_until_flat(c, live=True, attempts=3, wait=0)
+        closed, still = take_profit.flush_until_flat(c, live=True, attempts=3, wait=0, budget=0)
         check("a flush that never succeeded closed nothing", closed, 0)
         check("and says so rather than reporting a flat account", len(still), 1)
         check("naming the retcode the venue gave", still[0]["retcode"], 10031)
         check("after every attempt it was given", c.attempts, 3)
     finally:
         mt5_paper._log = real_log
+
+
+def test_the_flush_budget_is_wall_clock_not_attempts():
+    """The 2026-09-14 defect: six retries inside fifty seconds.
+
+    The machine woke, the 06:00 deadline fired immediately, and all six
+    attempts were spent in 50 seconds against a trade server that had not
+    finished reconnecting. Six refusals of 10031 is one reconnect attempt
+    wearing six hats, and seven positions were abandoned because of it.
+
+    So `attempts` is a floor and the real budget is wall-clock: a connection
+    that comes back on the ninth try, ninety seconds in, is still inside the
+    allowance that six-attempts-in-fifty-seconds threw away.
+    """
+    print()
+    print("Flush - the budget is measured in seconds, not in tries")
+
+    class Refusing(HarvestMT5):
+        def __init__(self, positions, fails):
+            super().__init__(positions)
+            self.fails = fails
+            self.attempts = 0
+
+        def order_send(self, request):
+            self.attempts += 1
+            if self.attempts <= self.fails:
+                return types.SimpleNamespace(retcode=10031, order=0, deal=0,
+                                             price=0.0, volume=0.0)
+            self._positions = []
+            return super().order_send(request)
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        # Eight refusals against an attempt FLOOR of three. The old loop
+        # stopped at three and abandoned the position; the budget keeps going.
+        c = Refusing([pos(1, profit=-2.25)], fails=8)
+        closed, still = take_profit.flush_until_flat(
+            c, live=True, attempts=3, wait=0, budget=5.0)
+        check("the flush outlived its attempt floor", closed, 1)
+        check("and left nothing failing", still, [])
+        check("because it kept trying past attempt three", c.attempts > 3, True)
+
+        # With no budget the floor is the ceiling again, which is what the
+        # older tests describe - the two behaviours are not in conflict.
+        c = Refusing([pos(2, profit=-2.25)], fails=8)
+        closed, still = take_profit.flush_until_flat(
+            c, live=True, attempts=3, wait=0, budget=0)
+        check("a zero budget stops at the floor", c.attempts, 3)
+        check("and reports the position still open", len(still), 1)
+    finally:
+        mt5_paper._log = real_log
+
+
+def test_a_sleep_mid_flush_restarts_the_budget_and_says_so():
+    """The 2026-09-15 defect: 'retrying in 10s' that resumed 2h06m later.
+
+    The machine suspended inside `time.sleep`. One attempt of six was spent,
+    nothing in the log named the gap, and the budget being spent no longer
+    described anything -- the venue session was gone and the reconnect had to
+    start over. A wake is not a retry.
+    """
+    print()
+    print("Flush - a mid-flush sleep is named, and restarts the allowance")
+
+    class Refusing(HarvestMT5):
+        def __init__(self, positions, fails):
+            super().__init__(positions)
+            self.fails = fails
+            self.attempts = 0
+
+        def order_send(self, request):
+            self.attempts += 1
+            if self.attempts <= self.fails:
+                return types.SimpleNamespace(retcode=10031, order=0, deal=0,
+                                             price=0.0, volume=0.0)
+            self._positions = []
+            return super().order_send(request)
+
+    real_log = mt5_paper._log
+    real_sleep = take_profit.time.sleep
+    real_mono = take_profit.time.monotonic
+    mt5_paper._log = lambda r: None
+
+    # A clock that jumps two hours the first time the flush waits.
+    clock = {"t": 0.0, "jumped": False}
+
+    def fake_mono():
+        return clock["t"]
+
+    def fake_sleep(seconds):
+        if not clock["jumped"]:
+            clock["jumped"] = True
+            clock["t"] += 7560.0          # 2h06m, the observed gap
+        else:
+            clock["t"] += seconds
+
+    buf = io.StringIO()
+    try:
+        take_profit.time.sleep = fake_sleep
+        take_profit.time.monotonic = fake_mono
+        c = Refusing([pos(3, profit=-2.25)], fails=4)
+        with contextlib.redirect_stdout(buf):
+            closed, still = take_profit.flush_until_flat(
+                c, live=True, attempts=2, wait=10.0, budget=300.0)
+    finally:
+        mt5_paper._log = real_log
+        take_profit.time.sleep = real_sleep
+        take_profit.time.monotonic = real_mono
+
+    out = buf.getvalue()
+    check("the gap is named in the log", "THE MACHINE SLEPT MID-FLUSH" in out, True)
+    check("the restart is explained", "budget restarts" in out, True)
+    check("and the flush went on to close the position", closed, 1)
+    check("leaving nothing open", still, [])
+
+
+def test_a_done_that_leaves_the_position_open_is_not_flat():
+    """A retcode is what the venue said, not what the book shows.
+
+    `flush_until_flat` returned the moment every close came back DONE. DONE is
+    the server acknowledging the request; it is not the position being gone.
+    A close that is accepted and does not remove the position ended the flush
+    with its budget unspent, and `run()` only found out afterwards, at the
+    `still_open` count, too late to do anything about it.
+
+    Same class as reading the quote instead of the fill: the tool's own
+    optimism written down as the venue's answer.
+    """
+    print()
+    print("Wind-down - the book confirms the close, not the retcode")
+
+    class AcceptsButKeeps(HarvestMT5):
+        """Says DONE to everything and never lets a position go."""
+
+        def order_send(self, request):
+            return types.SimpleNamespace(
+                retcode=self.TRADE_RETCODE_DONE, order=1, deal=1,
+                price=0.59752, volume=0.01)
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    buf = io.StringIO()
+    try:
+        c = AcceptsButKeeps([pos(11, profit=-2.25), pos(12, profit=-0.61)])
+        with contextlib.redirect_stdout(buf):
+            closed, still = take_profit.flush_until_flat(
+                c, live=True, attempts=2, wait=0, budget=0)
+    finally:
+        mt5_paper._log = real_log
+
+    out = buf.getvalue()
+    check("the disagreement is named", "STILL OPEN" in out.upper(), True)
+    check("and the flush does NOT report a flat account", len(still), 2)
+    check("naming the surviving tickets",
+          sorted(r["ticket"] for r in still), [11, 12])
+    check("with a status that is neither closed nor a venue refusal",
+          still[0]["status"], "ACCEPTED_BUT_STILL_OPEN")
+
+    # And the honest case still short-circuits: a fake that really closes
+    # must not be dragged through the retry loop.
+    mt5_paper._log = lambda r: None
+    try:
+        c = HarvestMT5([pos(21, profit=-2.25)])
+        with contextlib.redirect_stdout(io.StringIO()):
+            closed, still = take_profit.flush_until_flat(
+                c, live=True, attempts=2, wait=0, budget=0)
+    finally:
+        mt5_paper._log = real_log
+    check("a real close still returns flat on the first pass", (closed, still), (1, []))
+
+
+def test_a_dry_run_does_not_wait_for_a_book_it_never_changed():
+    """The confirming read is live-only, and it has to be.
+
+    A dry run sends nothing, so every position it "closed" is still there. A
+    confirming read would find them all, retry until the budget ran out, and
+    report a wall of failures for a run that never placed an order.
+    """
+    print()
+    print("Wind-down - a dry run confirms nothing because it changed nothing")
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    try:
+        c = HarvestMT5([pos(31, profit=-2.25), pos(32, profit=-0.61)])
+        with contextlib.redirect_stdout(io.StringIO()):
+            closed, still = take_profit.flush_until_flat(
+                c, live=False, attempts=2, wait=0, budget=0)
+    finally:
+        mt5_paper._log = real_log
+
+    check("a dry run reports both as gone", closed, 2)
+    check("and loops not at all", still, [])
 
 
 def test_a_closed_market_is_not_retried():
@@ -1255,7 +1559,7 @@ def test_a_closed_market_is_not_retried():
     mt5_paper._log = lambda r: None
     try:
         c = Closed([pos(1, profit=-2.25), pos(2, profit=-1.10)])
-        closed, still = take_profit.flush_until_flat(c, live=True, attempts=6, wait=0)
+        closed, still = take_profit.flush_until_flat(c, live=True, attempts=6, wait=0, budget=0)
         check("nothing was closed", closed, 0)
         check("both are reported still open", len(still), 2)
         check("naming the retcode", still[0]["retcode"], 10018)
@@ -1273,7 +1577,7 @@ def test_a_closed_market_is_not_retried():
                                              price=0.0, volume=0.0)
 
         c = Mixed([pos(3, profit=-2.25), pos(4, profit=-1.10)])
-        closed, still = take_profit.flush_until_flat(c, live=True, attempts=3, wait=0)
+        closed, still = take_profit.flush_until_flat(c, live=True, attempts=3, wait=0, budget=0)
         check("a mixed refusal still uses every attempt", c.attempts, 6)
         check("and still reports what stayed open", len(still), 2)
     finally:
@@ -1377,8 +1681,8 @@ def test_the_machine_is_released_even_when_the_session_raises():
     take_profit.ctypes = types.SimpleNamespace(windll=types.SimpleNamespace(kernel32=FakeKernel))
     try:
         try:
-            with take_profit.keep_awake() as held:
-                check("the hold was taken", held, True)
+            with take_profit.keep_awake() as (awake, _s0, _screen, _ac):
+                check("the hold was taken", awake, True)
                 raise RuntimeError("the session fell over")
         except RuntimeError:
             pass
@@ -1401,10 +1705,126 @@ def test_a_platform_that_cannot_hold_says_so_and_still_runs():
     real = take_profit.ctypes
     take_profit.ctypes = types.SimpleNamespace(windll=None)
     try:
-        with take_profit.keep_awake() as held:
-            check("no hold is claimed", held, False)
+        with take_profit.keep_awake() as (awake, _s0, _screen, _ac):
+            check("no hold is claimed", awake, False)
     finally:
         take_profit.ctypes = real
+
+
+def test_the_deadline_takes_an_execution_power_request():
+    """The hold that stops Modern Standby suspending the session.
+
+    Two fixes were shipped against the overnight sleep and neither worked,
+    because both reached for `SetThreadExecutionState`. Its flags map only to
+    PowerRequestSystemRequired and PowerRequestDisplayRequired; the request
+    that keeps a desktop application RUNNING through modern standby --
+    PowerRequestExecutionRequired -- has no `ES_` constant and can only be
+    taken through `PowerCreateRequest`. So the test is not "a hold was taken",
+    which was true on both the nights that failed. It is "the execution
+    request specifically was asked for, and only when a deadline needs it".
+    """
+    print()
+    print("Keep-awake - the execution power request, which no ES_ flag can express")
+
+    real = take_profit.ctypes
+    taken: list[int] = []
+
+    class FakeKernel:
+        PowerCreateRequest = types.SimpleNamespace(restype=None, argtypes=None)
+        PowerSetRequest = types.SimpleNamespace(argtypes=None)
+        PowerClearRequest = types.SimpleNamespace(argtypes=None)
+
+        @staticmethod
+        def SetThreadExecutionState(flags):  # noqa: N802
+            return 1
+
+        @staticmethod
+        def CloseHandle(h):  # noqa: N802
+            return 1
+
+    # PowerCreateRequest/SetRequest are attributes AND callables in the real
+    # API, because ctypes exposes argtypes on the function object. Model that.
+    def _create(_ctx):
+        return 4242
+
+    def _set(_h, t):
+        taken.append(t)
+        return 1
+
+    def _clear(_h, _t):
+        return 1
+
+    _create.restype = None
+    _create.argtypes = None
+    _set.argtypes = None
+    _clear.argtypes = None
+    FakeKernel.PowerCreateRequest = _create
+    FakeKernel.PowerSetRequest = _set
+    FakeKernel.PowerClearRequest = _clear
+
+    fake_ctypes = types.SimpleNamespace(
+        windll=types.SimpleNamespace(kernel32=FakeKernel),
+        Structure=real.Structure, Union=real.Union, POINTER=real.POINTER,
+        byref=real.byref, c_void_p=real.c_void_p, c_int=real.c_int,
+        c_ubyte=real.c_ubyte, c_ulong=real.c_ulong,
+    )
+    take_profit.ctypes = fake_ctypes
+    try:
+        with take_profit.keep_awake(need_the_deadline=True) as (awake, _s0, _screen, _ac):
+            check("the hold was taken", awake, True)
+        with_deadline = list(taken)
+
+        taken.clear()
+        with take_profit.keep_awake(need_the_deadline=False) as (_a, _b, _c, _d):
+            pass
+        without_deadline = list(taken)
+    finally:
+        take_profit.ctypes = real
+
+    check("a session with a deadline asks for EXECUTION",
+          take_profit.POWER_REQUEST_EXECUTION in with_deadline, True)
+    check("and for SYSTEM alongside it",
+          take_profit.POWER_REQUEST_SYSTEM in with_deadline, True)
+    check("a session with no deadline does NOT take the execution request",
+          take_profit.POWER_REQUEST_EXECUTION in without_deadline, False)
+
+
+def test_a_refused_power_request_is_announced_not_swallowed():
+    """The failure mode that cost two nights: a hold that reports success.
+
+    `SetThreadExecutionState` returned non-zero on both nights the machine
+    slept, so the banner was confident and wrong. If the power request is
+    refused now, the session says so in the log rather than printing the same
+    reassuring line.
+    """
+    print()
+    print("Keep-awake - a refused request is reported")
+
+    real = take_profit.ctypes
+
+    class NoPowerApi:
+        @staticmethod
+        def SetThreadExecutionState(flags):  # noqa: N802
+            return 1
+    # No PowerCreateRequest at all - an older kernel, or a stubbed one.
+
+    take_profit.ctypes = types.SimpleNamespace(
+        windll=types.SimpleNamespace(kernel32=NoPowerApi),
+        Structure=real.Structure, Union=real.Union, POINTER=real.POINTER,
+        byref=real.byref, c_void_p=real.c_void_p, c_int=real.c_int,
+        c_ubyte=real.c_ubyte, c_ulong=real.c_ulong,
+    )
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            with take_profit.keep_awake(need_the_deadline=True) as (awake, *_rest):
+                pass
+    finally:
+        take_profit.ctypes = real
+
+    out = buf.getvalue()
+    check("the refusal is named", "REFUSED" in out, True)
+    check("and the execution-state fallback still reports a hold", awake, True)
 
 
 def test_a_setting_can_be_overridden_but_not_invented():
@@ -1908,6 +2328,8 @@ def main():
     test_a_zero_multiple_means_no_bracket_not_a_zero_width_one()
     test_inverted_bracket_is_repaired_from_the_fill()
     test_unrepairable_bracket_is_closed_not_held()
+    test_an_escape_close_the_venue_refused_is_not_recorded_as_closed()
+    test_an_unanswered_order_is_unknown_not_rejected()
     test_lot_is_sized_off_the_stop_distance()
     test_rounding_never_risks_more_than_the_budget()
     test_a_partial_disconnect_is_not_a_cosmetic_failure()
@@ -1934,11 +2356,17 @@ def main():
     test_a_deadline_is_the_wall_clock_and_rolls_to_tomorrow()
     test_the_flush_fires_when_flat_by_equals_the_stop_hour()
     test_a_refused_flush_is_retried_and_named()
+    test_a_done_that_leaves_the_position_open_is_not_flat()
+    test_a_dry_run_does_not_wait_for_a_book_it_never_changed()
+    test_the_flush_budget_is_wall_clock_not_attempts()
+    test_a_sleep_mid_flush_restarts_the_budget_and_says_so()
     test_a_closed_market_is_not_retried()
     test_a_halt_does_not_flush_hours_early()
     test_the_two_halts_are_told_apart_by_value()
     test_the_machine_is_released_even_when_the_session_raises()
     test_a_platform_that_cannot_hold_says_so_and_still_runs()
+    test_the_deadline_takes_an_execution_power_request()
+    test_a_refused_power_request_is_announced_not_swallowed()
     test_a_setting_can_be_overridden_but_not_invented()
     test_one_bad_pass_does_not_end_a_session_with_hours_left()
     test_a_terminal_that_never_answers_is_given_up_on()

@@ -77,6 +77,53 @@ ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x00000001
 ES_DISPLAY_REQUIRED = 0x00000002
 
+#: POWER_REQUEST_TYPE. The enum order is the API's, not ours.
+POWER_REQUEST_DISPLAY = 0
+POWER_REQUEST_SYSTEM = 1
+POWER_REQUEST_AWAYMODE = 2
+#: The only request that survives Modern Standby, and the reason this module
+#: stopped relying on `SetThreadExecutionState`. See `power_request()`.
+POWER_REQUEST_EXECUTION = 3
+
+POWER_REQUEST_CONTEXT_VERSION = 0
+POWER_REQUEST_CONTEXT_SIMPLE_STRING = 0x1
+INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+AC_OFFLINE, AC_ONLINE, AC_UNKNOWN = 0, 1, 255
+
+
+def on_ac_power() -> int | None:
+    """0 on battery, 1 on mains, 255 unknown, None when it cannot be asked.
+
+    It matters because a power request is not the same promise on each. On
+    Modern Standby on DC, Microsoft documents that "system and execution
+    required power requests are terminated 5 minutes after the system sleep
+    timeout has expired" -- so on battery the hold below has a shelf life
+    measured in minutes and an overnight session cannot be relied on at all.
+    On AC there is no such clause.
+    """
+    if os.name != "nt":
+        return None
+    # The whole body is guarded, the structure definition included. A test
+    # that swaps `ctypes` for a stub reaches `ctypes.Structure` before it
+    # reaches any Windows call, and an unguarded class statement there takes
+    # the session down instead of reporting that it cannot tell.
+    try:
+        class _Status(ctypes.Structure):
+            _fields_ = [("ACLineStatus", ctypes.c_ubyte),
+                        ("BatteryFlag", ctypes.c_ubyte),
+                        ("BatteryLifePercent", ctypes.c_ubyte),
+                        ("SystemStatusFlag", ctypes.c_ubyte),
+                        ("BatteryLifeTime", ctypes.c_ulong),
+                        ("BatteryFullLifeTime", ctypes.c_ulong)]
+
+        status = _Status()
+        ok = ctypes.windll.kernel32.GetSystemPowerStatus(  # type: ignore[attr-defined]
+            ctypes.byref(status))
+    except (AttributeError, OSError, TypeError):
+        return None
+    return int(status.ACLineStatus) if ok else None
+
 
 def modern_standby() -> bool | None:
     """Whether this machine sleeps the S0 way. None when it cannot be told.
@@ -115,6 +162,110 @@ def parse_standby(text: str) -> bool:
     return "S0 Low Power Idle" in head
 
 
+def _reason_context(reason: str):
+    """A REASON_CONTEXT carrying a simple string, for PowerCreateRequest.
+
+    The union's largest arm is the Detailed struct, so it is declared in full
+    rather than as a bare LPWSTR -- a short union would be the right size on
+    32-bit and eight bytes too small on 64-bit, which is the kind of mistake
+    that corrupts the next field instead of failing.
+    """
+    from ctypes import wintypes
+
+    class _Detailed(ctypes.Structure):
+        _fields_ = [("LocalizedReasonModule", wintypes.HMODULE),
+                    ("LocalizedReasonId", wintypes.ULONG),
+                    ("ReasonStringCount", wintypes.ULONG),
+                    ("ReasonStrings", ctypes.POINTER(wintypes.LPWSTR))]
+
+    class _Reason(ctypes.Union):
+        _fields_ = [("Detailed", _Detailed),
+                    ("SimpleReasonString", wintypes.LPWSTR)]
+
+    class _Context(ctypes.Structure):
+        _fields_ = [("Version", wintypes.ULONG),
+                    ("Flags", wintypes.DWORD),
+                    ("Reason", _Reason)]
+
+    ctx = _Context()
+    ctx.Version = POWER_REQUEST_CONTEXT_VERSION
+    ctx.Flags = POWER_REQUEST_CONTEXT_SIMPLE_STRING
+    ctx.Reason.SimpleReasonString = reason
+    return ctx
+
+
+@contextlib.contextmanager
+def power_request(types: list[int], reason: str):
+    """Hold a set of POWER_REQUEST_TYPEs for the body, and release them after.
+
+    This exists because `SetThreadExecutionState` CANNOT express the one
+    request that matters here. Its flags map to PowerRequestSystemRequired and
+    PowerRequestDisplayRequired; there is no `ES_` constant for
+    PowerRequestExecutionRequired, and that is the only one documented to keep
+    "the calling process running instead of being suspended or terminated by
+    process lifetime management mechanisms".
+
+    Under Modern Standby the Desktop Activity Moderator suspends every desktop
+    application once the machine idles -- Microsoft states plainly that
+    "Windows prevents desktop applications from running during any part of
+    modern standby after the DAM phase completes". A harvest loop is a desktop
+    application. So the process was not failing to keep the MACHINE awake; it
+    was being paused by a component that no `ES_` flag addresses, which is why
+    the 2026-09-15 fix printed its banner, returned a non-zero previous state,
+    and slept for 112 minutes anyway.
+
+    Yields (held, handle). `held` is False on non-Windows, on an old kernel, or
+    when the request is refused -- never a silent no-op.
+    """
+    if os.name != "nt":
+        yield (False, None)
+        return
+
+    from ctypes import wintypes
+
+    handle = None
+    taken: list[int] = []
+    k32 = None
+    try:
+        # Inside the guard, not above it. `windll` is absent on a stub and
+        # None in the tests that model a platform without the API, and an
+        # unguarded attribute walk there takes the session down at startup
+        # instead of reporting that the hold could not be taken.
+        k32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        # restype MUST be set. ctypes defaults to c_int, which truncates a
+        # 64-bit handle to its low half -- the create succeeds, every
+        # PowerSetRequest against the truncated value fails, and the only
+        # symptom is a machine that still sleeps.
+        k32.PowerCreateRequest.restype = wintypes.HANDLE
+        k32.PowerCreateRequest.argtypes = [ctypes.c_void_p]
+        k32.PowerSetRequest.argtypes = [wintypes.HANDLE, ctypes.c_int]
+        k32.PowerClearRequest.argtypes = [wintypes.HANDLE, ctypes.c_int]
+        ctx = _reason_context(reason)
+        handle = k32.PowerCreateRequest(ctypes.byref(ctx))
+        if not handle or handle == INVALID_HANDLE_VALUE:
+            handle = None
+        else:
+            for t in types:
+                if k32.PowerSetRequest(handle, t):
+                    taken.append(t)
+    except (AttributeError, OSError, TypeError, ValueError):
+        handle = None
+
+    try:
+        yield (bool(taken), handle)
+    finally:
+        if handle is not None and k32 is not None:
+            for t in reversed(taken):
+                try:
+                    k32.PowerClearRequest(handle, t)
+                except (AttributeError, OSError, TypeError):
+                    pass
+            try:
+                k32.CloseHandle(handle)
+            except (AttributeError, OSError, TypeError):
+                pass
+
+
 @contextlib.contextmanager
 def keep_awake(need_the_deadline: bool = False):
     """Hold the machine awake for as long as the session runs.
@@ -131,45 +282,90 @@ def keep_awake(need_the_deadline: bool = False):
     machine changed after the loop, and a laptop that never sleeps again is a
     worse bug than the one being fixed.
 
-    **The display is held too on an S0 machine, and that is not a stylistic
-    choice.** Holding only the SYSTEM was correct for S3 and is useless under
-    Modern Standby, where the transition follows the screen going off rather
-    than an idle timer: `ES_SYSTEM_REQUIRED` alone returns success and the
-    machine idles anyway. It happened twice on the night of 2026-09-14, and the
-    cost was the whole point of the session -- S0 disconnects the network, so
-    the 06:00 flush met `retcode=10031` six times, gave up with seven positions
-    open, and five of them then stopped out unmanaged for -21.56.
+    **This holds a POWER REQUEST, not just an execution state, and the
+    difference is the whole bug.** Two fixes were shipped against this before
+    and neither worked, because both reached for `SetThreadExecutionState`:
+    first `ES_SYSTEM_REQUIRED` alone, then `ES_DISPLAY_REQUIRED` as well on the
+    theory that Modern Standby follows the screen going off. The second one
+    printed its banner, returned a non-zero previous state, and the session of
+    2026-09-15 still lost 112 minutes, then 60, then 126.
 
-    So on S0 the screen stays lit. That is worse to look at and better than a
-    wind-down that does not run, and `need_the_deadline` keeps the cost where
-    the benefit is: a session with no `--flat-by` holds the system only, as
-    before. It still does not defeat closing the lid or an explicit sleep,
-    neither of which is an idle timeout. Windows only; elsewhere it is a no-op
-    and says so rather than pretending.
+    The theory was wrong. The machine was not necessarily sleeping out from
+    under the process -- the process was being PAUSED. Under Modern Standby the
+    Desktop Activity Moderator suspends desktop applications, and Microsoft
+    states it without hedging: "Windows prevents desktop applications from
+    running during any part of modern standby after the DAM phase completes."
+    A harvest loop is a desktop application. No `ES_` flag addresses the DAM,
+    because the execution-state flags map only to PowerRequestSystemRequired
+    and PowerRequestDisplayRequired. The request that does address it,
+    `PowerRequestExecutionRequired` -- "the calling process continues to run
+    instead of being suspended or terminated by process lifetime management
+    mechanisms" -- has no `ES_` constant at all and can only be taken through
+    `PowerCreateRequest`/`PowerSetRequest`.
+
+    So both are taken now: the power request for the process, and the old
+    execution state as well, because they are cheap and they fail in different
+    places. On S0 the display is held too -- a lit screen is recoverable and a
+    wind-down that never runs is not -- and `need_the_deadline` keeps that cost
+    where the benefit is.
+
+    **Three things this still cannot do, and the caller is told about each.**
+    A power request does not survive the user closing the lid, pressing the
+    power button, or choosing Sleep: Microsoft terminates requests on
+    user-initiated sleep entry, and an app should not be able to override that.
+    And on Modern Standby ON BATTERY, "system and execution required power
+    requests are terminated 5 minutes after the system sleep timeout has
+    expired" -- so an overnight session on DC power cannot be relied on however
+    this is written, which is now said out loud rather than discovered at 06:00.
+
+    Yields (held, s0, screen, ac). Windows only; elsewhere a no-op that says so.
     """
     s0 = modern_standby() if need_the_deadline else False
+    ac = on_ac_power()
+
     flags = ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+    wants = [POWER_REQUEST_SYSTEM]
+    if need_the_deadline:
+        # The one that matters. Taken whenever a deadline has to be met,
+        # S0 or not -- it costs nothing on an S3 machine, where it simply
+        # implies PowerRequestSystemRequired.
+        wants.append(POWER_REQUEST_EXECUTION)
     if s0 is not False and need_the_deadline:
         # None (undetermined) is treated as S0. A lit screen is recoverable;
         # a flush that never runs is not.
         flags |= ES_DISPLAY_REQUIRED
+        wants.append(POWER_REQUEST_DISPLAY)
 
-    held = 0
-    try:
-        held = ctypes.windll.kernel32.SetThreadExecutionState(flags)  # type: ignore[attr-defined]
-    except (AttributeError, OSError):
+    reason = ("trade-research: an overnight session must stay running to close "
+              "its open positions at the deadline")
+    with power_request(wants, reason) as (requested, _handle):
         held = 0
-    if not held:
-        print("  note: could not hold the machine awake - if it sleeps before the "
-              "deadline, nothing closes and the session simply stops")
-    try:
-        yield (bool(held), s0, bool(flags & ES_DISPLAY_REQUIRED))
-    finally:
-        if held:
-            try:
-                ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)  # type: ignore[attr-defined]
-            except (AttributeError, OSError):
-                pass
+        try:
+            held = ctypes.windll.kernel32.SetThreadExecutionState(flags)  # type: ignore[attr-defined]
+        except (AttributeError, OSError):
+            held = 0
+
+        if need_the_deadline and not requested:
+            print("  WARNING: the execution power request was REFUSED. This is the "
+                  "hold that stops Modern Standby suspending the session; without "
+                  "it the deadline can arrive with the process paused and nothing "
+                  "closed. Two earlier fixes failed here silently -- this one says so.")
+        if not held and not requested:
+            print("  note: could not hold the machine awake - if it sleeps before the "
+                  "deadline, nothing closes and the session simply stops")
+        if need_the_deadline and ac == AC_OFFLINE:
+            print("  WARNING: ON BATTERY. Microsoft terminates system and execution "
+                  "power requests 5 minutes after the sleep timeout expires on DC "
+                  "power, so this session's hold WILL lapse and the deadline may "
+                  "arrive with the machine idle. Put the machine on mains.")
+        try:
+            yield (bool(held) or requested, s0, bool(flags & ES_DISPLAY_REQUIRED), ac)
+        finally:
+            if held:
+                try:
+                    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)  # type: ignore[attr-defined]
+                except (AttributeError, OSError):
+                    pass
 
 
 def net_floating(position) -> float:
@@ -196,6 +392,36 @@ def harvest(mt5, min_profit: float, live: bool) -> list[dict]:
 FLUSH_ATTEMPTS = 6
 FLUSH_WAIT_SECONDS = 10.0
 
+#: The flush keeps trying for this much WALL-CLOCK time, not merely for
+#: `FLUSH_ATTEMPTS` iterations.
+#:
+#: Counting attempts was the defect. On 2026-09-14 the machine woke, the
+#: deadline fired immediately, and all six attempts ran inside 50 seconds --
+#: six refusals of retcode 10031 from a trade server that had not finished
+#: reconnecting, which is one reconnect attempt wearing six hats. Seven
+#: positions were abandoned. The budget below is what "give the connection a
+#: fair chance" actually means, and 10 minutes is roughly 12x the longest
+#: observed reconnect on this venue.
+FLUSH_BUDGET_SECONDS = 600.0
+
+#: A gap this much larger than the wait means the machine slept mid-flush.
+#:
+#: The mirror image of the same defect, from the night after. On 2026-09-15 a
+#: retry that announced "retrying in 10s" resumed 2h06m later, because the
+#: machine suspended inside `time.sleep`. It consumed one attempt of six and
+#: the log said nothing. A wake is not a retry: the venue session is gone, the
+#: reconnect starts over, and the budget that was being spent no longer
+#: describes anything. So it is detected, named, and the budget restarts.
+FLUSH_SLEEP_FACTOR = 4.0
+FLUSH_SLEEP_FLOOR = 60.0
+
+#: How many times a mid-flush sleep may restart the budget before the flush
+#: gives up and reports. Without a cap, a machine that suspends every few
+#: minutes would keep a wind-down running indefinitely, and an unbounded
+#: retry loop in a trading tool is its own defect. Reporting seven open
+#: positions is bad; retrying them silently until lunchtime is worse.
+FLUSH_SLEEP_RESTARTS = 3
+
 #: TRADE_RETCODE_MARKET_CLOSED. The one refusal that retrying cannot fix.
 #:
 #: 10031 (no connection) is why the retry loop exists: a machine resuming from
@@ -210,7 +436,8 @@ MARKET_CLOSED = 10018
 
 
 def flush_until_flat(mt5, live: bool, attempts: int = FLUSH_ATTEMPTS,
-                     wait: float = FLUSH_WAIT_SECONDS) -> tuple[int, list[dict]]:
+                     wait: float = FLUSH_WAIT_SECONDS,
+                     budget: float = FLUSH_BUDGET_SECONDS) -> tuple[int, list[dict]]:
     """Close every own position, retrying while any refuse, and SAY which.
 
     Two failures this replaces, both from the same night. The flush counted
@@ -221,12 +448,25 @@ def flush_until_flat(mt5, live: bool, attempts: int = FLUSH_ATTEMPTS,
     instant the machine wakes, which is when the trade server is least likely
     to be there.
 
+    **The budget is wall-clock, and `attempts` is now a floor rather than a
+    ceiling.** Retrying stops when the account is flat, when the market is
+    shut, or when BOTH the attempt floor and the time budget are spent -- so
+    six refusals inside 50 seconds no longer end a wind-down that had nine
+    minutes of its allowance left. See `FLUSH_BUDGET_SECONDS`.
+
+    A machine that sleeps mid-flush restarts the budget rather than spending
+    it. See `FLUSH_SLEEP_FACTOR`.
+
     Returns (closed, still_failing). A dry run reports every position as gone
     on the first pass, so it never loops.
     """
     closed = 0
     failures: list[dict] = []
-    for attempt in range(1, attempts + 1):
+    started = time.monotonic()
+    attempt = 0
+    restarts = 0
+    while True:
+        attempt += 1
         stamp = datetime.now().strftime("%H:%M:%S")
         try:
             results = flatten(mt5, live)
@@ -255,7 +495,49 @@ def flush_until_flat(mt5, live: bool, attempts: int = FLUSH_ATTEMPTS,
                   f"#{r.get('ticket')} status={r.get('status')} "
                   f"retcode={r.get('retcode')}", flush=True)
         if not failures:
-            return closed, []
+            # A RETCODE IS NOT A CONFIRMATION. Every close said DONE, which is
+            # the venue acknowledging the request, not the book agreeing that
+            # the position is gone. Ending here on the acknowledgement alone is
+            # the same class of defect as reading the quote instead of the
+            # fill: the tool's own optimism recorded as the venue's answer.
+            #
+            # So the book is re-read. A DONE that did not remove the position
+            # keeps the loop running with its budget intact, and `run()` no
+            # longer discovers the disagreement after the flush has stopped
+            # caring. A read that FAILS is not an empty book -- it is unknown,
+            # and unknown is not the good case, so it is treated as still
+            # failing rather than as flat.
+            # A dry run closes nothing, so the book still holds every position
+            # it just "closed". Confirming there would loop until the budget
+            # ran out and report a wall of failures for a run that sent no
+            # orders, so the check is live-only -- the same reason `flatten`
+            # reports DRY_RUN as gone.
+            if not live:
+                return closed, []
+            try:
+                left_open = mt5_paper.own_positions(mt5)
+            except Exception as exc:  # noqa: BLE001 - unknown, never assumed flat
+                print(f"  [{stamp}] every close was accepted but the book could "
+                      f"NOT be re-read ({type(exc).__name__}: {exc}); the account "
+                      f"is UNKNOWN, not flat", flush=True)
+                left_open = None
+
+            if left_open is not None and not left_open:
+                return closed, []
+            if left_open:
+                # Synthesise a failure row per surviving ticket so the caller
+                # and the log name the position, not just the disagreement.
+                failures = [{"ticket": getattr(p, "ticket", None),
+                             "symbol": getattr(p, "symbol", "?"),
+                             "status": "ACCEPTED_BUT_STILL_OPEN",
+                             "retcode": None} for p in left_open]
+                print(f"  [{stamp}] THE VENUE ACCEPTED EVERY CLOSE AND "
+                      f"{len(failures)} POSITION(S) ARE STILL OPEN: "
+                      + ", ".join(f"{r['symbol']} #{r['ticket']}" for r in failures)
+                      + ". A DONE is not a closed position; retrying.", flush=True)
+            else:
+                failures = [{"ticket": None, "symbol": "?",
+                             "status": "UNREADABLE_AFTER_CLOSE", "retcode": None}]
         if market_closed:
             print(f"  [{stamp}] THE MARKET IS CLOSED (retcode {MARKET_CLOSED} on "
                   f"all {len(failures)}). Retrying cannot change that, so the "
@@ -264,11 +546,39 @@ def flush_until_flat(mt5, live: bool, attempts: int = FLUSH_ATTEMPTS,
                   "venue reopens. They carry financing and the opening gap.",
                   flush=True)
             return closed, failures
-        if attempt < attempts:
-            print(f"  [{stamp}] {len(failures)} still open; retrying in "
-                  f"{wait:.0f}s (attempt {attempt}/{attempts})", flush=True)
-            time.sleep(wait)
-    return closed, failures
+        spent = time.monotonic() - started
+        if attempt >= attempts and spent >= budget:
+            print(f"  [{stamp}] the flush budget is spent: {attempt} attempts over "
+                  f"{spent / 60:.1f} minutes and {len(failures)} still refusing",
+                  flush=True)
+            return closed, failures
+
+        left = max(0.0, budget - spent)
+        print(f"  [{stamp}] {len(failures)} still open; retrying in "
+              f"{wait:.0f}s (attempt {attempt}, {left / 60:.1f} min of budget left)",
+              flush=True)
+
+        before = time.monotonic()
+        time.sleep(wait)
+        slept = time.monotonic() - before
+        if slept > max(wait * FLUSH_SLEEP_FACTOR, wait + FLUSH_SLEEP_FLOOR):
+            # The clock jumped inside the sleep. Everything measured so far
+            # describes a venue session that no longer exists.
+            stamp = datetime.now().strftime("%H:%M:%S")
+            print(f"  [{stamp}] THE MACHINE SLEPT MID-FLUSH: {slept / 60:.0f} minutes "
+                  f"passed waiting {wait:.0f}s. The venue connection is gone and the "
+                  f"reconnect starts over, so the retry budget restarts too -- the "
+                  f"attempts spent before the gap were against a different session",
+                  flush=True)
+            restarts += 1
+            if restarts > FLUSH_SLEEP_RESTARTS:
+                print(f"  [{stamp}] and that is restart {restarts}; a machine "
+                      f"sleeping through its own wind-down this many times is not "
+                      f"going to finish one. Stopping so the positions are REPORTED "
+                      f"rather than retried forever", flush=True)
+                return closed, failures
+            started = time.monotonic()
+            attempt = 0
 
 
 def flatten(mt5, live: bool) -> list[dict]:
@@ -585,8 +895,9 @@ def run(mt5, args) -> dict:
         print(f"  [{stamp}] flat-by {args.flat_by}: closed {gone_count} at the deadline",
               flush=True)
         if still:
-            print(f"  [{stamp}] POSITIONS ARE STILL OPEN AT THE VENUE after "
-                  f"{FLUSH_ATTEMPTS} attempts: "
+            print(f"  [{stamp}] POSITIONS ARE STILL OPEN AT THE VENUE after at least "
+                  f"{FLUSH_ATTEMPTS} attempts over {FLUSH_BUDGET_SECONDS / 60:.0f} "
+                  f"minutes: "
                   + ", ".join(f"{r.get('symbol', '?')} retcode={r.get('retcode')}"
                               for r in still))
             print(f"  [{stamp}] Close them by hand, or start a wind-down session: "
@@ -711,17 +1022,26 @@ def main() -> int:
     print()
 
     try:
-        with keep_awake(need_the_deadline=bool(args.flat_by)) as (awake, s0, screen):
+        with keep_awake(need_the_deadline=bool(args.flat_by)) as (awake, s0, screen, ac):
             if awake and args.flat_by:
+                # Say which hold is in force, not just that one is. The two
+                # previous fixes both printed a confident banner while the
+                # session went on to sleep, so the banner now names the
+                # mechanism a reader can check against the log's timestamps.
+                power = ("holding an EXECUTION power request so Modern Standby "
+                         "cannot suspend this process")
                 if screen:
                     reason = ("this machine only has S0 standby" if s0
                               else "the standby type could not be determined")
-                    print(f"  holding the machine AND THE SCREEN awake until the session "
-                          f"ends -- {reason}, and holding the system alone does not "
-                          f"work there\n")
+                    print(f"  {power}, and the screen too -- {reason}, where the "
+                          f"Desktop Activity Moderator pauses desktop apps and no "
+                          f"execution-state flag prevents it")
                 else:
-                    print("  holding the machine awake until the session ends "
-                          "(the display may still sleep)\n")
+                    print(f"  {power} (the display may still sleep)")
+                if ac == AC_ONLINE:
+                    print("  on mains, so the hold has no documented expiry\n")
+                else:
+                    print()
             out = run(mt5, args)
             # The heartbeat's last state is the last PASS, taken before the
             # flush. A completed session whose record still says 7 open is
