@@ -556,7 +556,24 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
                 **({"sizing": sizing} if sizing else {}),
                 **({"risk": risk_record} if risk_record else {})}
 
-    res = mt5.order_send(request)
+    # UNKNOWN IS NOT REJECTED, AND THE DIFFERENCE DECIDES WHETHER A RETRY IS
+    # SAFE. This call was unguarded, and `status` below reads
+    # `"SENT" if done else "REJECTED"` -- so an IPC error raised here, or a
+    # `None` returned by a terminal that had gone away, was recorded as though
+    # the VENUE had refused the order. It is the opposite claim. A refusal
+    # means nothing was transmitted and a retry is free; an exception means
+    # the request may well have reached the server and a retry may open a
+    # second position. `backend/app/oms/state.py` already draws this line and
+    # the harness path was not honouring it.
+    send_error = None
+    try:
+        res = mt5.order_send(request)
+    except Exception as exc:  # noqa: BLE001 - recorded as UNKNOWN, never refused
+        res = None
+        send_error = f"{type(exc).__name__}: {exc}"
+    if res is None and send_error is None:
+        send_error = "order_send returned None; the terminal did not answer"
+
     done = getattr(res, "retcode", None) == mt5.TRADE_RETCODE_DONE
     ticket = getattr(res, "order", None)
 
@@ -579,7 +596,10 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
         # be deduplicated by, because two genuine partial fills of the same size
         # at the same price are a real thing that happens.
         "deal": int(getattr(res, "deal", 0) or 0) or None,
-        "status": "SENT" if done else "REJECTED",
+        "status": ("SENT" if done
+                   else "UNKNOWN" if send_error is not None
+                   else "REJECTED"),
+        **({"send_error": send_error} if send_error else {}),
         **({"sizing": sizing} if sizing else {}),
         **({"risk": risk_record} if risk_record else {}),
     }
@@ -620,19 +640,48 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
                 symbol=symbol, side="sell" if is_buy else "buy", volume=lot,
                 entry_price=fill,
             ).record
-            mt5.order_send({
-                "action": mt5.TRADE_ACTION_DEAL,
-                "symbol": symbol,
-                "volume": float(lot),
-                "type": mt5.ORDER_TYPE_SELL if is_buy else mt5.ORDER_TYPE_BUY,
-                "position": ticket,
-                "price": tick.bid if is_buy else tick.ask,
-                "deviation": 20,
-                "magic": MAGIC,
-                "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": filling,
-            })
-            out["bracket_repair_failed_closed"] = True
+            # THE RESULT OF THIS CLOSE IS THE WHOLE POINT OF IT.
+            #
+            # It was discarded, and `bracket_repair_failed_closed = True` was
+            # then set unconditionally -- so a close the venue REFUSED was
+            # recorded as a close that happened, on the one order that exists
+            # to escape a guaranteed loss. The position stayed open with both
+            # exits against it and the record said it had been dealt with,
+            # which is the worst direction for this particular lie to run.
+            #
+            # Same rule as the flush: a retcode is what the venue said about
+            # the request, so record what it said and let the flag mean it.
+            escape_error = None
+            try:
+                escape = mt5.order_send({
+                    "action": mt5.TRADE_ACTION_DEAL,
+                    "symbol": symbol,
+                    "volume": float(lot),
+                    "type": mt5.ORDER_TYPE_SELL if is_buy else mt5.ORDER_TYPE_BUY,
+                    "position": ticket,
+                    "price": tick.bid if is_buy else tick.ask,
+                    "deviation": 20,
+                    "magic": MAGIC,
+                    "type_time": mt5.ORDER_TIME_GTC,
+                    "type_filling": filling,
+                })
+            except Exception as exc:  # noqa: BLE001 - UNKNOWN, never "closed"
+                escape = None
+                escape_error = f"{type(exc).__name__}: {exc}"
+
+            escaped = getattr(escape, "retcode", None) == mt5.TRADE_RETCODE_DONE
+            out["bracket_repair_failed_closed"] = escaped
+            out["bracket_repair_close_retcode"] = getattr(escape, "retcode", None)
+            if escape_error:
+                out["bracket_repair_close_error"] = escape_error
+            if not escaped:
+                # Loud, because nothing downstream can infer it. The position
+                # is open, both of its exits lose, and no retry happens here.
+                print(f"  THE ESCAPE CLOSE FAILED on {symbol} #{ticket}: "
+                      f"retcode={getattr(escape, 'retcode', None)}"
+                      f"{' ' + escape_error if escape_error else ''}. The position "
+                      f"is OPEN with an inverted bracket and every branch a loss. "
+                      f"Close it by hand.", flush=True)
 
     _log({"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), "event": "order", **out})
     return out
