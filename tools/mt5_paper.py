@@ -582,8 +582,22 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
     # said 0.59473, and only the account report disagreed.
     fill = float(getattr(res, "price", 0.0) or 0.0) if done else 0.0
 
+    # THE VOLUME THE VENUE FILLED, which is not necessarily the volume asked
+    # for. `lot` below is the REQUEST; `res.volume` is what the server
+    # actually executed, and on a partial fill they differ. The request was
+    # the only one recorded, so a partial fill entered the ledger as a
+    # complete one at the full size -- the same "a figure the tool chose is
+    # not a figure the server confirmed" defect as reading the quote instead
+    # of the fill, in the one field position size is derived from.
+    #
+    # Recorded beside `lot` rather than replacing it: the pair is the
+    # evidence that a fill was partial, and collapsing them would hide the
+    # very thing this is for.
+    filled = float(getattr(res, "volume", 0.0) or 0.0) if done else 0.0
+
     out = {
         "symbol": symbol, "side": side, "lot": lot, "price": price,
+        "filled_lot": filled or None,
         "fill_price": fill or None,
         "slippage_points": round((fill - price) / point, 1) if (fill and point) else None,
         "sl": request["sl"], "tp": request["tp"],

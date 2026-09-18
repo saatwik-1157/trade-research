@@ -362,7 +362,14 @@ class MT5Adapter(BrokerAdapter):
                 position_id=str(raw.get("order")) if raw.get("order") else None,
                 deal_id=str(raw["deal"]) if raw.get("deal") else None,
                 fill_price=_dec(raw.get("fill_price")),
-                filled_volume=_dec(raw.get("lot")),
+                # The VENUE's volume, falling back to the request only when
+                # the venue did not report one. `lot` is what was asked for;
+                # on a partial fill the two differ and recording the request
+                # books the position at a size that was never opened. The
+                # close path at :501 already reads the executed volume -- the
+                # open path did not, so the two halves of one round trip
+                # disagreed about how much was traded.
+                filled_volume=_dec(raw.get("filled_lot") or raw.get("lot")),
                 filled_at=utcnow(),
                 retcode=raw.get("retcode"),
                 fill_source="broker",
@@ -406,12 +413,31 @@ class MT5Adapter(BrokerAdapter):
             return OrderResult(
                 OrderStatus.rejected, f"no position {position_id}", fill_source="broker"
             )
+        # NONE MEANS "LEAVE IT ALONE", AND 0.0 MEANS "REMOVE IT".
+        #
+        # Those are different instructions and this sent the second for the
+        # first. At MT5, TRADE_ACTION_SLTP writes BOTH levels every time --
+        # there is no partial modify -- and a transmitted 0.0 deletes the
+        # level rather than leaving it untouched. So `modify_order(pid,
+        # take_profit=X)` silently removed the STOP, turning a request to set
+        # a target into an unprotected position.
+        #
+        # Nothing in the codebase relied on the old meaning: `FakeBroker`
+        # treats None as leave-alone and every caller was written against the
+        # fake, so the two adapters disagreed and only the real one was
+        # dangerous. Latent until something wires `/protect` to the venue,
+        # which is the top position-management recommendation.
+        #
+        # An omitted argument now re-sends the level the position already
+        # carries, and 0.0 is reached only when there genuinely is no level.
+        keep_sl = position.stop_loss if stop_loss is None else stop_loss
+        keep_tp = position.take_profit if take_profit is None else take_profit
         request = {
             "action": mt5.TRADE_ACTION_SLTP,
             "symbol": position.symbol,
             "position": int(position_id),
-            "sl": float(stop_loss) if stop_loss is not None else 0.0,
-            "tp": float(take_profit) if take_profit is not None else 0.0,
+            "sl": float(keep_sl) if keep_sl is not None else 0.0,
+            "tp": float(keep_tp) if keep_tp is not None else 0.0,
         }
         try:
             res = await self._call(mt5.order_send, request)

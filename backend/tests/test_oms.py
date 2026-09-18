@@ -570,6 +570,11 @@ def test_an_unknown_order_can_never_go_back_to_being_sendable() -> None:
     exits = TRANSITIONS[OrderStatus.unknown]
     sendable = {OrderStatus.intent, OrderStatus.submitting, OrderStatus.submitted}
     assert not (exits & sendable)
+    # And nothing here may be re-sent for the same intent. `failed` is the
+    # only state that licenses that, and it is not reachable by widening this
+    # set -- stated explicitly because the membership list below is a
+    # snapshot and this is the property it is protecting.
+    assert (exits - {OrderStatus.failed}) & SAFE_TO_RESEND == set()
     assert exits == {
         OrderStatus.filled,
         OrderStatus.partially_filled,
@@ -577,6 +582,12 @@ def test_an_unknown_order_can_never_go_back_to_being_sendable() -> None:
         OrderStatus.rejected,
         OrderStatus.expired,
         OrderStatus.failed,
+        # Added 2026-09-18. It satisfies this test's own stated property --
+        # a state a venue read can establish, from which nothing is
+        # transmitted -- and its absence was the reason reconciliation wrote
+        # `rejected` over orders the venue was still working. See the
+        # justification in `state.py`.
+        OrderStatus.accepted,
     }
 
 
@@ -1294,3 +1305,142 @@ async def test_a_venue_with_no_deal_id_falls_back_and_invents_nothing(
         T0,
     )
     assert [f.broker_deal_id for f in order.book.fills] == ["pos-1"]
+
+
+# ==================================================== reconciliation, verified
+#
+# The three behaviours below were changed on 2026-09-18 and none of them was
+# covered: `FakeBroker.get_orders` returns `[]` unconditionally, so the branch
+# where the venue is HOLDING a working order was unreachable from the suite,
+# and `_match_position`'s fallback was never exercised with a known broker id.
+# 207 tests passed either way, which is how both defects survived.
+
+
+async def test_a_working_order_at_the_venue_is_accepted_not_rejected(
+    oms: OrderManager, broker: FakeBroker
+) -> None:
+    """The venue holding an order is not the venue refusing it.
+
+    Reconciliation moved such an order to `rejected`, which is TERMINAL, while
+    writing a transition reason that said "the venue holds order X in state Y".
+    Both cannot be true, and it fired on exactly the orders reconciliation
+    exists to rescue: submitted, unacknowledged, alive at the venue, lost
+    locally.
+    """
+    from app.brokers.base import BrokerOrder
+
+    order = oms.create(approve(), intent_id="i-work", account_id="acct-a", at=T0).order
+    await oms.submit(order, at=T0)
+
+    # The venue is working it: an order, no fills, no position. `unknown`
+    # because reconcile() only acts on the two uncertain states -- that is
+    # the whole point of it.
+    order.status = OrderStatus.unknown
+    order.book.fills.clear()
+    broker._positions.clear()
+    working = BrokerOrder(
+        order_id=order.broker_order_id or "v-1",
+        symbol=order.symbol,
+        side=order.side,
+        volume=order.quantity,
+        price=None,
+        state="placed",
+        placed_at=T0,
+    )
+    broker.get_orders = lambda magic=None: _just([working])  # type: ignore[method-assign]
+
+    await oms.reconcile(order, at=T0)
+
+    assert order.status is OrderStatus.accepted, (
+        f"a working order became {order.status}; `rejected` is terminal and would "
+        f"close an order the venue is still holding"
+    )
+    assert order.status not in TERMINAL
+
+
+def _just(value: object):
+    """An awaitable returning `value`, for stubbing an async broker method."""
+
+    async def _coro(*_a: object, **_k: object) -> object:
+        return value
+
+    return _coro()
+
+
+def test_a_known_broker_id_that_matches_nothing_does_not_guess(
+    oms: OrderManager,
+) -> None:
+    """The id is the better evidence, and a known id that matches said no.
+
+    The symbol-and-side fallback is documented as used "only when there is no
+    id to match on" and sat inside the same loop as the id test, so it ran for
+    every candidate regardless. An order WITH a broker id could be handed the
+    first position that merely shared its symbol and side.
+    """
+    from app.brokers.base import BrokerPosition
+
+    order = oms.create(approve(), intent_id="i-id", account_id="acct-a", at=T0).order
+    order.broker_order_id = "the-one-i-sent"
+
+    decoy = BrokerPosition(
+        position_id="somebody-elses",
+        symbol=order.symbol,
+        side="long" if order.side == "buy" else "short",
+        volume=order.quantity,
+        entry_price=Decimal("1"),
+        opened_at=T0,
+    )
+
+    assert oms._match_position(order, [decoy]) is None, (
+        "an order with a known broker id was matched to a position that only "
+        "shares its symbol and side"
+    )
+
+    # And the id match itself still works, across the whole list.
+    mine = BrokerPosition(
+        position_id="the-one-i-sent",
+        symbol=order.symbol,
+        side="long" if order.side == "buy" else "short",
+        volume=order.quantity,
+        entry_price=Decimal("1"),
+        opened_at=T0,
+    )
+    assert oms._match_position(order, [decoy, mine]) is mine
+
+
+def test_a_position_this_system_did_not_open_is_never_adopted(
+    oms: OrderManager,
+) -> None:
+    """`tools/` trades the same demo account under a different magic.
+
+    Without an ownership guard the symbol-and-side fallback can attach a
+    harness position -- or a hand trade -- to a local intent, after which
+    every fill, exit and P&L figure describes somebody else's position.
+    """
+    from app.brokers.base import BrokerPosition
+    from app.brokers.mt5 import MAGIC, TOOLKIT_MAGIC
+
+    order = oms.create(approve(), intent_id="i-magic", account_id="acct-a", at=T0).order
+    order.broker_order_id = None  # no id, so the fallback is in play
+    wanted = "long" if order.side == "buy" else "short"
+
+    def at(magic: int | None) -> BrokerPosition:
+        return BrokerPosition(
+            position_id=f"p-{magic}",
+            symbol=order.symbol,
+            side=wanted,
+            volume=order.quantity,
+            entry_price=Decimal("1"),
+            opened_at=T0,
+            magic=magic,
+        )
+
+    harness = at(TOOLKIT_MAGIC)
+    assert oms._match_position(order, [harness]) is None, (
+        "a harness position was adopted into the platform's book"
+    )
+
+    # Our own is taken, and a position with no magic still is -- the paper and
+    # fake brokers do not set one and this must stay broker-agnostic.
+    assert oms._match_position(order, [harness, at(MAGIC)]).magic == MAGIC
+    assert oms._match_position(order, [at(None)]) is not None

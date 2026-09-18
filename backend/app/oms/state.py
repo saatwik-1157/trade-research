@@ -104,6 +104,11 @@ TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
             OrderStatus.failed,
             # It may have. NOT safe to re-send.
             OrderStatus.unknown,
+            # Reconciliation of a CRASHED submission found the venue holding
+            # it. Same reasoning as the `unknown` set below: the process died
+            # between send and record, the order is alive, and there has to
+            # be a legal way to write that down.
+            OrderStatus.accepted,
         }
     ),
     OrderStatus.submitted: frozenset(
@@ -174,6 +179,18 @@ TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
             OrderStatus.expired,
             # Reconciliation found no order at the venue at all.
             OrderStatus.failed,
+            # The venue is HOLDING it, working, not yet filled. Added
+            # 2026-09-18, and its absence was doing real harm: reconciliation
+            # had no legal way to say "alive at the venue", so it said
+            # `rejected` instead -- terminal, and the precise opposite of
+            # what it had just observed. It fired on exactly the orders this
+            # state exists to rescue.
+            #
+            # This does not weaken the set. Every other member is a finished
+            # outcome and `accepted` is the one unfinished outcome the venue
+            # can report, so the order stays open to fill, cancel or a real
+            # refusal later -- all of which `accepted` already permits.
+            OrderStatus.accepted,
         }
     ),
 }

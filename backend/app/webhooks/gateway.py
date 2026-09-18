@@ -198,7 +198,23 @@ class WebhookGateway:
             raise Unauthorized("source address is not a published TradingView address")
 
     async def _existing(self, db: AsyncSession, key: str) -> WebhookEvent | None:
-        return await db.scalar(select(WebhookEvent).where(WebhookEvent.idempotency_key == key))
+        """A prior ACCEPTED alert with this key, if there is one.
+
+        Status-aware on purpose. Matching on the key alone made a rejection
+        permanent: an alert with an unmapped ticker was stored under its own
+        idempotency key, so "reject, fix the mapping, resend" found that row
+        and answered `duplicate` forever. The alert could never be accepted,
+        and the only visible symptom was a 200 that did nothing.
+
+        A duplicate means "this signal already exists". A rejection created no
+        signal, so it cannot make one a duplicate.
+        """
+        return await db.scalar(
+            select(WebhookEvent).where(
+                WebhookEvent.idempotency_key == key,
+                WebhookEvent.status == str(Outcome.accepted),
+            )
+        )
 
     async def _strategy_version_id(self, db: AsyncSession, alert: Alert) -> str | None:
         """Map a named strategy to a version, refusing an unknown name.
@@ -536,9 +552,23 @@ class WebhookGateway:
         The key falls back to a time-based one so two different bad payloads do
         not collide on the unique index.
         """
+        # A REJECTION MUST NOT OCCUPY THE LOGICAL KEY. `idempotency_key` is
+        # UNIQUE, so a rejection stored under the alert's own key blocks the
+        # corrected resend at the index even after `_existing` learned to
+        # ignore it -- the insert would just fail differently.
+        #
+        # The logical key stays inside the string, so the rejection is still
+        # greppable against the alert it came from, and the timestamp keeps
+        # each attempt distinct. This extends the rule the fallback below
+        # already followed for keyless payloads to every rejection, which is
+        # what it should have been: the unique index is for signals, and a
+        # rejection is the absence of one.
+        rejection_key = (
+            f"tv:rej:{key}:{now.timestamp():.6f}" if key else f"tv:rej:{now.timestamp():.6f}"
+        )
         row = WebhookEvent(
             provider="tradingview",
-            idempotency_key=key or f"tv:rej:{now.timestamp():.6f}",
+            idempotency_key=rejection_key,
             received_at=now.replace(tzinfo=None),
             source_ip=source_ip,
             auth_strength=auth_strength,

@@ -788,12 +788,26 @@ class OrderManager:
         if found_order is not None:
             # The venue is holding it. It is live, not lost.
             order.broker_order_id = order.broker_order_id or found_order.order_id
+            # A WORKING ORDER IS `accepted`, NOT `rejected`.
+            #
+            # The reason string says "the venue holds order X in state Y" and
+            # the status said the venue had refused it. Both cannot be true.
+            # `rejected` is terminal, so reconciliation was closing orders
+            # that the venue was still working -- the precise opposite of
+            # what this function is for, and it happened on exactly the
+            # orders it was meant to rescue: submitted, unacknowledged, alive
+            # at the venue and lost locally.
+            #
+            # `accepted` is the honest reading of "the venue is holding it":
+            # acknowledged, no fill yet. It is a legal move from `submitted`
+            # and it leaves the order open to fill, cancel or a real refusal
+            # later, all of which `accepted` permits.
             order.move(
                 OrderStatus.partially_filled
                 if order.book.fills
                 else OrderStatus.filled
                 if found_position is not None
-                else OrderStatus.rejected,
+                else OrderStatus.accepted,
                 at=now,
                 source="reconciliation",
                 reason=f"the venue holds order {found_order.order_id} in state {found_order.state}",
@@ -853,16 +867,48 @@ class OrderManager:
     def _match_position(
         self, order: ManagedOrder, positions: list[BrokerPosition]
     ) -> BrokerPosition | None:
+        # THE COMMENT WAS RIGHT AND THE CODE DID NOT MATCH IT. The fallback
+        # was described as used "only when there is no id to match on" and
+        # sat inside the same loop as the id test, so it ran for every
+        # candidate whether an id was known or not. An order WITH a broker id
+        # could be handed the first position that merely shared its symbol
+        # and side -- which is the confusion the comment exists to warn about.
+        if order.broker_order_id:
+            for candidate in positions:
+                if candidate.position_id == order.broker_order_id:
+                    return candidate
+            # A known id that matches nothing means the position is not
+            # there. Guessing by symbol and side at that point is strictly
+            # worse than saying so: the id is the better evidence and it
+            # said no.
+            return None
+
+        # No id to match on. Weaker, and reported in the transition reason
+        # rather than treated as certain.
+        wanted = "long" if order.side == "buy" else "short"
         for candidate in positions:
-            if order.broker_order_id and candidate.position_id == order.broker_order_id:
-                return candidate
-            # Fall back to symbol and side. Weaker, and deliberately only used
-            # when there is no id to match on -- it can confuse two orders on
-            # the same instrument, which is why a match here is reported in
-            # the transition reason rather than treated as certain.
-            wanted = "long" if order.side == "buy" else "short"
-            if candidate.symbol == order.symbol and candidate.side == wanted:
-                return candidate
+            if candidate.symbol != order.symbol or candidate.side != wanted:
+                continue
+            # NEVER ADOPT A POSITION THIS SYSTEM DID NOT OPEN. `tools/`
+            # trades the same demo account under magic 770315 and this
+            # platform writes 770316 -- separate tags, after an incident
+            # where sharing one made the harness close the platform's
+            # positions. A symbol-and-side match can therefore land on a
+            # harness trade, or a hand trade. Attaching one to a local intent
+            # makes every fill, exit and P&L figure after it describe
+            # somebody else's position.
+            #
+            # A candidate with NO magic is allowed through: the paper and
+            # fake brokers do not set one, and this must stay broker-
+            # agnostic. Imported locally rather than at module scope so the
+            # OMS keeps no import edge to a specific adapter; the constant is
+            # a plain int and `brokers.mt5` imports nothing but stdlib at
+            # module level, so this is cheap and safe off Windows.
+            from app.brokers.mt5 import MAGIC as PLATFORM_MAGIC
+
+            if candidate.magic is not None and candidate.magic != PLATFORM_MAGIC:
+                continue
+            return candidate
         return None
 
     # ============================================================== expiry
