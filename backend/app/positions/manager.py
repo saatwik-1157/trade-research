@@ -525,6 +525,21 @@ class PositionManager:
             query = query.where(Position.mode == mode)
         return list((await self.db.scalars(query.order_by(Position.opened_at))).all())
 
+    async def codes_for(self, rows: list[Position]) -> dict[str, Position]:
+        """Open positions keyed by tradable CODE, one row per code.
+
+        The key a quote source has to answer on, and the same key `run_once`
+        looks a quote up under. Where two positions share a code the first is
+        kept: they are the same instrument, so one quote serves both, and the
+        row travels only to say which venue holds it.
+        """
+        by_code: dict[str, Position] = {}
+        for row in rows:
+            code = await self._symbol_code(row)
+            if code and code not in by_code:
+                by_code[code] = row
+        return by_code
+
     async def run_once(
         self,
         quotes: dict[str, MarketState],

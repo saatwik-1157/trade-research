@@ -71,6 +71,7 @@ from app.observability.worker import MonitoringWorker
 from app.oms.registry import OrderManagerRegistry
 from app.oms.worker import OmsReconcileWorker
 from app.paper.service import PaperService
+from app.positions.wiring import monitor_for
 from app.realtime.hub import Hub
 from app.recovery.bots import recovery_gate as bot_recovery_gate
 from app.recovery.contract import SafeModeReason as _SafeModeReason
@@ -411,6 +412,35 @@ def create_app(
                 },
             )
 
+        # The position monitor, on the same terms as the execution worker and
+        # after the same recovery sequence: a process that came up with an
+        # unresolved order has latched safe mode before anything here closes
+        # a position.
+        if settings.position_monitor_enabled and settings.workers_enabled:
+            app.state.workers.start(app.state.position_monitor)
+            log.warning(
+                "the position monitor is running; open positions will be managed and "
+                "closed without a browser",
+                extra={
+                    "event": "position_monitor_started",
+                    "trading_mode": settings.trading_mode.value,
+                    "interval_seconds": settings.position_monitor_interval_seconds,
+                },
+            )
+        else:
+            log.info(
+                "the position monitor is registered and NOT started; nothing manages "
+                "an open position until POST /v1/positions/monitor/start or /sweep",
+                extra={
+                    "event": "position_monitor_idle",
+                    "reason": (
+                        "position_monitor_enabled is false"
+                        if not settings.position_monitor_enabled
+                        else "workers_enabled is false"
+                    ),
+                },
+            )
+
         # L51. The execution worker starts HERE and nowhere earlier: after the
         # recovery sequence has run, so a platform that came up with an
         # unresolved order has already latched safe mode and this worker's
@@ -667,6 +697,33 @@ def create_app(
         ),
     )
     registry.register(app.state.bot_supervisor)
+
+    # L21's position monitor, finally given a host. It was written, tested and
+    # never constructed: `grep PositionMonitor app/` found the class, its own
+    # module and a mention in a docstring, and nothing else. So `PolicySet`
+    # had no production caller -- the one `PositionManager` this platform
+    # built called `close_now`, which takes the caller's decision and never
+    # consults a policy -- and seven of the nine exit policies could not fire
+    # at all.
+    #
+    # Registered and NOT started, like the execution worker and for a sharper
+    # reason: this one CLOSES positions. `POST /v1/positions/sweep` runs one
+    # pass on demand, which is what makes the mechanism usable and testable
+    # before anybody turns the loop on.
+    #
+    # Every exit it could apply is OFF unless a setting turns it on, and that
+    # is the repository's own measurement rather than caution -- see
+    # `app/positions/wiring.py` and `reports/exit_search_d1.json`.
+    app.state.position_monitor = monitor_for(
+        sessions=app.state.session_factory,
+        managers=app.state.order_managers,
+        risk=app.state.risk,
+        market_data=app.state.market_data,
+        brokers=app.state.brokers,
+        hub=app.state.hub,
+        settings=settings,
+    )
+    registry.register(app.state.position_monitor)
     app.state.webhook_gateway = WebhookGateway(
         secret=settings.tv_webhook_secret,
         mode=settings.trading_mode.value,

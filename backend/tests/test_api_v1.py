@@ -346,6 +346,7 @@ async def test_unmapped_provider_symbol_is_not_guessed(signed_in: AsyncClient) -
         "/v1/admin/audit-logs",
         "/v1/system/safety",
         "/v1/webhooks/events",
+        "/v1/positions/monitor",
     ],
 )
 async def test_every_data_route_refuses_anonymous_access(client: AsyncClient, path: str) -> None:
@@ -2996,3 +2997,66 @@ async def test_registering_a_venue_sends_nothing(app: FastAPI, client: AsyncClie
         after = await db.scalar(select(func.count()).select_from(Order))
     assert after == before, "registering a venue created an order"
     assert app.state.order_managers.get("acct-v").orders == {}
+
+
+# ============ Tier-1 item 5: the position monitor's control plane
+
+
+async def test_the_monitor_status_route_reports_what_is_configured(
+    app: FastAPI, signed_in: AsyncClient
+) -> None:
+    """An inert trail and an absent one look identical from outside, and a
+    mechanism that exists and does nothing is the defect this item fixes.
+    The route therefore names the policies and the configuration."""
+    r = await signed_in.get("/v1/positions/monitor")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["worker"] == "position_monitor"
+    assert body["supervisor"]["running"] is False
+    assert "stop_loss" in body["policies"] and "take_profit" in body["policies"]
+    assert body["configured"]["trail_atr_multiple"] is None
+    assert body["configured"]["max_hold_hours"] is None
+    assert "not a flatten" in body["authority"] or "liquidate" in body["authority"]
+
+
+async def test_sweeping_positions_needs_the_order_permission(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    """`POST /sweep` can CLOSE a position, so it sits behind the permission
+    an order does, not behind the one that reads the portfolio."""
+    await client.post("/auth/register", json=ALICE)
+    refused = await client.post("/v1/positions/sweep", headers=_csrf(client))
+    assert refused.status_code == 403
+
+    await _promote(app, ALICE["email"], Role.trader)
+    allowed = await client.post("/v1/positions/sweep", headers=_csrf(client))
+    assert allowed.status_code == 200, allowed.text
+    body = allowed.json()
+    assert body["results"] == [], "no positions are open, so a pass closes nothing"
+    assert "not a flatten" in body["note"]
+
+
+async def test_starting_and_stopping_the_monitor_needs_the_order_permission(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    await client.post("/auth/register", json=ALICE)
+    assert (
+        await client.post("/v1/positions/monitor/start", headers=_csrf(client))
+    ).status_code == 403
+    assert (
+        await client.post("/v1/positions/monitor/stop", headers=_csrf(client))
+    ).status_code == 403
+
+    await _promote(app, ALICE["email"], Role.trader)
+    started = await client.post("/v1/positions/monitor/start", headers=_csrf(client))
+    assert started.status_code == 200, started.text
+    assert started.json()["running"] is True
+
+    # Already running is a conflict, not a second loop.
+    assert (
+        await client.post("/v1/positions/monitor/start", headers=_csrf(client))
+    ).status_code == 409
+
+    stopped = await client.post("/v1/positions/monitor/stop", headers=_csrf(client))
+    assert stopped.status_code == 200
+    assert stopped.json()["running"] is False

@@ -364,3 +364,79 @@ def test_the_reconcile_sweep_starts_after_recovery_and_before_execution() -> Non
     sweep = source.index("app.state.workers.start(app.state.oms_reconciler)")
     execution = source.index("app.state.workers.start(app.state.execution)")
     assert recovery < sweep < execution
+
+
+# ============ Tier-1 item 5: the position monitor is constructed at last
+
+
+def test_the_position_monitor_defaults_to_not_started() -> None:
+    """It CLOSES positions, which is a sharper reason to default off than the
+    execution worker's. Every exit it could apply is off too, and that is a
+    measurement rather than caution: a 3.0 ATR trail measured -217 median
+    out-of-sample expectancy at D1 against -58 for the fixed bracket."""
+    from app.core.settings import LIVE_GATES, Settings
+
+    settings = Settings(_env_file=None)
+    assert settings.position_monitor_enabled is False
+    assert settings.position_trail_atr_multiple is None
+    assert settings.position_break_even_atr_multiple is None
+    assert settings.position_break_even_buffer_atr is None
+    assert settings.position_max_hold_hours is None
+
+    enabled = Settings(_env_file=None, position_monitor_enabled=True)
+    assert enabled.trading_mode.value == "paper"
+    assert enabled.live_trading is False
+    assert enabled.live_execution_allowed is False
+    assert not any(LIVE_GATES.values())
+
+
+def test_the_position_monitor_is_constructed_registered_and_gated() -> None:
+    """**The test that stops this item recurring.**
+
+    L21 built the monitor, the manager and nine policies, and `grep
+    PositionMonitor app/` found the class, its own module and a docstring
+    mention -- no construction site anywhere. A mechanism with no caller is
+    the whole defect, so this reads `app/main.py` rather than trusting it.
+    """
+    source = (APP / "main.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    built = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "monitor_for"
+    ]
+    assert built, "app/main.py does not construct a position monitor"
+    keywords = {kw.arg for kw in built[0].keywords}
+    assert {"sessions", "managers", "risk", "market_data", "brokers", "hub", "settings"} <= keywords
+    assert "registry.register(app.state.position_monitor)" in source
+    assert "settings.position_monitor_enabled and settings.workers_enabled" in source
+
+
+def test_the_position_monitor_starts_after_the_recovery_sequence() -> None:
+    """A worker that closed a position before startup reconciliation had run
+    would act on a platform whose unresolved orders had not yet latched safe
+    mode."""
+    source = (APP / "main.py").read_text(encoding="utf-8")
+    recovery = source.index("run_startup")
+    monitor = source.index("app.state.workers.start(app.state.position_monitor)")
+    assert recovery < monitor
+
+
+def test_the_monitor_builds_its_close_engine_per_pass_not_once() -> None:
+    """`RiskService.load()` replaces its switch set wholesale during startup
+    recovery, so an engine captured when the monitor was constructed would
+    close positions against switches that had since been replaced. The
+    factory is handed the SERVICE and calls `engine_for_close()` itself."""
+    import inspect
+
+    from app.positions import wiring
+
+    source = inspect.getsource(wiring.monitor_for)
+    assert "def build(" in source
+    build = source[source.index("def build(") :]
+    assert "engine_for_close()" in build, (
+        "the close engine is not built inside the per-pass factory"
+    )

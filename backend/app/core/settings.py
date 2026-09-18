@@ -19,6 +19,7 @@ all of this and is not affected by anything here.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from enum import StrEnum
 from functools import lru_cache
 from urllib.parse import urlsplit
@@ -274,6 +275,41 @@ class Settings(BaseSettings):
     # one tick into a hundred venue round trips; the remainder is taken next
     # pass and reported as deferred.
     oms_reconcile_max_per_pass: int = 10
+
+    # --- Position management (L21 built it; this is its switch) ---
+    #
+    # False and registered, exactly like `execution_worker_enabled`: this
+    # worker CLOSES positions, and a process that began closing because
+    # somebody deployed it would be a process that traded without anybody
+    # deciding to. `POST /v1/positions/sweep` runs one pass on demand.
+    position_monitor_enabled: bool = False
+    position_monitor_interval_seconds: float = 5.0
+    # ATR MULTIPLES, never absolute distances. A price distance is per
+    # instrument -- 0.0001 on EURUSD is 0.10 on XAUUSD -- so a deployment-wide
+    # absolute would be wrong for every symbol but one. None leaves the policy
+    # inert, which is exactly what `PolicySet.default()` already does.
+    #
+    # OFF by default, and that is a MEASUREMENT rather than caution. A 3.0 ATR
+    # trail had a median out-of-sample expectancy of -217 at D1 against -58
+    # for the fixed 1.5x1.5 bracket, and move-to-breakeven -123, across a 16x8
+    # grid in which all eight exits were negative
+    # (`reports/exit_search_d1.json`). Turning either on by default would be
+    # overruling the repository's own data from a config file.
+    position_trail_atr_multiple: Decimal | None = None
+    position_break_even_atr_multiple: Decimal | None = None
+    # Also a multiple, for the same reason. A break-even stop placed exactly
+    # at the entry loses the spread every time it fires, which is not
+    # break-even -- and the spread is per instrument, so only an ATR-relative
+    # buffer can be stated once for every symbol.
+    position_break_even_buffer_atr: Decimal | None = None
+    # Hours. None or 0 means no time exit, which is today's behaviour.
+    position_max_hold_hours: float | None = None
+    # The bars the two multiples above are measured against. Without an ATR
+    # both stop movers refuse -- "no ATR, no trail: nothing is invented" -- so
+    # a configured deployment with no bar source silently does nothing, which
+    # is why this is a named setting and not an assumption.
+    position_atr_timeframe: str = "H1"
+    position_atr_period: int = 14
 
     # --- Recovery (L38) ---
     # False skips the startup reconciliation sequence. It exists for tests and

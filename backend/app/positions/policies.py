@@ -381,6 +381,14 @@ class BreakEvenPolicy:
     spread -- a break-even stop placed exactly at the entry is a stop that
     loses the spread every time it fires, which is not break-even.
 
+    `buffer_atr_multiple` states that same buffer as a multiple of the ATR,
+    and it exists so the buffer can be CONFIGURED at all. An absolute buffer
+    is a price, and a price means different things on different instruments,
+    so a deployment-wide one would be wrong for every symbol but one. When it
+    is set it wins over `buffer`, and a quote with no ATR proposes nothing
+    rather than falling back to a buffer nobody chose -- the same fail-closed
+    rule the trigger already follows.
+
     **It only ever tightens.** The proposal is dropped unless it improves on
     the current stop in the protective direction, which is the same rule the
     trail follows and the same rule invariant 11 states. A break-even that
@@ -397,7 +405,16 @@ class BreakEvenPolicy:
     atr_multiple: Decimal | None = None
     trigger_distance: Decimal | None = None
     buffer: Decimal = Decimal("0")
+    buffer_atr_multiple: Decimal | None = None
     name: str = "break_even"
+
+    def buffer_for(self, market: MarketState) -> Decimal | None:
+        """The gap past the entry, in price. None means refuse."""
+        if self.buffer_atr_multiple is None:
+            return self.buffer
+        if market.atr is None:
+            return None  # no ATR, no buffer: nothing is invented
+        return self.buffer_atr_multiple * market.atr
 
     def trigger(self, market: MarketState) -> Decimal | None:
         gap = self.trigger_distance
@@ -420,10 +437,11 @@ class BreakEvenPolicy:
         if advanced < gap:
             return None
 
+        buffer = self.buffer_for(market)
+        if buffer is None:
+            return None
         candidate = (
-            position.entry_price + self.buffer
-            if position.is_long
-            else position.entry_price - self.buffer
+            position.entry_price + buffer if position.is_long else position.entry_price - buffer
         )
         current = position.stop_loss
         if current is not None:

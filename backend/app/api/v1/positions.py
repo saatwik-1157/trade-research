@@ -28,18 +28,15 @@ from app.auth.deps import get_db, require_permission
 from app.auth.models import User
 from app.auth.permissions import Permission
 from app.core.errors import Conflict, NotFound, ValidationFailed
-from app.models.accounts import BrokerAccount
 from app.models.execution import Position, PositionEvent
 from app.models.market import Symbol
 from app.oms.registry import NoOrderManager, OrderManagerRegistry
-from app.positions.broker_executor import BrokerExitExecutor
-from app.positions.executor import PaperExitExecutor
-from app.positions.ingest import BROKER_MODES
+from app.positions import wiring
 from app.positions.manager import MANAGEABLE, NOT_ACTIONABLE, PositionManager
+from app.positions.monitor import PositionMonitor
 from app.positions.policies import ExitDecision, ExitReason, MarketState
 from app.positions.reconciler import PositionReconciler
 from app.services import execution as svc
-from app.symbols.service import broker_symbol_for
 
 router = APIRouter(prefix="/positions", tags=["positions"])
 
@@ -125,19 +122,10 @@ async def _owned(db: AsyncSession, position_id: str) -> Position:
 
 
 def _executor(request: Request, mode: str):  # noqa: ANN202
-    """The executor for this position's mode, chosen by the mode alone.
-
-    Paper closes in the simulator; demo and live go through the account's
-    order manager to the adapter. There is no branch by which a paper position
-    could reach a venue or a demo position be closed by the simulator.
-    """
-    if mode == "paper":
-        return PaperExitExecutor()
-    from app.execution.store import store_for
-
-    return BrokerExitExecutor(
-        _managers(request),
-        mode=mode,
+    """The executor for this position's mode. One implementation, in
+    `app.positions.wiring`, so this route and the monitor cannot drift."""
+    return wiring.executor_for(
+        managers=_managers(request),
         # L45 C-2. The engine that mints the close's Approval. The OMS creates
         # nothing without one, so passing the application's own engine here is
         # what puts this route on the same path as every other order rather
@@ -145,7 +133,8 @@ def _executor(request: Request, mode: str):  # noqa: ANN202
         risk=request.app.state.risk.engine_for_close(),
         # L45 C-1, for closes. An order the venue may hold and the database has
         # never heard of is the state no guard can reason about.
-        store=store_for(request.app.state.session_factory),
+        sessions=request.app.state.session_factory,
+        mode=mode,
     )
 
 
@@ -335,87 +324,147 @@ async def reconcile(
     return report.as_dict()
 
 
-async def _venue_quote(request: Request, db: AsyncSession, row: Position, code: str):  # noqa: ANN202
-    """The quote from the venue that actually holds this position, or None.
-
-    **Only for a position held at a venue.** A broker position is closed AT a
-    broker, and that broker's own book is the authoritative price for it --
-    pricing the exit off a research feed instead would be valuing a trade at a
-    number the counterparty never quoted.
-
-    This does not breach the rule that the broker book and the normalized feed
-    are "different measurements and never merged": nothing is pooled or stored
-    here. One transient read decides one close, and the response says which
-    source it came from, so the two can never be confused after the fact.
-
-    Returns None -- never a guess -- when the position names no account, the
-    account's adapter is not registered in this process, or the venue does not
-    quote the symbol.
-    """
-    if row.mode not in BROKER_MODES or not row.broker_account_id:
-        return None
-    account = await db.get(BrokerAccount, row.broker_account_id)
-    if account is None:
-        return None
-    registry = getattr(request.app.state, "brokers", None)
-    if registry is None:  # pragma: no cover - wired at startup
-        return None
-    try:
-        # Keyed by the registry key an operator chose, which is what
-        # `broker_accounts.name` records.
-        adapter = registry.get(account.name)
-    except Exception:  # noqa: BLE001 - not registered in this process
-        return None
-    try:
-        venue_symbol = await broker_symbol_for(db, code, account.broker)
-        quote = await adapter.get_quote(venue_symbol or code)
-    except Exception:  # noqa: BLE001 - a venue that cannot quote is a refusal
-        return None
-    if quote is None or quote.bid is None or quote.ask is None:
-        return None
-    return MarketState(
-        # The CODE, matching `PositionView.symbol`. The two are compared before
-        # a close, and the comparison is only meaningful if they agree.
-        symbol=code,
-        bid=Decimal(str(quote.bid)),
-        ask=Decimal(str(quote.ask)),
-        as_of=getattr(quote, "at", None) or datetime.now(UTC),
-    )
-
-
-async def _quote(request: Request, db: AsyncSession, row: Position):  # noqa: ANN202
+async def _quote(request: Request, db: AsyncSession, row: Position) -> MarketState | None:
     """The current quote for a position's instrument, or None.
 
     None is a refusal, not a default. Closing against a price the platform
     does not have would be a decision made on a number nobody measured.
 
-    **The venue first for a broker position**, because that is where it is held
-    and where it will be closed; the normalized feed otherwise, and as the
-    fallback when no adapter is reachable. Before this order existed, a demo
-    position could not be closed at all: the feed carries no live quotes and
-    the refusal above fired every time.
+    **The venue first for a broker position**, because that is where it is
+    held and where it will be closed; the normalized feed otherwise, and as
+    the fallback when no adapter is reachable.
+
+    Both halves live in `app.positions.wiring` now, because the position
+    monitor has to price a position exactly as this route does and a second
+    copy is a second answer. The feed half also had never worked: it called
+    `service.get_quote(db, code)` where the method is
+    `get_quote(self, db, internal_symbol, provider)` -- a TypeError,
+    swallowed by a bare `except Exception` and returned as None -- and then
+    read `quote.bid` although the method returns a `QuoteResult` whose quote
+    is at `.quote`. Either defect alone made the fallback dead, so a
+    position with no reachable venue could not be closed at all and the
+    refusal read as "no usable quote" rather than as a bug.
     """
     symbol = await db.get(Symbol, row.symbol_id)
     code = symbol.code if symbol is not None else None
     if code is None:
         return None
 
-    venue = await _venue_quote(request, db, row, code)
+    venue = await wiring.venue_quote_for(
+        db, row, code, brokers=getattr(request.app.state, "brokers", None)
+    )
     if venue is not None:
         return venue
-
-    service = getattr(request.app.state, "market_data", None)
-    if service is None:  # pragma: no cover - wired at startup
-        return None
-    try:
-        quote = await service.get_quote(db, code)
-    except Exception:  # noqa: BLE001
-        return None
-    if quote is None or quote.bid is None or quote.ask is None:
-        return None
-    return MarketState(
-        symbol=code,
-        bid=Decimal(str(quote.bid)),
-        ask=Decimal(str(quote.ask)),
-        as_of=quote.at if getattr(quote, "at", None) else datetime.now(UTC),
+    return await wiring.feed_quote_for(
+        db, code, market_data=getattr(request.app.state, "market_data", None)
     )
+
+
+# ================================================= the monitor's control plane
+#
+# Modelled on `app/api/v1/execution.py`, which is the house pattern for a
+# worker's surface: status, start, stop, and a run-one-pass route beside the
+# loop. `POST /sweep` is the equivalent of `POST /v1/bots/supervise` and it is
+# what makes position management usable before anybody starts the loop.
+
+
+def _monitor(request: Request) -> PositionMonitor:
+    monitor: PositionMonitor | None = getattr(request.app.state, "position_monitor", None)
+    if monitor is None:  # pragma: no cover - registered in main.py at startup
+        raise Conflict("the position monitor is not registered on this deployment")
+    return monitor
+
+
+@router.get(
+    "/monitor",
+    summary="What manages open positions, and which exits are configured",
+    description=(
+        "Reading the configured policies is the point: an inert trail and an "
+        "absent one look identical from outside, and every exit here is OFF "
+        "unless a setting turns it on. The defaults are a measurement, not "
+        "caution -- a 3.0 ATR trail measured -217 median out-of-sample "
+        "expectancy at D1 against -58 for the fixed bracket."
+    ),
+)
+async def monitor_status(request: Request, _: User = _READ) -> dict[str, Any]:
+    monitor = _monitor(request)
+    return {
+        "worker": monitor.name,
+        "mode": monitor.mode,
+        "supervisor": monitor.status.as_dict(),
+        "policies": [p.name for p in _policy_set(request).policies],
+        "stop_movers": [p.name for p in _policy_set(request).stop_movers()],
+        "configured": wiring.configured(request.app.state.settings),
+        "authority": (
+            "This worker closes positions and moves stops. It opens nothing, and a "
+            "risk halt is not a flatten: no account-level lock reaches it as an "
+            "instruction to liquidate."
+        ),
+    }
+
+
+def _policy_set(request: Request):  # noqa: ANN202
+    return wiring.policy_set_for(request.app.state.settings)
+
+
+@router.post(
+    "/monitor/start",
+    summary="Begin managing open positions in the background",
+    description=(
+        "The loop survives a closed browser and a dropped connection, which "
+        "is the whole reason it is a worker. It closes positions: every exit "
+        "it can apply is configured, and an unconfigured deployment starts a "
+        "monitor that enforces stops and targets already on the position and "
+        "moves no stop of its own."
+    ),
+)
+async def monitor_start(request: Request, _: User = _CLOSE) -> dict[str, Any]:
+    monitor = _monitor(request)
+    if monitor.status.running:
+        raise Conflict("the position monitor is already running")
+    request.app.state.workers.start(monitor)
+    return {"running": True, "worker": monitor.name, "mode": monitor.mode}
+
+
+@router.post(
+    "/monitor/stop",
+    summary="Stop managing positions. Nothing already closed is reopened",
+    description=(
+        "Stops the loop. Positions stay exactly as they are, including any "
+        "stop this monitor moved: a stop at the venue is the venue's, and "
+        "stopping a worker does not put one back."
+    ),
+)
+async def monitor_stop(request: Request, _: User = _CLOSE) -> dict[str, Any]:
+    monitor = _monitor(request)
+    monitor.stop()
+    return {"running": False, "worker": monitor.name, "mode": monitor.mode}
+
+
+@router.post(
+    "/sweep",
+    summary="Run exactly one management pass now",
+    description=(
+        "One pass of the same code the loop runs, so the mechanism can be "
+        "exercised and read before anybody starts it. **It can close a "
+        "position**, which is why it needs the same permission an order does."
+    ),
+)
+async def monitor_sweep(request: Request, _: User = _CLOSE) -> dict[str, Any]:
+    monitor = _monitor(request)
+    await monitor.tick()
+    return {
+        "worker": monitor.name,
+        "mode": monitor.mode,
+        "results": [
+            {
+                "position_id": r.position_id,
+                "closed": r.closed,
+                "skipped": r.skipped,
+                "needs_reconciliation": r.needs_reconciliation,
+                "reason": str(r.decision.reason) if r.decision is not None else None,
+            }
+            for r in monitor.last_results
+        ],
+        "note": "A pass, not a flatten: a position with no reason to close is left open.",
+    }

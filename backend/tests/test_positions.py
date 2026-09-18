@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
+from app.core.settings import Settings
 from app.db.base import Base
+from app.marketdata.types import Availability, Bar, Provider, Timeframe
 from app.models.execution import Position, PositionEvent
 from app.models.market import Symbol
+from app.positions import wiring
 from app.positions.executor import (
     CloseOutcome,
     CloseStatus,
@@ -431,32 +436,38 @@ async def test_sweep_only_touches_the_requested_mode(db: AsyncSession) -> None:
     assert paper.status == "closed" and demo.status == "open"
 
 
-async def test_monitor_runs_passes_and_stops_cleanly(db: AsyncSession) -> None:
-    row = await make_position(db)
-    manager = PositionManager(db, PaperExitExecutor())
+async def test_monitor_runs_passes_and_stops_cleanly(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    async with sessions() as setup:
+        row = await make_position(setup)
+        await setup.commit()
 
-    async def quotes() -> dict[str, MarketState]:
+    async def quotes(db: AsyncSession, rows: dict[str, Position]) -> dict[str, MarketState]:
         return {CODE: market_for(row, "1.10500")}  # neither level hit
 
     async def context() -> RiskContext:
         return HOLD
 
     monitor = PositionMonitor(
-        manager=manager, quotes=quotes, context=context, interval_seconds=0.01
+        sessions, paper_manager, quotes=quotes, context=context, interval_seconds=0.01
     )
     passes = await monitor.run(max_passes=3)
     assert passes == 3
-    assert row.status == "open"  # nothing triggered, nothing closed
+    async with sessions() as check:
+        found = await check.get(Position, row.id)
+        assert found is not None and found.status == "open"
 
     monitor.stop()
     assert monitor.stop_event.is_set()
 
 
-async def test_monitor_survives_a_failing_pass(db: AsyncSession) -> None:
-    manager = PositionManager(db, PaperExitExecutor())
+async def test_monitor_survives_a_failing_pass(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
     calls = {"n": 0}
 
-    async def quotes() -> dict[str, MarketState]:
+    async def quotes(db: AsyncSession, rows: dict[str, Position]) -> dict[str, MarketState]:
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("quote feed down")
@@ -466,7 +477,7 @@ async def test_monitor_survives_a_failing_pass(db: AsyncSession) -> None:
         return HOLD
 
     monitor = PositionMonitor(
-        manager=manager, quotes=quotes, context=context, interval_seconds=0.01
+        sessions, paper_manager, quotes=quotes, context=context, interval_seconds=0.01
     )
     assert await monitor.run(max_passes=2) >= 1
     assert calls["n"] >= 2  # it kept going after the failure
@@ -1463,3 +1474,478 @@ async def test_an_orphan_in_another_mode_is_not_this_sweeps_finding(
     report = await PositionReconciler(db, venue, mode="demo").sweep("acct-a")
     assert report.unattributed == []
     assert report.clean is True
+
+
+# ============== Tier-1 item 5: the monitor is constructed, and configurable
+#
+# L21 built nine policies, a manager and a monitor. None ran: the monitor had
+# no construction site outside this file, and the one production
+# `PositionManager` only ever called `close_now`, which never consults a
+# policy. So `PolicySet.decide` had no production caller at all, and seven of
+# the nine policies could not fire.
+
+
+@pytest.fixture
+async def sessions() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    """A session FACTORY, which is what the monitor takes now.
+
+    It used to take a built `PositionManager`, and a manager holds a session
+    for its whole life. That is right for a request and wrong for a loop: a
+    pinned session keeps a connection, never clears its identity map, and
+    stays poisoned after one failed flush.
+    """
+    engine = create_async_engine(
+        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield async_sessionmaker(engine, expire_on_commit=False)
+    await engine.dispose()
+
+
+def paper_manager(db: AsyncSession) -> PositionManager:
+    return PositionManager(db, PaperExitExecutor())
+
+
+def bars(*closes: str, high: str = "0.00100", low: str = "0.00100") -> list[Bar]:
+    """A bar series whose true range is exactly `high + low` per bar, so the
+    ATR the tests expect can be read off by hand."""
+    out: list[Bar] = []
+    for n, close in enumerate(closes):
+        mid = Decimal(close)
+        out.append(
+            Bar(
+                symbol=CODE,
+                provider=Provider.mt5,
+                timeframe=Timeframe.H1,
+                bar_time=OPENED + timedelta(hours=n),
+                open=mid,
+                high=mid + Decimal(high),
+                low=mid - Decimal(low),
+                close=mid,
+                spread_availability=Availability.not_available,
+            )
+        )
+    return out
+
+
+class StubFeed:
+    """Stands in for `MarketDataService`, with its REAL signatures.
+
+    `get_quote(self, db, internal_symbol, provider)` returning a
+    `QuoteResult` is the shape the close route got wrong in both respects,
+    so a stub that accepted the wrong call would hide the defect it exists
+    to pin.
+    """
+
+    def __init__(self, bid: str = "1.10500", ask: str = "1.10502", series: list[Bar] | None = None):
+        self.bid, self.ask = Decimal(bid), Decimal(ask)
+        self.series = (
+            series if series is not None else bars(*["1.10" + f"{n:03d}" for n in range(20)])
+        )
+        self.quote_calls: list[tuple[str, object]] = []
+        self.bar_calls: list[tuple[str, object, int]] = []
+
+    async def get_quote(self, db: AsyncSession, internal_symbol: str, provider: Provider) -> object:
+        self.quote_calls.append((internal_symbol, provider))
+        return SimpleNamespace(
+            quote=SimpleNamespace(bid=self.bid, ask=self.ask, at=NOW), stale=False
+        )
+
+    async def get_bars(
+        self,
+        db: AsyncSession,
+        internal_symbol: str,
+        timeframe: Timeframe,
+        provider: Provider,
+        *,
+        limit: int = 500,
+    ) -> object:
+        self.bar_calls.append((internal_symbol, timeframe, limit))
+        return SimpleNamespace(series=SimpleNamespace(bars=self.series[-limit:]))
+
+
+def config(**over: object) -> Settings:
+    return Settings(_env_file=None, **over)  # type: ignore[arg-type]
+
+
+# ------------------------------------------------------- the policy tiers
+
+
+def test_the_default_policy_set_moves_no_stop_and_sets_no_time_limit() -> None:
+    """Today's behaviour, pinned before it becomes configurable. The trail
+    proposes nothing on any quote and the time exit never fires, which is
+    what `PolicySet.default()` has always produced."""
+    policies = PolicySet.default()
+    trail = policies.trailing()
+    assert trail is not None
+    assert trail.proposed_stop(long_position(), quote("1.20000", atr="0.00100")) is None
+    assert [p for p in policies.policies if isinstance(p, BreakEvenPolicy)] == []
+    assert [p for p in policies.policies if isinstance(p, PartialTakeProfitPolicy)] == []
+    time_exit = next(p for p in policies.policies if isinstance(p, TimeExitPolicy))
+    assert time_exit.max_hold is None
+
+
+def test_an_unconfigured_deployment_builds_exactly_the_default_set() -> None:
+    """The measured research says these exits do not help, so a deployment
+    that asks for nothing must get the inert set rather than a house
+    default somebody picked."""
+    built = wiring.policy_set_for(config())
+    assert [p.name for p in built.policies] == [p.name for p in PolicySet.default().policies]
+    trail = built.trailing()
+    assert trail is not None and trail.atr_multiple is None and trail.distance is None
+    assert built.stop_movers() == [trail]
+
+
+def test_a_configured_policy_set_carries_the_trail_the_break_even_and_the_max_hold() -> None:
+    built = wiring.policy_set_for(
+        config(
+            position_trail_atr_multiple="3.0",
+            position_break_even_atr_multiple="1.0",
+            position_break_even_buffer_atr="0.25",
+            position_max_hold_hours=48,
+        )
+    )
+    trail = built.trailing()
+    assert trail is not None and trail.atr_multiple == Decimal("3.0")
+    movers = built.stop_movers()
+    assert len(movers) == 2
+    break_even = next(p for p in movers if isinstance(p, BreakEvenPolicy))
+    assert break_even.atr_multiple == Decimal("1.0")
+    assert break_even.buffer_atr_multiple == Decimal("0.25")
+    time_exit = next(p for p in built.policies if isinstance(p, TimeExitPolicy))
+    assert time_exit.max_hold == timedelta(hours=48)
+
+
+def test_the_break_even_buffer_is_an_atr_multiple_not_a_price() -> None:
+    """A price buffer cannot be configured deployment-wide: 0.0001 on EURUSD
+    is 0.10 on XAUUSD. As a multiple it means the same thing everywhere."""
+    policy = BreakEvenPolicy(atr_multiple=Decimal("1"), buffer_atr_multiple=Decimal("0.5"))
+    market = quote("1.10500", atr="0.00100")
+    position = long_position(entry_price=Decimal("1.10000"), stop_loss=Decimal("1.09000"))
+    proposed = policy.proposed_stop(position, market)
+    assert proposed is not None
+    # entry + 0.5 x ATR, not entry.
+    assert proposed.new_stop == Decimal("1.10000") + Decimal("0.5") * Decimal("0.00100")
+
+
+def test_a_break_even_buffer_with_no_atr_proposes_nothing() -> None:
+    """Fail closed, like the trigger: no ATR, no buffer, nothing invented."""
+    policy = BreakEvenPolicy(
+        trigger_distance=Decimal("0.00100"), buffer_atr_multiple=Decimal("0.5")
+    )
+    position = long_position(entry_price=Decimal("1.10000"), stop_loss=Decimal("1.09000"))
+    assert policy.proposed_stop(position, quote("1.10500")) is None
+
+
+def test_a_quote_without_an_atr_moves_no_stop() -> None:
+    """The fail-closed case for the whole ATR tier: a configured trail with
+    no ATR on the quote proposes nothing rather than inventing a distance."""
+    built = wiring.policy_set_for(config(position_trail_atr_multiple="3.0"))
+    trail = built.trailing()
+    assert trail is not None
+    assert trail.proposed_stop(long_position(), quote("1.20000")) is None
+    assert trail.proposed_stop(long_position(), quote("1.20000", atr="0.00100")) is not None
+
+
+# --------------------------------------------------------------- the ATR
+
+
+def test_the_atr_is_the_mean_true_range_the_toolkit_computes() -> None:
+    """`tools/rule_backtest.atr_series` is a simple mean of true range over n
+    bars, and its docstring says it matches `atr_from()` in `mt5_paper`.
+    This is that definition in Decimal -- asserted against arithmetic done by
+    hand rather than against the toolkit, because importing it would pull
+    numpy and `tools/` onto the monitor's per-pass path.
+
+    Each bar here spans high = close + 0.001 and low = close - 0.001 with a
+    flat close, so every true range is exactly 0.002 and the mean is too.
+    """
+    series = bars("1.10000", "1.10000", "1.10000", "1.10000")
+    assert wiring.true_range_mean(series, 3) == Decimal("0.002")
+    # n + 1 bars are needed: the first true range needs a previous close.
+    assert wiring.true_range_mean(series, 3) is not None
+    assert wiring.true_range_mean(series[:2], 3) is None
+    assert wiring.true_range_mean([], 14) is None
+
+
+def test_a_gap_between_bars_counts_as_true_range() -> None:
+    """The point of true range over high-minus-low: a bar that opens away
+    from the last close has travelled further than its own span."""
+    flat = wiring.true_range_mean(bars("1.10000", "1.10000"), 1)
+    gapped = wiring.true_range_mean(bars("1.10000", "1.20000"), 1)
+    assert flat is not None and gapped is not None
+    assert gapped > flat
+
+
+async def test_the_atr_is_read_once_per_cache_window(db: AsyncSession) -> None:
+    """A 5-second loop recomputing an ATR from bars would ask a rate-limited
+    provider twelve times a minute per symbol for the same answer."""
+    feed = StubFeed()
+    cache = wiring.AtrCache(ttl_seconds=300.0)
+    settings = config(position_atr_period=5)
+    first = await wiring.atr_for(
+        db, CODE, market_data=feed, settings=settings, cache=cache, now=NOW
+    )
+    assert first is not None
+    for offset in (1, 60, 299):
+        again = await wiring.atr_for(
+            db,
+            CODE,
+            market_data=feed,
+            settings=settings,
+            cache=cache,
+            now=NOW + timedelta(seconds=offset),
+        )
+        assert again == first
+    assert len(feed.bar_calls) == 1
+    assert feed.bar_calls[0][2] == 6, "period + 1 bars, because the first range needs a prior close"
+
+    await wiring.atr_for(
+        db, CODE, market_data=feed, settings=settings, cache=cache, now=NOW + timedelta(seconds=300)
+    )
+    assert len(feed.bar_calls) == 2
+
+
+async def test_a_provider_that_cannot_serve_bars_yields_no_atr(db: AsyncSession) -> None:
+    class Broken(StubFeed):
+        async def get_bars(self, *a: object, **k: object) -> object:
+            raise RuntimeError("provider down")
+
+    value = await wiring.atr_for(
+        db, CODE, market_data=Broken(), settings=config(), cache=wiring.AtrCache(), now=NOW
+    )
+    assert value is None
+
+
+# ------------------------------------------------- the feed quote defect
+
+
+async def test_the_feed_quote_path_actually_returns_a_quote(db: AsyncSession) -> None:
+    """THE REGRESSION TEST for a path that had never worked.
+
+    `api/v1/positions.py` called `service.get_quote(db, code)` where the
+    method is `get_quote(self, db, internal_symbol, provider)` -- a
+    TypeError, swallowed by a bare `except Exception` -- and then read
+    `quote.bid` where the result carries its quote at `.quote`. Either
+    defect alone returned None every time, so a position with no reachable
+    venue could not be closed at all and the refusal read as "no usable
+    quote" rather than as a bug.
+    """
+    feed = StubFeed(bid="1.10500", ask="1.10502")
+    state = await wiring.feed_quote_for(db, CODE, market_data=feed)
+    assert state is not None
+    assert (state.bid, state.ask) == (Decimal("1.10500"), Decimal("1.10502"))
+    assert state.symbol == CODE
+    # Called WITH a provider, which is what made the old call a TypeError.
+    assert feed.quote_calls == [(CODE, Provider.mt5)]
+
+
+async def test_no_market_data_service_is_a_refusal_not_a_guess(db: AsyncSession) -> None:
+    assert await wiring.feed_quote_for(db, CODE, market_data=None) is None
+
+
+async def test_the_quote_source_attaches_the_atr_the_stop_movers_need(
+    db: AsyncSession,
+) -> None:
+    """**Without this the whole configured tier is decorative.**
+
+    Nothing in `app/` ever set `MarketState.atr`, so both stop movers would
+    have refused on every tick -- "no ATR, no trail: nothing is invented" --
+    and a deployment that had configured a trail would have silently done
+    nothing. Asserting the policies refuse without an ATR is not enough: it
+    passes just as happily when the ATR never arrives.
+    """
+    row = await make_position(db, mode="paper")
+    feed = StubFeed()
+    source = wiring.quotes_source(
+        market_data=feed,
+        brokers=None,
+        settings=config(position_atr_period=5),
+        mode="paper",
+    )
+    quotes = await source(db, {CODE: row})
+
+    assert CODE in quotes, "the open symbol was not quoted"
+    market = quotes[CODE]
+    assert market.atr is not None and market.atr > 0
+    assert feed.bar_calls, "no bars were read, so no ATR could have been computed"
+
+    # And the consequence: a configured trail can now actually move a stop.
+    trail = wiring.policy_set_for(config(position_trail_atr_multiple="3.0")).trailing()
+    assert trail is not None
+    assert trail.proposed_stop(long_position(), market) is not None
+
+
+# ------------------------------------------------------------ the monitor
+
+
+async def test_the_monitor_opens_one_session_per_pass_and_closes_it(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    seen: list[AsyncSession] = []
+
+    def build(db: AsyncSession) -> PositionManager:
+        seen.append(db)
+        return PositionManager(db, PaperExitExecutor())
+
+    async def quotes(db: AsyncSession, rows: dict[str, Position]) -> dict[str, MarketState]:
+        return {}
+
+    async def context() -> RiskContext:
+        return HOLD
+
+    monitor = PositionMonitor(
+        sessions, build, quotes=quotes, context=context, interval_seconds=0.01
+    )
+    await monitor.run(max_passes=3)
+    assert len(seen) == 3
+    assert len({id(s) for s in seen}) == 3, "a session was reused across passes"
+    for session in seen:
+        assert not session.is_active or not session.in_transaction()
+
+
+async def test_the_monitor_publishes_its_events_only_after_the_commit(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    """`drain_events` exists so an event can never describe something that
+    was not saved. Nothing drained them until now -- L21 said publishing
+    them was the monitor's job once it was started, and it never was."""
+    async with sessions() as setup:
+        row = await make_position(setup)
+        await setup.commit()
+        position_id = row.id
+
+    published: list[object] = []
+
+    async def publish(event: object) -> None:
+        # The row must already be committed and visible to a NEW session.
+        async with sessions() as check:
+            found = await check.get(Position, position_id)
+            assert found is not None and found.status == "closed"
+        published.append(event)
+
+    async def quotes(db: AsyncSession, rows: dict[str, Position]) -> dict[str, MarketState]:
+        return {CODE: market_for(row, "1.11000")}  # take-profit hit
+
+    async def context() -> RiskContext:
+        return HOLD
+
+    monitor = PositionMonitor(
+        sessions,
+        paper_manager,
+        quotes=quotes,
+        context=context,
+        interval_seconds=0.01,
+        publish=publish,
+    )
+    await monitor.run(max_passes=1)
+    assert published, "the close published nothing"
+
+
+async def test_a_hub_that_raises_does_not_fail_the_pass(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    """A lost event is not a lost trade."""
+    async with sessions() as setup:
+        row = await make_position(setup)
+        await setup.commit()
+
+    async def publish(event: object) -> None:
+        raise ConnectionError("redis is gone")
+
+    async def quotes(db: AsyncSession, rows: dict[str, Position]) -> dict[str, MarketState]:
+        return {CODE: market_for(row, "1.11000")}
+
+    async def context() -> RiskContext:
+        return HOLD
+
+    monitor = PositionMonitor(
+        sessions,
+        paper_manager,
+        quotes=quotes,
+        context=context,
+        interval_seconds=0.01,
+        publish=publish,
+    )
+    await monitor.run(max_passes=1)
+    assert monitor.status.failures == 0
+    async with sessions() as check:
+        found = await check.get(Position, row.id)
+        assert found is not None and found.status == "closed"
+
+
+async def test_the_monitor_only_sweeps_its_own_mode(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    """A paper monitor can never reach a venue through this worker."""
+    async with sessions() as setup:
+        paper = await make_position(setup, mode="paper")
+        demo = await make_position(setup, mode="demo")
+        await setup.commit()
+
+    async def quotes(db: AsyncSession, rows: dict[str, Position]) -> dict[str, MarketState]:
+        assert set(rows) == {CODE}
+        return {CODE: market_for(paper, "1.11000")}
+
+    async def context() -> RiskContext:
+        return HOLD
+
+    monitor = PositionMonitor(
+        sessions, paper_manager, quotes=quotes, context=context, interval_seconds=0.01, mode="paper"
+    )
+    await monitor.run(max_passes=1)
+    async with sessions() as check:
+        shut = await check.get(Position, paper.id)
+        untouched = await check.get(Position, demo.id)
+        assert shut is not None and shut.status == "closed"
+        assert untouched is not None and untouched.status == "open"
+
+
+async def test_the_quote_source_is_asked_for_the_codes_that_are_open(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    """`codes_for` is the contract between the sweep and the quote source:
+    the same key `run_once` looks a quote up under."""
+    async with sessions() as setup:
+        await make_position(setup)
+        await make_position(setup)  # same symbol, two positions
+        await setup.commit()
+        manager = PositionManager(setup, PaperExitExecutor())
+        rows = await manager.open_positions("paper")
+        by_code = await manager.codes_for(rows)
+    assert list(by_code) == [CODE]
+    assert len(rows) == 2
+
+
+# ------------------------------------------- a halt is not a flatten
+
+
+async def test_the_monitor_never_converts_a_risk_halt_into_a_flatten() -> None:
+    """The most important thing here not to break.
+
+    `risk/engine.py` says of a loss streak that "a halt would stop the
+    session managing what is already open, and a streak is a reason to stop
+    OPENING, never a reason to stop watching", and `tools/risk_gate.py` says
+    the same of the kill switch. `RiskState.emergency_stop` and
+    `daily_loss_locked` are in BLOCKING, which means no NEW order -- mapping
+    either onto this context would make the monitor liquidate the entire
+    book the moment a daily limit tripped.
+    """
+    context = await wiring.context_for()
+    assert context.emergency_stop is False
+    assert context.daily_loss_breached is False
+    assert context.strategy_exit_signalled is False
+    assert context.max_floating_loss is None
+    assert context.kill_switch_reason is None
+
+    source = inspect.getsource(wiring.context_for)
+    for forbidden in ("RiskState", "daily_loss_locked", "kill_switch", "safe_mode"):
+        assert f"{forbidden}(" not in source
+
+
+def test_the_wiring_layer_reaches_no_broker_directly() -> None:
+    """It picks an executor by mode and never imports a terminal."""
+    names = set(dir(wiring))
+    assert not (names & {"MetaTrader5", "mt5_paper"})
+    assert "PaperExitExecutor" in names and "BrokerExitExecutor" in names
