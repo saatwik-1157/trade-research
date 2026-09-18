@@ -245,6 +245,36 @@ class Settings(BaseSettings):
     # still refuses with `no_venue`.
     execution_worker_enabled: bool = False
 
+    # --- The OMS reconcile sweep (L19 built it; nothing polled it) ---
+    #
+    # `OrderManager.reconcile` is the only exit from `unknown`, and until this
+    # flag existed its only production caller was POST
+    # /v1/orders/{id}/reconcile. An order parked at 02:00 blocked its intent,
+    # its account's bot recovery and safe mode's reason list until a human
+    # posted.
+    #
+    # Default **False**, for `execution_worker_enabled`'s reason rather than
+    # by copying it. This sweep does not send, but it does DECIDE: a
+    # reconciliation that finds nothing at the venue writes `failed`, which is
+    # the one state a fresh order for the same intent may follow. Something
+    # that unblocks re-sending on a timer is an operator decision, not a side
+    # effect of the process booting.
+    #
+    # It is not gated on safe mode, deliberately: an unresolved order is one of
+    # the conditions that latches safe mode, so a sweep that refused while safe
+    # mode was engaged could never clear the thing it was engaged for. It
+    # releases nothing -- `SafeMode.release` takes an actor and stays a human
+    # act.
+    oms_reconcile_enabled: bool = False
+    # Slower than monitoring (15s) and the bot supervisor (30s) on purpose:
+    # `reconcile` makes two adapter round trips PER ORDER, and an unresolved
+    # order that waits one more minute is not worse off.
+    oms_reconcile_interval_seconds: float = 60.0
+    # Orders settled per pass, per account. A bound so a backlog cannot turn
+    # one tick into a hundred venue round trips; the remainder is taken next
+    # pass and reported as deferred.
+    oms_reconcile_max_per_pass: int = 10
+
     # --- Recovery (L38) ---
     # False skips the startup reconciliation sequence. It exists for tests and
     # for a process that is deliberately not the one reconciling; a deployment

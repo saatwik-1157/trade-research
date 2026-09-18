@@ -86,6 +86,10 @@ services:
       # LIVE_TRADING stays false, the RiskEngine refuses any other mode, and an
       # account with no registered order manager refuses with `no_venue`.
       EXECUTION_WORKER_ENABLED: ${EXECUTION_WORKER_ENABLED:-false}
+      # Same shape and the same reason as the line above: false in the file,
+      # passed through from the host, so turning the sweep on is a decision
+      # somebody makes for one deployment.
+      OMS_RECONCILE_ENABLED: ${OMS_RECONCILE_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy

@@ -69,6 +69,7 @@ from app.observability.service import ObservabilityService
 from app.observability.thresholds import from_settings as monitoring_thresholds
 from app.observability.worker import MonitoringWorker
 from app.oms.registry import OrderManagerRegistry
+from app.oms.worker import OmsReconcileWorker
 from app.paper.service import PaperService
 from app.realtime.hub import Hub
 from app.recovery.bots import recovery_gate as bot_recovery_gate
@@ -380,6 +381,36 @@ def create_app(
                     "the startup recovery sequence itself failed; nothing was verified",
                 )
 
+        # The reconcile sweep, started BEFORE the execution worker and AFTER
+        # the recovery sequence. The order is the argument: startup
+        # reconciliation has already counted what is unresolved and latched
+        # safe mode for it, this loop is what can now clear those, and the
+        # consumer of signals starts last.
+        if settings.oms_reconcile_enabled and settings.workers_enabled:
+            app.state.workers.start(app.state.oms_reconciler)
+            log.info(
+                "the OMS reconcile sweep is running; orders parked `unknown` will be "
+                "settled against the venue without a human",
+                extra={
+                    "event": "oms_reconcile_started",
+                    "interval_seconds": settings.oms_reconcile_interval_seconds,
+                    "accounts": sorted(app.state.order_managers.managers),
+                },
+            )
+        else:
+            log.info(
+                "the OMS reconcile sweep is registered and NOT started; an order "
+                "parked `unknown` stays blocked until POST /v1/orders/{id}/reconcile",
+                extra={
+                    "event": "oms_reconcile_idle",
+                    "reason": (
+                        "oms_reconcile_enabled is false"
+                        if not settings.oms_reconcile_enabled
+                        else "workers_enabled is false"
+                    ),
+                },
+            )
+
         # L51. The execution worker starts HERE and nowhere earlier: after the
         # recovery sequence has run, so a platform that came up with an
         # unresolved order has already latched safe mode and this worker's
@@ -541,6 +572,11 @@ def create_app(
     app.state.safe_mode = SafeMode()
     app.state.recovery = RecoveryManager(app.state.safe_mode)
 
+    # One store, shared by the pipeline that writes orders and the sweep that
+    # settles them. Two `store_for` calls would be two symbol caches answering
+    # the same question.
+    app.state.order_store = order_store_for(app.state.session_factory)
+
     app.state.execution_pipeline = ExecutionPipeline(
         # L38's gate, in front of every existing one and never instead of one.
         safe_mode=app.state.safe_mode,
@@ -559,7 +595,7 @@ def create_app(
         # mode never latches, and an order whose venue state was never
         # established is re-sent after any restart. It is passed HERE, at the
         # one place the deployed pipeline is built.
-        store=order_store_for(app.state.session_factory),
+        store=app.state.order_store,
         # L53. What the RiskEngine is evaluated against. Without it the engine
         # sees only equity -- which is None here -- so every portfolio-level
         # limit is unenforceable, including `one_position_per_symbol`, which is
@@ -579,6 +615,31 @@ def create_app(
         to_signal=_to_incoming_signal,
     )
     registry.register(app.state.execution)
+
+    # L19's reconciler, on a loop for the first time. `OrderManager.reconcile`
+    # was built, tested, and called from exactly one place: POST
+    # /v1/orders/{id}/reconcile. So an order parked `unknown` at 02:00 blocked
+    # its intent, its account's bot recovery and safe mode's reason list until
+    # somebody woke up and posted.
+    #
+    # Registered and NOT started unless `oms_reconcile_enabled` says so, like
+    # the execution worker and the bot supervisor. It sends nothing, but it
+    # decides: a reconciliation that finds nothing at the venue writes
+    # `failed`, the one state a fresh order for the same intent may follow.
+    #
+    # It is NOT a second reconciler. `app/recovery/reconciliation.py` counts
+    # unresolved orders and deliberately settles none -- "settling an order is
+    # an act against a venue and this module does not act" -- and that stays
+    # true. This is a worker that calls the OMS's own method, and the manual
+    # route stays as the on-demand equivalent, exactly as POST
+    # /v1/bots/supervise sits beside the bot supervisor worker.
+    app.state.oms_reconciler = OmsReconcileWorker(
+        app.state.order_managers,
+        app.state.order_store,
+        interval_seconds=settings.oms_reconcile_interval_seconds,
+        max_per_pass=settings.oms_reconcile_max_per_pass,
+    )
+    registry.register(app.state.oms_reconciler)
 
     # The bot supervisor (L22). It measures bot heartbeats rather than trusting
     # `bot_runs.status`, marks a silent run crashed, and considers recovery --

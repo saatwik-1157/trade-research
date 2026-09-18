@@ -708,6 +708,34 @@ def test_a_pipeline_without_a_store_says_so() -> None:
     assert "NOT DURABLE" in str(boot(venue, None).status()["durability"])
 
 
+def test_the_deployed_reconcile_sweep_is_constructed_registered_and_gated() -> None:
+    """The same defect one item later: `OrderManager.reconcile` was complete,
+    tested, and called from one HTTP route. A worker module with no
+    construction site in `app/main.py` would be the mechanism built and not
+    wired again, so this reads the file rather than trusting it."""
+    source = Path(__file__).resolve().parents[1] / "app" / "main.py"
+    text = source.read_text(encoding="utf-8")
+    tree = ast.parse(text)
+
+    built = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "OmsReconcileWorker"
+    ]
+    assert built, "app/main.py no longer constructs an OmsReconcileWorker"
+    for call in built:
+        assert len(call.args) == 2, "the sweep takes the registry and the store, positionally"
+        keywords = {kw.arg for kw in call.keywords}
+        assert {"interval_seconds", "max_per_pass"} <= keywords
+    assert "registry.register(app.state.oms_reconciler)" in text
+    assert "settings.oms_reconcile_enabled and settings.workers_enabled" in text
+    # One store for the pipeline that writes orders and the sweep that settles
+    # them; a second `store_for` would be a second symbol cache.
+    assert text.count("order_store_for(") == 1
+
+
 # ============================================== 7. the OMS discard is fenced
 
 

@@ -285,7 +285,11 @@ def test_the_budget_allows_genuine_transient_recovery(attempts: int) -> None:
 
 
 def test_the_execution_worker_defaults_to_not_started() -> None:
-    """**The one worker flag that defaults False, and it must stay that way.**
+    """**A worker that acts on trading defaults False, and must stay that way.**
+
+    (Two flags carry that property now: this one and `oms_reconcile_enabled`,
+    which decides an order's fate against the venue. The requirement is
+    stated rather than the count, because the count went stale once.)
 
     `notifications_enabled` and `monitoring_enabled` default True because a
     platform whose monitoring starts only when somebody remembers to switch it
@@ -326,3 +330,37 @@ def test_starting_the_execution_worker_cannot_enable_live_trading() -> None:
     assert enabled.trading_mode.value == "paper"
     assert enabled.live_trading is False
     assert enabled.live_execution_allowed is False
+
+
+# ==================== Tier-1 item 4: the reconcile sweep is also a choice
+
+
+def test_the_oms_reconcile_sweep_defaults_to_not_started() -> None:
+    """It sends nothing, and it still defaults off, because it DECIDES: a
+    reconciliation that finds nothing at the venue writes `failed`, the one
+    state a fresh order for the same intent may follow. Unblocking a resend
+    on a timer is an operator's call, not a side effect of booting."""
+    from app.core.settings import LIVE_GATES, Settings
+
+    settings = Settings(_env_file=None)
+    assert settings.oms_reconcile_enabled is False
+    assert settings.oms_reconcile_interval_seconds >= 60.0
+    assert settings.oms_reconcile_max_per_pass >= 1
+
+    enabled = Settings(_env_file=None, oms_reconcile_enabled=True)
+    assert enabled.oms_reconcile_enabled is True
+    assert enabled.trading_mode.value == "paper"
+    assert enabled.live_trading is False
+    assert enabled.live_execution_allowed is False
+    assert not any(LIVE_GATES.values())
+
+
+def test_the_reconcile_sweep_starts_after_recovery_and_before_execution() -> None:
+    """Ordering on the source. Startup reconciliation counts the unresolved
+    orders and latches safe mode for them; the sweep is what can then clear
+    them; the consumer of signals starts last."""
+    source = (APP / "main.py").read_text(encoding="utf-8")
+    recovery = source.index("run_startup")
+    sweep = source.index("app.state.workers.start(app.state.oms_reconciler)")
+    execution = source.index("app.state.workers.start(app.state.execution)")
+    assert recovery < sweep < execution

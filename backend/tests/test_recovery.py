@@ -914,3 +914,40 @@ async def test_entering_safe_mode_needs_no_re_authentication(admin: AsyncClient)
         json={"reason": "pausing while we investigate"},
     )
     assert r.status_code == 200
+
+
+# ================ Tier-1 item 4: the sweep exists, and recovery still acts not
+
+
+async def test_the_reconcile_sweep_is_registered_and_not_started(app: FastAPI) -> None:
+    """Constructed and registered by `create_app`, started by nobody. The
+    registry refuses a duplicate name, so this also proves the five workers
+    the app builds have five distinct names."""
+    workers = app.state.workers.workers
+    assert "oms_reconcile" in workers
+    sweep = workers["oms_reconcile"]
+    assert app.state.oms_reconciler is sweep
+    assert sweep.status.running is False
+    assert sweep.store is app.state.order_store
+    assert sweep.managers is app.state.order_managers
+    report = sweep.report()
+    assert "resume" in str(report["scope"]) and "load_unresolved" in str(report["scope"])
+    assert "releases no safe-mode latch" in str(report["authority"])
+
+
+async def test_the_startup_sequence_still_settles_no_order(app: FastAPI) -> None:
+    """A regression fence on a deliberate decision. `recovery/reconciliation`
+    counts unresolved orders and settles none -- "settling an order is an act
+    against a venue and this module does not act". The sweep is a separate
+    actor and boot does not start it, so an `unknown` order is still
+    `unknown` after the whole startup sequence."""
+    await _unknown_order(app)
+    async with app.state.session_factory() as db:
+        report = await app.state.recovery.run_startup(db, app)
+        await db.commit()
+    assert report.clean is False
+    async with app.state.session_factory() as db:
+        row = await db.get(Order, "o-unknown")
+        assert row is not None and row.status == "unknown"
+    assert app.state.oms_reconciler.status.running is False
+    assert app.state.oms_reconciler.status.passes == 0

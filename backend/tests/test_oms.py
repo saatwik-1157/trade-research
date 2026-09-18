@@ -20,6 +20,7 @@ most are the ones about not knowing:
 from __future__ import annotations
 
 import ast
+import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -27,9 +28,10 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from app.brokers.base import NotConnected, OrderResult, SymbolInfo
+from app.brokers.base import BrokerOrder, NotConnected, OrderResult, SymbolInfo
 from app.brokers.base import OrderStatus as BrokerOrderStatus
 from app.brokers.fake import FakeBroker
+from app.execution.store import OrderNotRecorded, PriorOrder
 from app.oms import (
     NEEDS_RECONCILIATION,
     SAFE_TO_RESEND,
@@ -46,6 +48,8 @@ from app.oms import (
     ReconciliationRequired,
     can_resend,
 )
+from app.oms.registry import OrderManagerRegistry
+from app.oms.worker import OmsReconcileWorker
 from app.risk.engine import Approval, OrderProposal, PortfolioState, RiskEngine, RiskLimits
 
 T0 = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
@@ -1743,3 +1747,339 @@ async def test_the_status_report_separates_terms_refusals_from_sends(
     assert status["orders_filled"] == 1
     assert status["orders_failed"] == 1
     assert broker._orders_placed == 1
+
+
+# ================= Tier-1 item 4: the reconcile sweep, on a loop at last
+
+
+class RecordingStore:
+    """An `OrderStore` that remembers what it was asked to write.
+
+    It implements the whole protocol -- `prior_order` and `record` -- so it
+    satisfies `OrderStore` structurally rather than by being cast to it.
+    """
+
+    def __init__(self, *, refuse: bool = False) -> None:
+        self.recorded: list[ManagedOrder] = []
+        self.refuse = refuse
+
+    async def prior_order(self, intent_id: str) -> PriorOrder | None:
+        return None
+
+    async def record(self, order: ManagedOrder) -> None:
+        if self.refuse:
+            raise OrderNotRecorded(f"symbol {order.symbol!r} does not resolve")
+        self.recorded.append(order)
+
+
+@dataclass
+class SweepVenue(FakeBroker):
+    """Counts the venue reads a reconciliation costs."""
+
+    order_reads: int = 0
+
+    async def get_orders(self, magic: int | None = None) -> list[BrokerOrder]:
+        self.order_reads += 1
+        return await super().get_orders(magic)
+
+
+async def sweep_venue() -> SweepVenue:
+    venue = SweepVenue(mode="demo")
+    await venue.connect()
+    venue.set_quote("EURUSD", "1.10000", "1.10002")
+    venue.symbols["EURUSD"] = SPEC
+    return venue
+
+
+async def park_unknown(
+    registry: OrderManagerRegistry, venue: FakeBroker, *, account: str, intent: str
+) -> ManagedOrder:
+    """One order the venue never answered for, in `unknown`, in memory."""
+    manager = registry.managers.get(account) or registry.register(
+        account, venue, mode="demo", broker="fake"
+    )
+    venue.unknown_next = True
+    # The approval has to name the SAME account the order is created for:
+    # `account_id` is one of the fields `request_hash` binds over, so an
+    # approval issued for another account does not bind to this order.
+    order = manager.create(
+        approve(account_id=account), intent_id=intent, account_id=account, at=T0
+    ).order
+    await manager.submit(order, at=T0)
+    assert order.status is OrderStatus.unknown
+    return order
+
+
+def sweeper(
+    registry: OrderManagerRegistry, store: RecordingStore, *, max_per_pass: int = 10
+) -> OmsReconcileWorker:
+    return OmsReconcileWorker(registry, store, interval_seconds=0.01, max_per_pass=max_per_pass)
+
+
+async def test_the_sweep_settles_an_unresolved_order_without_a_human() -> None:
+    """The defect: only `POST /v1/orders/{id}/reconcile` ever did this."""
+    venue = await sweep_venue()
+    registry = OrderManagerRegistry()
+    order = await park_unknown(registry, venue, account="acct-a", intent="i-1")
+    assert registry.unresolved() == {"acct-a": [order.id]}
+
+    store = RecordingStore()
+    worker = sweeper(registry, store)
+    assert await worker.run(max_passes=1) == 1
+
+    assert order.status is OrderStatus.failed
+    assert order.error_code == "NOT_AT_VENUE"
+    assert can_resend(order.status)
+    assert store.recorded == [order], "the settled order was not written down"
+    assert registry.unresolved() == {}
+    assert worker.status.failures == 0
+    assert worker.report()["last_pass"] == {
+        "settled": 1,
+        "unreadable": 0,
+        "unrecorded": 0,
+        "faulted": 0,
+        "gone": 0,
+        "deferred": 0,
+    }
+
+
+async def test_the_sweep_records_a_fill_the_venue_turned_out_to_hold() -> None:
+    """The other exit from `unknown`: the venue holds the position, the
+    answer went missing. The sweep records `filled`, and the store sees an
+    order carrying its fill -- the shape `record_fill` turns into a Position."""
+    venue = await sweep_venue()
+    registry = OrderManagerRegistry()
+    manager = registry.register("acct-a", venue, mode="demo", broker="fake")
+    order = manager.create(approve(), intent_id="i-1", account_id="acct-a", at=T0).order
+    await manager.submit(order, at=T0)
+    assert order.status is OrderStatus.filled
+    order.status = OrderStatus.unknown
+    order.book.fills.clear()
+    assert registry.unresolved() == {"acct-a": [order.id]}
+
+    store = RecordingStore()
+    await sweeper(registry, store).run(max_passes=1)
+    assert order.status is OrderStatus.filled
+    assert order.filled_quantity == Decimal("1")
+    assert store.recorded == [order]
+
+
+async def test_a_sweep_that_cannot_read_the_venue_leaves_the_order_unknown() -> None:
+    """Fail closed, twice over: an unreachable venue is not a conclusion, and
+    it is not a clean pass either."""
+    venue = await sweep_venue()
+    registry = OrderManagerRegistry()
+    order = await park_unknown(registry, venue, account="acct-a", intent="i-1")
+    await venue.disconnect()
+
+    store = RecordingStore()
+    worker = sweeper(registry, store)
+    await worker.run(max_passes=1)
+
+    assert order.status is OrderStatus.unknown
+    assert registry.managers["acct-a"].status()["reconciliation_failures"] == 1
+    assert store.recorded == []
+    assert worker.status.failures == 0, "an unreadable venue is a condition, not a loop fault"
+    assert worker.last_pass["unreadable"] == 1
+    assert worker.last_pass["settled"] == 0
+    assert registry.unresolved() == {"acct-a": [order.id]}
+
+
+async def test_one_unreadable_account_does_not_stop_the_sweep_reaching_the_others() -> None:
+    down, up = await sweep_venue(), await sweep_venue()
+    registry = OrderManagerRegistry()
+    stuck = await park_unknown(registry, down, account="acct-down", intent="i-1")
+    free = await park_unknown(registry, up, account="acct-up", intent="i-2")
+    await down.disconnect()
+
+    worker = sweeper(registry, RecordingStore())
+    await worker.run(max_passes=1)
+
+    assert stuck.status is OrderStatus.unknown
+    assert free.status is OrderStatus.failed
+    last = worker.last_pass
+    assert (last["settled"], last["unreadable"]) == (1, 1)
+
+
+async def test_the_sweep_takes_the_account_lock_so_it_cannot_race_a_submission() -> None:
+    """The pipeline and the manual route hold `registry.lock(account)` across
+    create, persist and submit. A sweep that did not would see an order in
+    flight, find nothing at the venue yet, and write `failed` -- licensing a
+    second send for the same intent. While the lock is held the pass makes
+    no progress; when it is released, the order is settled."""
+    # THE CONTROL FIRST, so the assertion below cannot pass vacuously. An
+    # unlocked account settles well inside the window the locked one is
+    # given, which is what makes "it had not settled yet" evidence of the
+    # lock rather than evidence of a slow machine.
+    free_venue = await sweep_venue()
+    free = OrderManagerRegistry()
+    quick = await park_unknown(free, free_venue, account="acct-a", intent="i-1")
+    await asyncio.wait_for(sweeper(free, RecordingStore()).run(max_passes=1), timeout=0.05)
+    assert quick.status is OrderStatus.failed
+
+    venue = await sweep_venue()
+    registry = OrderManagerRegistry()
+    order = await park_unknown(registry, venue, account="acct-a", intent="i-1")
+    worker = sweeper(registry, RecordingStore())
+
+    lock = registry.lock("acct-a")
+    await lock.acquire()
+    try:
+        task = asyncio.create_task(worker.run(max_passes=1))
+        await asyncio.sleep(0.05)
+        assert not task.done()
+        assert order.status is OrderStatus.unknown, "settled while the account lock was held"
+        assert venue.order_reads == 0, "the venue was read before the lock was taken"
+        assert worker.status.passes == 0
+    finally:
+        lock.release()
+    await asyncio.wait_for(task, timeout=2.0)
+    assert order.status is OrderStatus.failed
+    assert venue.order_reads == 1
+
+
+async def test_the_sweep_never_submits_closes_cancels_or_modifies() -> None:
+    """Asserted on the module's source AND on a live venue."""
+    package = Path(__file__).resolve().parents[1] / "app" / "oms"
+    tree = ast.parse((package / "worker.py").read_text(encoding="utf-8"))
+    forbidden = {
+        "submit",
+        "close",
+        "cancel",
+        "modify",
+        "place_order",
+        "close_position",
+        "modify_order",
+        "cancel_order",
+    }
+    called = {
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+    assert not (called & forbidden), called & forbidden
+    assert "reconcile" in called
+
+    venue = await sweep_venue()
+    registry = OrderManagerRegistry()
+    await park_unknown(registry, venue, account="acct-a", intent="i-1")
+    assert venue._orders_placed == 0
+    await sweeper(registry, RecordingStore()).run(max_passes=1)
+    assert venue._orders_placed == 0
+    assert venue.order_reads == 1
+
+
+async def test_a_reconciled_order_is_persisted_before_its_events_are_published() -> None:
+    """Ordering is the property `drain_events` exists for: an event must
+    never describe something that was not saved."""
+    venue = await sweep_venue()
+    registry = OrderManagerRegistry()
+    store = RecordingStore()
+    recorded_when_published: list[int] = []
+
+    async def sink(event_type: str, payload: dict[str, object], order: ManagedOrder) -> None:
+        recorded_when_published.append(len(store.recorded))
+
+    registry.register("acct-a", venue, mode="demo", broker="fake", publish=sink)
+    order = await park_unknown(registry, venue, account="acct-a", intent="i-1")
+    # The submission's own events are flushed here so the sweep's are the
+    # only ones the sink sees.
+    await registry.managers["acct-a"].flush_events()
+    recorded_when_published.clear()
+
+    await sweeper(registry, store).run(max_passes=1)
+    assert order.status is OrderStatus.failed
+    assert recorded_when_published, "the settlement published no event"
+    assert all(n >= 1 for n in recorded_when_published), recorded_when_published
+
+
+async def test_a_reconciled_order_the_store_refuses_is_counted_not_hidden() -> None:
+    """`record` refuses when the symbol will not resolve. The order already
+    exists at a venue, so the refusal is reported and the sweep goes on --
+    it is not a clean pass and not a loop failure."""
+    venue = await sweep_venue()
+    registry = OrderManagerRegistry()
+    order = await park_unknown(registry, venue, account="acct-a", intent="i-1")
+    worker = sweeper(registry, RecordingStore(refuse=True))
+    await worker.run(max_passes=1)
+    assert order.status is OrderStatus.failed
+    assert worker.status.failures == 0
+    assert worker.last_pass["unrecorded"] == 1
+
+
+async def test_the_sweep_is_bounded_per_pass_and_reports_what_it_deferred() -> None:
+    venue = await sweep_venue()
+    registry = OrderManagerRegistry()
+    orders = [
+        await park_unknown(registry, venue, account="acct-a", intent=f"i-{n}") for n in range(12)
+    ]
+    worker = sweeper(registry, RecordingStore(), max_per_pass=10)
+
+    await worker.tick()
+    assert venue.order_reads == 10, "each settlement is one venue read pair; ten were budgeted"
+    assert sum(o.status is OrderStatus.failed for o in orders) == 10
+    assert worker.last_pass["settled"] == 10
+    assert worker.last_pass["deferred"] == 2
+
+    await worker.tick()
+    assert venue.order_reads == 12
+    assert all(o.status is OrderStatus.failed for o in orders)
+    assert worker.last_pass == {
+        "settled": 2,
+        "unreadable": 0,
+        "unrecorded": 0,
+        "faulted": 0,
+        "gone": 0,
+        "deferred": 0,
+    }
+
+
+async def test_one_order_that_raises_does_not_starve_the_rest_forever() -> None:
+    """`Worker.run` survives a failing tick, which is not enough here: a
+    single order raising something unexpected would abort every pass at the
+    same place, so every OTHER unresolved order would stay unresolved for
+    good. It is counted rather than swallowed -- `faulted` is the difference
+    between nothing to settle and something that cannot be settled."""
+    venue = await sweep_venue()
+    registry = OrderManagerRegistry()
+    bad = await park_unknown(registry, venue, account="acct-a", intent="i-1")
+    good = await park_unknown(registry, venue, account="acct-a", intent="i-2")
+
+    manager = registry.managers["acct-a"]
+    real = manager.reconcile
+
+    async def explode(order: ManagedOrder, **kw: object) -> ManagedOrder:
+        if order.id == bad.id:
+            raise RuntimeError("something nobody anticipated")
+        return await real(order, **kw)  # type: ignore[arg-type]
+
+    manager.reconcile = explode  # type: ignore[method-assign]
+
+    worker = sweeper(registry, RecordingStore())
+    await worker.run(max_passes=1)
+
+    assert worker.status.failures == 0, "the pass itself must not fail"
+    assert worker.last_pass["faulted"] == 1
+    assert worker.last_pass["settled"] == 1
+    assert good.status is OrderStatus.failed, "a healthy order was starved by a broken one"
+    assert bad.status is OrderStatus.unknown
+
+
+async def test_an_empty_registry_is_a_clean_sweep_not_a_failure() -> None:
+    """The default deployment: no adapter registered, nothing to settle."""
+    worker = sweeper(OrderManagerRegistry(), RecordingStore())
+    assert await worker.run(max_passes=1) == 1
+    assert worker.status.failures == 0
+    assert worker.last_pass["settled"] == 0
+    assert worker.report()["unresolved"] == {}
+
+
+def test_the_sweep_reports_that_it_only_sees_in_memory_orders() -> None:
+    """Honesty over a silent default: an order left by a PREVIOUS process is
+    not swept, and the report says so rather than looking complete."""
+    report = sweeper(OrderManagerRegistry(), RecordingStore()).report()
+    assert "resume" in str(report["scope"])
+    assert "load_unresolved" in str(report["scope"])
+    assert report["worker"] == "oms_reconcile"
+    supervisor = report["supervisor"]
+    assert isinstance(supervisor, dict) and supervisor["running"] is False
