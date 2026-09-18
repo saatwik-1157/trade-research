@@ -1,8 +1,8 @@
 # PROJECT_STATUS.md
 
-Generated 2026-09-18 from the repository, the crash journal, the session logs
-and the ledger. **The venue was not read** — no MT5 terminal is running, so
-every account figure below is the last one a session managed to observe.
+Generated 2026-09-18 from the repository, the crash journal, the session logs,
+the ledger and a live read of the venue. Updated again that evening; see
+[What changed on 2026-09-18](#what-changed-on-2026-09-18).
 
 **Current Status:** `HARNESS_FENCED` → `SOAK_REQUIRED`, and the soak is not
 producing clean evidence because the host keeps falling asleep.
@@ -31,13 +31,80 @@ and the fix that was supposed to prevent it does not work.**
 |---|---|
 | **Trading Mode** | `paper` — `live_trading: false`, 12 live blockers, `assert_demo` in code |
 | **Account** | `5055473926 @ MetaQuotes-Demo` **[DEMO]** · **FLAT** as of 09-18 16:10 — 0 open positions, 0 pending, balance 99,919.45 USD, equity the same. 632 closed trades on the venue, 09-04 to 09-17, net −80.55 |
-| **Running processes** | none. **MT5 terminal is not running either**, which is why the book cannot be checked from here |
+| **Running processes** | none trading. MT5 terminal open and idle |
+| **Preflight** | `tools/preflight.py`, 11 checks, read-only. Last run **NOT_READY** on two counts: the machine is **on battery**, where Microsoft terminates execution power requests 5 minutes after the sleep timeout, and a Saturday deadline is outside the venue's week. Everything else green |
+| **Operator entry point** | `run.bat` — double-click menu, 17 options, the three that send orders each behind a typed YES |
+| **CI** | **red since 2026-09-13** (`4305cd7` was the last green). Two separate causes, both now fixed; the run on `8385a5d` has 5 of 6 jobs green with `backend` still going. See [CI](#ci-was-red-for-five-days-and-only-half-of-it-was-new) |
 | **TradingView Status** | gateway built (hmac, age check, idempotency, body cap). **Never exercised end to end** — no broker account registered |
 | **MT5 Status** | one adapter, one `order_send` on the platform path; 4 on the harness path, all four behind the Risk Engine — the opening order needs an `Approval`, the three closing ones are recorded and never refused |
 | **Risk Status** | 33+ veto codes — weekly loss, consecutive losses and correlation added at P4. RiskEngine is the final veto on **both** paths as of P2 |
 | **Windows Build Status** | **exists.** `dist/trade-research/` onedir, rebuilt 09-15 09:36, plus a legacy onefile `dist/trade-research.exe` from 09-12. Built by `build_exe.py`. *(This row said "none" until 09-18; it was stale.)* |
 | **Stability** | **three sessions have now reached a deadline; one of the three flushed clean.** The limiting factor is no longer the code path — it is the host sleeping. See [Modern standby](#modern-standby-is-eating-the-soak) |
 | **Tests** | **toolkit lane green: 108 passed in 7.8s** (re-run 09-18, including 8 new tests for the fixes below). Backend suite last recorded 09-12 at 2,976 passed / 0 failed (21m33s). `ruff` + `mypy` are clean over `backend/` — **and only `backend/`**: `.github/workflows/tests.yml` runs both with `working-directory: backend`, so `tools/` has never been lint- or type-gated and carries pre-existing findings in both |
+
+## What changed on 2026-09-18
+
+The day divides into the morning's defect work — recorded in the sections
+below — and an evening spent measuring things and finding that the
+measurements were themselves wrong.
+
+**The one gate this project ever passed was noise in the gate.**
+`reports/rule_search.json` records `beats_permutation_null: True` for
+`boll_fade_50_2.0`, and `CLAUDE.md` quoted it as the single thing that ever
+cleared anything here. It does not clear it. `--null-rounds` defaulted to 3,
+and three draws cannot estimate "the best of N under no skill" well enough to
+judge against: measured on identical data with only the round count changed,
+the null's best came out at 1.57 over 3 rounds and 0.92 over 25. Settled at 20
+rounds on the 41-candidate baseline, the null is **1.00** and the candidate
+scores **0.98**. The default is now 10, and every figure measured before today
+was taken at 3. The search now fails **all three** gates rather than two of
+three, which makes the result stronger, not weaker.
+
+**Two new searches, both null, and one of them with a control.**
+
+- *Supertrend* (`tools/supertrend_search.py`), the only concrete strategy in
+  three public trading repositories. Not a rename — its band ratchets, so the
+  flip level carries state from every bar since the last flip, which nothing
+  searched here does. The source rule scores **−2.24 in sample and −4.17 out**,
+  loses in all seven pairs, and is positive in one era of four. Per-symbol win
+  rates run 44–48% against the 50.5–52.8% the spread demands.
+- *Volume* (`tools/volume_search.py`), the last untested input, on crypto D1
+  where the exchange reports real traded size. **Two of the six candidates
+  ignore volume and are the point**: at both quantiles the arm that ignores it
+  beats both arms that use it. The finding is not "volume fails" but "the
+  control beat the treatment", which is only visible because the control was
+  in the run — six of the seven earlier searches had no equivalent.
+
+**Two tools that make the thing operable.** `run.bat` is a double-click menu
+over everything; `tools/preflight.py` answers the question `--dry-run` cannot,
+because that refuses early on a weekend deadline and then reports nothing
+else. The preflight found on its first run that this machine is on battery,
+which is the one condition under which the standby fix below cannot work.
+
+## CI was red for five days, and only half of it was new
+
+The last green run is `4305cd7` on 09-13. Everything since has been red, and
+the cause is two unrelated defects that happened to land together.
+
+The first arrived with the eight commits that sat unpushed from 09-15 to
+09-18: the `keep_awake` tests bound the context manager's yield to a single
+name and compared a **tuple to `True`**, which fails on every platform. That
+was fixed early on 09-18 while unpacking those tuples for the power-request
+work, before anyone had looked at CI.
+
+The second was added on top and is worth recording as a method failure rather
+than a typo. A new test asserted that a session with a deadline requests
+`PowerRequestExecutionRequired`. True on Windows; **false by design on Linux**,
+where `power_request()` returns at `os.name != "nt"` before taking anything.
+Stubbing `ctypes` does not help — the platform check runs first, which is the
+point of it. It passed locally on the only platform it could pass on, and the
+matrix is Linux.
+
+The test now splits: the three request types on Windows, and off Windows the
+documented no-op — nothing taken, and the session still *runs* rather than
+claiming a hold it does not have. Verified by flipping `os.name` to `posix`
+**after** the imports, because `ctypes` branches on it at import time and
+flipping first breaks the import instead of the test.
 
 ## Modern standby is eating the soak
 
@@ -245,6 +312,18 @@ at fill; max absolute slippage 14.0 points.
 - **Crash journal now holds 9 sessions**, and its statuses are load-bearing:
   `completed`, `ended_not_flat`, `abandoned` and an unreadable account are four
   different things and the journal distinguishes all four
+- **The watchdog is launched** — `run_overnight.py` starts it with `--adopt`
+  for every full session, in Python rather than the batch file because the
+  frozen executable never touches `start-trading.bat`. Full sessions only: a
+  `--harvest-only` wind-down is deliberately unsupervised, since restarting
+  one that died would re-enter the book it was emptying
+- **Eighth and last input searched.** Volume was the only thing left that is
+  not a function of OHLC, and `crypto_market.py` had been downloading it and
+  discarding column 5 since the universe was added. Searched, null, control
+  beat the treatment
+- **`run.bat`** — the operator entry point, 17 options
+- **`tools/preflight.py`** — 11 checks, read-only, and the only thing in the
+  toolkit that would have said "on battery" before 06:00
 
 ## In Progress
 
@@ -355,16 +434,22 @@ week came from the host or the venue, not from the risk path.**
 
 ## Next Recommended Action
 
-**1. Start the terminal and read the account.** It is UNKNOWN, has been for two
-days, and nothing below matters until it is known:
+**1.** ~~Start the terminal and read the account.~~ **Done 09-18 16:10** — the
+account is flat, 0 positions, and the ledger has been merged to 882 trades.
+
+**2. Plug the machine in, then run the preflight, and start nothing until it
+says READY.** Double-click `run.bat` and choose 17, or:
 
 ```
-dist/trade-research/trade-research.exe account
+python tools/preflight.py --until-hour 6
 ```
 
-**2. Close whatever is there**, watching rather than scheduling:
-`start-trading.bat --harvest-only`. Then `python tools/track_record.py --merge`
-to pull in the 09-16 session's trades, which the ledger has never seen.
+It is currently **NOT_READY on two counts**, and the first is the one that
+matters: this machine is **on battery**, where Microsoft terminates system and
+execution power requests five minutes after the sleep timeout expires. A soak
+started that way lapses mid-session and produces another worthless night —
+the exact failure the last three weeks went into. The second is the calendar
+and resolves itself on Sunday.
 
 **3. Run one full-length session and read its timestamps.** The sleep fix and
 the wall-clock flush budget are in, but **the only thing that closes Critical
@@ -403,13 +488,21 @@ when it says what you expected.
 
 ## Working tree
 
-On `main`, and **local `main` has been rewritten**: every hash below
-`28fbc1b` changed on 2026-09-18 and the remote-tracking refs were dropped, so
-the branch no longer reports an upstream. `origin/main` on GitHub is still at
-the pre-rewrite `18f84d8`, which means the two histories have diverged and
-publishing the local one needs a force-push. That is a decision, not a
-formality — the commits already on the remote are the ones anyone who cloned
-the repository has.
+Clean, on `main`, and in step with `origin/main`. **Local `main` was rewritten
+on 2026-09-18** — every hash below `28fbc1b` changed and the remote-tracking
+refs were dropped — and the rewritten history has since been published, so the
+divergence that needed a force-push is resolved. Anyone who cloned before
+09-18 has the old hashes and will see a divergence on their next pull; that is
+a consequence of the rewrite and is worth telling them rather than letting
+them discover it.
+
+**`.gitattributes` now pins `*.bat`, `*.cmd` and `*.ps1` to `eol=crlf`**, and
+that is load-bearing rather than cosmetic. `run.bat` was written LF-only, and
+cmd.exe reads a batch file by seeking through it: with bare LF its label
+resolution is unreliable, `goto :menu` silently did not jump, and the menu ran
+a live ledger merge three times on an empty stdin while its own guard
+correctly reported that no input had arrived. No error, nothing in the output.
+Verified fixed by doing an actual fresh clone and checking the bytes.
 
 The ledger and the reports are gitignored, so ledger movement shows up in
 `data/track_record.jsonl` and `reports/track_record.json` rather than in the
