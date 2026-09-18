@@ -34,7 +34,7 @@ and the fix that was supposed to prevent it does not work.**
 | **Risk Status** | 33+ veto codes — weekly loss, consecutive losses and correlation added at P4. RiskEngine is the final veto on **both** paths as of P2 |
 | **Windows Build Status** | **exists.** `dist/trade-research/` onedir, rebuilt 09-15 09:36, plus a legacy onefile `dist/trade-research.exe` from 09-12. Built by `build_exe.py`. *(This row said "none" until 09-18; it was stale.)* |
 | **Stability** | **three sessions have now reached a deadline; one of the three flushed clean.** The limiting factor is no longer the code path — it is the host sleeping. See [Modern standby](#modern-standby-is-eating-the-soak) |
-| **Tests** | **not re-run since 09-12.** Last recorded: 9 toolkit gates (py3.14) · full backend suite 2,976 passed / 0 failed (21m33s) · `ruff` + `mypy` clean, 411 files. Eight commits have landed since, four of which changed project-root resolution |
+| **Tests** | **toolkit lane green: 108 passed in 7.8s** (re-run 09-18, including 8 new tests for the fixes below). Backend suite last recorded 09-12 at 2,976 passed / 0 failed (21m33s). `ruff` + `mypy` are clean over `backend/` — **and only `backend/`**: `.github/workflows/tests.yml` runs both with `working-directory: backend`, so `tools/` has never been lint- or type-gated and carries pre-existing findings in both |
 
 ## Modern standby is eating the soak
 
@@ -80,6 +80,43 @@ things follow, and they are separate defects:
    10 seconds and delivers 126 minutes should say so, and the retry budget
    should be spent in wall-clock time rather than in attempts — six attempts
    inside 50 seconds is not six chances at a reconnect, it is one.
+
+### What changed on 2026-09-18
+
+Both numbered defects above are now fixed in code, and the first one had a
+root cause neither previous attempt had found.
+
+**The machine was not necessarily sleeping out from under the session — the
+session was being paused.** Under Modern Standby the Desktop Activity
+Moderator suspends desktop applications, which Microsoft states without
+hedging: *"Windows prevents desktop applications from running during any part
+of modern standby after the DAM phase completes."* A harvest loop is a desktop
+application. No `ES_` flag addresses the DAM, because the execution-state
+flags map only to `PowerRequestSystemRequired` and
+`PowerRequestDisplayRequired`. The request that does —
+`PowerRequestExecutionRequired`, *"the calling process continues to run
+instead of being suspended or terminated by process lifetime management
+mechanisms"* — has no `ES_` constant at all and is reachable only through
+`PowerCreateRequest`/`PowerSetRequest`. That is why both earlier fixes printed
+a confident banner, got a non-zero previous state back, and slept anyway.
+
+Verified on this machine rather than assumed, which is the step both earlier
+fixes skipped: `PowerCreateRequest` returns a live handle and system,
+execution and display are all GRANTED. `powercfg /requests` needs elevation so
+it could not be read back — that is a gap in the evidence, not a claim.
+
+Two limits are now printed at startup instead of discovered at 06:00. Power
+requests are terminated on user-initiated sleep (lid, power button, Start
+menu), so closing the lid still ends a session. And on Modern Standby **on
+battery**, system and execution requests are terminated 5 minutes after the
+sleep timeout expires — so an overnight run on DC cannot be relied on however
+this is written, and a session with a deadline that starts on battery now says
+so in capitals.
+
+**This is not closed until a full-length session runs without a gap.** Two
+fixes have already been declared working here on the strength of an API
+return value. The banner now names which hold is in force so the next log can
+be read against its own claim.
 
 The detector working at all is new and it is the reason this section can be
 written. It was added in the same commit as the fix that failed.
@@ -212,14 +249,22 @@ Nothing is running. The open item is not work, it is an unattended book:
 
 ## Critical Issues
 
-1. **Modern standby sleeps through sessions, and the fix does not hold.**
-   *New 2026-09-18.* Promoted above the two-paths finding because it has now
-   caused an actual abandoned book, twice, and because it invalidates the soak
-   the project is waiting on. Detail in
-   [Modern standby](#modern-standby-is-eating-the-soak).
-2. **The flush retry budget is counted in attempts, not wall-clock.** Six
-   retries inside 50 seconds after a two-hour sleep is one reconnect attempt
-   wearing six hats. On 09-14 it cost seven positions.
+1. ~~**Modern standby sleeps through sessions, and the fix does not hold.**~~
+   **Root cause found and fixed 2026-09-18, pending a live soak.** The two
+   earlier fixes both reached for `SetThreadExecutionState`, which cannot
+   express the request that matters: the Desktop Activity Moderator SUSPENDS
+   desktop applications under Modern Standby, and only
+   `PowerRequestExecutionRequired` — which has no `ES_` constant — exempts a
+   process from it. The session now takes a real power request, verified
+   GRANTED on this machine. **Not closed until a full-length session runs
+   without a gap**, because that is the evidence the last two fixes lacked.
+   Detail in [Modern standby](#modern-standby-is-eating-the-soak).
+2. ~~**The flush retry budget is counted in attempts, not wall-clock.**~~
+   **Fixed 2026-09-18.** Attempts are a floor, the budget is 10 minutes of
+   wall-clock, and a mid-flush sleep restarts the budget rather than spending
+   it (capped at 3 restarts). The flush also no longer believes a retcode:
+   after every close is accepted it re-reads the book, and a DONE that left
+   the position open keeps the loop running instead of reporting flat.
 3. **Two independent paths to a broker order.** *Reduced 2026-09-11, not
    closed.* The harness imports `app.risk.engine` through `tools/risk_gate.py`,
    and `place()` refuses a live order carrying no risk decision —
@@ -227,9 +272,15 @@ Nothing is running. The open item is not work, it is an unattended book:
    so no `orders` row, no `intent_id`, no reconciliation; the platform's kill
    switches are deliberately not read; weekly loss and correlated exposure have
    no data source on this path and report `not_enforced`.
-4. **Foreign keys are unenforced across the test suite.** SQLite runs with the
-   pragma off; only `orders.signal_id` is covered. 2,976 tests are weaker
-   evidence than the count suggests.
+4. ~~**Foreign keys are unenforced across the test suite.**~~ **Closed, and
+   this row was wrong on 09-12 and again on 09-18** — it was carried forward
+   twice without being checked. `backend/tests/conftest.py:46` registers an
+   `event.listens_for(Engine, "connect")` listener that sets
+   `PRAGMA foreign_keys=ON`, keyed on the driver module so asyncpg in the
+   Postgres job is untouched. Its own comment gives the reason: one listener
+   rather than 121 edits, because the suite builds 121 engines across 51 files
+   and a rule repeated 121 times is one that gets missed the 122nd time. It
+   reaches every session the tests open, including ones added later.
 5. ~~**No session reaches its deadline.**~~ **Closed 2026-09-11**, and the
    record since is 1 clean flush in 3 attempts — and the clean one got there by
    luck. Reopening this would be the wrong call; the deadline branch works. The
@@ -244,10 +295,30 @@ Nothing is running. The open item is not work, it is an unattended book:
   **the wiring still does not exist** — `grep -i watchdog start-trading.bat
   tools/run_overnight.py` returns nothing. A supervisor nobody launches would
   have restarted three of the last four sessions.
+- ~~**A refused escape close was recorded as a close that happened.**~~
+  **Fixed 2026-09-18.** When a bracket repair fails, both exits are against
+  the position and holding it is a guaranteed loss, so `place()` fires one
+  escape close — and `tools/mt5_paper.py` **discarded its result**, setting
+  `bracket_repair_failed_closed = True` unconditionally. A close the venue
+  refused was written down as a rescue, on the single order whose whole
+  purpose is escaping a loss with no good branch. The flag now means what it
+  says, the retcode is recorded, and a failure prints a close-it-by-hand line.
+- ~~**An unanswered `order_send` was recorded as a venue refusal.**~~
+  **Fixed 2026-09-18.** The call was unguarded and `status` read
+  `"SENT" if done else "REJECTED"`, so a raised IPC error or a `None` from a
+  departed terminal became `REJECTED`. That is the opposite claim, and it is
+  the one that decides whether a retry is safe: a refusal transmitted nothing,
+  an exception may have reached the server and a retry can open a second
+  position. Those cases now record `UNKNOWN` and keep the error text.
 - `SIGNAL_CREATED` has no consumer; `ExecutionWorker` polls instead.
 - Two pass counters disagree on failure (`passes 65` in the summary,
   `"passes": 55` in the journal).
 - An `AttributeError` reaches operator-facing output as its class name.
+- **MT5 has no client-supplied order id.** `magic` is the ownership filter and
+  `comment` is routinely overwritten by the broker, so an `intent_id` cannot
+  be carried on an order and provable idempotency is not achievable on this
+  platform. Read-back reconciliation is the only honest retry-safety story
+  here; any design that assumes idempotency keys is wrong about MT5.
 - ~~RiskEngine lacks weekly-loss, consecutive-loss and correlation vetoes.~~
   **Closed at P4.**
 - ~~No watchdog across workers; no crash journal; no restart-loop limiting.~~
@@ -275,20 +346,32 @@ dist/trade-research/trade-research.exe account
 `start-trading.bat --harvest-only`. Then `python tools/track_record.py --merge`
 to pull in the 09-16 session's trades, which the ledger has never seen.
 
-**3. Fix the sleep before running another soak.** Find out why the S0
-keep-awake does not hold — a session that loses five hours is not evidence, and
-three of the last four produced none. Extend the sleep detector to the deadline
-and flush paths, and make the flush retry budget wall-clock.
+**3. Run one full-length session and read its timestamps.** The sleep fix and
+the wall-clock flush budget are in, but **the only thing that closes Critical
+1 is a night with no gap in the pass log.** Two fixes have already been
+declared working on the strength of an API return value; this one is not
+believed until a session proves it. Run it **on mains** — on battery the
+power request lapses by design and the run is worthless as evidence.
 
-**4. Then decide whether the launcher starts a watchdog.** It is the last loose
-end from P1b and it stopped being a pure design question this week: three of
-the last four sessions ended in a state a supervisor would have acted on.
+**4. Then decide whether the launcher starts a watchdog.** It is the last
+loose end from P1b, it stopped being a pure design question this week, and it
+is about an hour of work: `tools/watchdog.py` already has the restart budget,
+the fast-exit cost and the refusal table, and `session_alive()` already
+prevents a double start. Nothing calls it.
 
-**5. Re-run the suite.** It has not run since 09-12 and eight commits have
-landed, four of them touching project-root resolution.
+**5. Then the MT5 retcode table** — `tools/mt5_retcodes.py`, mapping the codes
+this project has actually observed (10018, 10031, 10030, `TRADE_RETCODE_DONE`)
+to `(class, retryable, transmitted)`, shared by the harness and
+`backend/app/brokers/mt5.py` so both paths classify a refusal the same way.
+Half a day, and it generalises the `UNKNOWN`-vs-`REJECTED` fix above rather
+than leaving it as one special case.
 
-**6. Then P5** — foreign keys and a Postgres-backed integration job, Critical
-#4 and the highest test-integrity win left.
+**6. Then a bounded, verified reconnect on `VenueUnreadable`** — Critical 4.
+Verify by identity, not by the call answering: re-read `account_info()` and
+assert the login matches the one captured at session start, because
+`positions_get` answering while `account_info` returns `None` is the partial
+disconnect this project has already hit. Bound it on the time left to
+`flat_at`, never on an attempt count.
 
 Do not train a model. `ModelTrainingNeedAssessment` = **DO_NOT_TRAIN**: six
 search families across five universes have already failed to clear their own
@@ -298,11 +381,17 @@ space with more parameters.
 
 ## Working tree
 
-Clean, on `main`, **8 commits ahead of `origin/main` and unpushed** — the
-modern-standby work, frozen-root resolution across four modules, the watchdog
-frozen-mode fix, and the perf-audit docs section. The ledger and the reports
-are gitignored, so ledger movement shows up in `data/track_record.jsonl` and
-`reports/track_record.json` rather than in the diff.
+On `main`, and **local `main` has been rewritten**: every hash below
+`28fbc1b` changed on 2026-09-18 and the remote-tracking refs were dropped, so
+the branch no longer reports an upstream. `origin/main` on GitHub is still at
+the pre-rewrite `18f84d8`, which means the two histories have diverged and
+publishing the local one needs a force-push. That is a decision, not a
+formality — the commits already on the remote are the ones anyone who cloned
+the repository has.
+
+The ledger and the reports are gitignored, so ledger movement shows up in
+`data/track_record.jsonl` and `reports/track_record.json` rather than in the
+diff.
 
 `PROJECT_STATE.json` is still stamped 2026-09-07 and was again deliberately not
 regenerated: it measures the running deployment, and neither `tr-postgres` nor
