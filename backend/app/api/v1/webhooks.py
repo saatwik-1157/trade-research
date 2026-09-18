@@ -20,21 +20,35 @@ value it can take that describes a trade.
 CSRF does not apply: the middleware only challenges requests that carry a
 session cookie, and this one carries none. Rate limiting is the protection
 here, exactly as it is for sign-in.
+
+**One write door and two read doors.** `GET /events` and `GET /events/{id}`
+answer the one question the table exists for -- "did our alert arrive, and if
+it did not act, why" -- which until they existed was answerable only by
+opening the database. Both are gated on `manage_brokers`, like the status
+route. Neither touches the gateway, so this module holds no secret and there
+is no value it could put back into a payload that was redacted on write; it
+also means the read surface still answers when the receiver is unconfigured,
+which is exactly when an operator most needs to read the rejections.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.pagination import Page, PageParams, SortSpec, page_params, paginate
+from app.api.v1.schemas import WebhookEventDetailOut, WebhookEventOut
 from app.auth.deps import get_db, require_permission
 from app.auth.models import User
 from app.auth.permissions import Permission
 from app.auth.ratelimit import RateLimit
-from app.core.errors import request_id_of
+from app.core.errors import NotFound, ValidationFailed, request_id_of
+from app.models.signals import WebhookEvent
 from app.webhooks.gateway import Outcome, Unauthorized, WebhookGateway
 from app.webhooks.schema import MAX_BODY_BYTES
 
@@ -49,6 +63,36 @@ _BROKERS = Depends(require_permission(Permission.manage_brokers))
 # here is a 429 with a retry hint; it never silently drops an alert, because a
 # dropped alert and an alert that never fired look identical to the sender.
 WEBHOOK_LIMIT = RateLimit(limit=120, window_seconds=60)
+
+EVENT_SORTS = SortSpec(
+    columns={"received_at": WebhookEvent.received_at, "status": WebhookEvent.status},
+    default="received_at",
+)
+# Mirrors the CHECK constraints on the table (`app/models/signals.py`), named
+# here so the fail-closed filter check and its test can both read them.
+EVENT_STATUSES = ("accepted", "rejected", "duplicate")
+AUTH_STRENGTHS = ("strong", "weak", "none")
+
+
+def _naive_utc(value: datetime | None) -> datetime | None:
+    """`received_at` is stored naive-UTC. A caller may send an offset, and
+    comparing an aware datetime to a naive column raises on some drivers, so
+    the bound is normalised exactly as the gateway normalises the write."""
+    if value is None:
+        return None
+    return value.astimezone(UTC).replace(tzinfo=None) if value.tzinfo else value
+
+
+def _one_of(name: str, value: str | None, allowed: tuple[str, ...]) -> None:
+    """Refuse an unrecognised filter rather than ignoring it.
+
+    A typo'd `?status=accpeted` that returned the whole table would read as
+    "these are the accepted ones", which is a false statement about the
+    record -- the same argument `app/api/pagination.py` makes about a
+    silently truncated page.
+    """
+    if value is not None and value not in allowed:
+        raise ValidationFailed(f"{name} must be one of {', '.join(allowed)}, not {value!r}")
 
 
 def _client_ip(request: Request) -> str:
@@ -201,3 +245,88 @@ async def tradingview_status(request: Request, _: User = _BROKERS) -> dict[str, 
             "built, and no path from this endpoint to a broker exists."
         ),
     }
+
+
+# ===================================================== the recorded alerts
+
+
+@router.get(
+    "/events",
+    response_model=Page[WebhookEventOut],
+    summary="Alerts received, accepted and refused",
+    description=(
+        "Newest first. Every authenticated alert leaves a row, including one "
+        "that was refused -- 'we never received it' and 'we received it and "
+        "would not act on it' are different answers, and only one of them "
+        "means the sender should look at its own config. A duplicate creates "
+        "NO row: a replay resolves onto the row it duplicates, so the count "
+        "here is the count of distinct alerts, not of deliveries. The payload "
+        "is not on a list row; read one event for it. **Nothing here was "
+        "executed.**"
+    ),
+)
+async def list_webhook_events(
+    params: PageParams = Depends(page_params),
+    status_filter: str | None = Query(None, alias="status", description="accepted | rejected"),
+    provider: str | None = Query(None, max_length=16),
+    auth_strength: str | None = Query(None, description="strong | weak | none"),
+    signal_id: str | None = Query(None, max_length=36),
+    from_time: datetime | None = Query(None, description="received_at lower bound, UTC."),
+    to_time: datetime | None = Query(None, description="received_at upper bound, UTC."),
+    sort: str | None = Query(None, description="received_at | status"),
+    order: str | None = Query(None, description="asc | desc"),
+    db: AsyncSession = Depends(get_db),
+    _: User = _BROKERS,
+) -> Page[WebhookEventOut]:
+    # `status_filter` rather than `status`: this module imports `fastapi.status`
+    # and uses it in the POST handler, and a bare parameter would shadow it.
+    _one_of("status", status_filter, EVENT_STATUSES)
+    _one_of("auth_strength", auth_strength, AUTH_STRENGTHS)
+    if from_time and to_time and from_time > to_time:
+        raise ValidationFailed("from_time is after to_time")
+
+    stmt = select(WebhookEvent)
+    if status_filter:
+        stmt = stmt.where(WebhookEvent.status == status_filter)
+    if provider:
+        stmt = stmt.where(WebhookEvent.provider == provider)
+    if auth_strength:
+        stmt = stmt.where(WebhookEvent.auth_strength == auth_strength)
+    if signal_id:
+        stmt = stmt.where(WebhookEvent.signal_id == signal_id)
+    lower, upper = _naive_utc(from_time), _naive_utc(to_time)
+    if lower:
+        stmt = stmt.where(WebhookEvent.received_at >= lower)
+    if upper:
+        stmt = stmt.where(WebhookEvent.received_at <= upper)
+
+    # Offset paging over an unindexed `received_at`, which `app/api/pagination.py`
+    # argues for at these row counts. An index would mean a migration, which
+    # would turn a read-only feature into a schema change.
+    stmt = EVENT_SORTS.apply(stmt, sort, order)
+    rows, page = await paginate(db, stmt, params)
+    items = [WebhookEventOut.model_validate(r, from_attributes=True) for r in rows]
+    return Page[WebhookEventOut](items=items, page=page)
+
+
+@router.get(
+    "/events/{event_id}",
+    response_model=WebhookEventDetailOut,
+    summary="One recorded alert, with the payload as it was stored",
+    description=(
+        "The payload is served exactly as it sits in the row. It was redacted "
+        "on write by the only component that holds the secret, and this route "
+        "imports neither the gateway nor the settings, so there is no value it "
+        "could put back. A 200 describes an alert that was RECORDED; it never "
+        "means anything was executed."
+    ),
+)
+async def get_webhook_event(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = _BROKERS,
+) -> WebhookEventDetailOut:
+    row = await db.get(WebhookEvent, event_id)
+    if row is None:
+        raise NotFound(f"no webhook event {event_id}")
+    return WebhookEventDetailOut.model_validate(row, from_attributes=True)

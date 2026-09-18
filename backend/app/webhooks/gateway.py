@@ -269,9 +269,26 @@ class WebhookGateway:
         # Redacted immediately, before anything is stored or logged. Nothing
         # downstream of this line has the secret in hand.
         safe_payload = redact(payload, self.secret)
+        # And `parse_alert` reads the REDACTED copy, which is what the line
+        # above already claims of everything below it. Parsing the raw payload
+        # was the one exception, and it reached the database: the messages for
+        # an unsupported `action` and an unparseable `time` echo up to 32
+        # characters of what the caller sent, and `_record_rejection` stores
+        # that text in `error`.
+        #
+        # That column is served over HTTP now, so a sender that pasted the
+        # secret into the wrong field would have 32 of its 33 characters
+        # handed back by a read route -- and redacting the message afterwards
+        # cannot repair it, because a truncated secret no longer matches the
+        # secret. It has to be scrubbed BEFORE the echo is built.
+        #
+        # No field `parse_alert` reads is a SECRET_KEYS field, and the keys
+        # `redact` removes are all in its `known` set, so a well-formed alert
+        # parses identically and its fingerprint is unchanged.
+        parseable = safe_payload if isinstance(safe_payload, dict) else {}
 
         try:
-            alert = parse_alert(payload)
+            alert = parse_alert(parseable)
             check_age(
                 alert.signal_time,
                 now,

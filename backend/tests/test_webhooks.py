@@ -914,3 +914,296 @@ async def test_an_alert_becomes_an_order_through_the_deployed_wiring(
     assert len(orders) == 1
     assert orders[0].intent_id == signal.signal_key
     assert orders[0].paper_account_id == "acct-a"
+
+
+# =============== Tier-1 item 6: reading back what the receiver recorded
+#
+# The write path has been complete since L09 and nothing could read it. The
+# one question the table exists to answer -- "did our alert arrive, and if it
+# did not act, why" -- was answerable only by opening the database, and the
+# rows that most need reading (rejections, unroutable alerts, weak auth) have
+# no trade and so no path through the journal either.
+
+
+async def _trader(app: FastAPI, client: AsyncClient) -> None:
+    """Register ALICE and promote her to trader, which is what
+    `manage_brokers` needs. The status route's own test does this inline."""
+    await client.post("/auth/register", json=ALICE)
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.email == ALICE["email"]))
+        assert user is not None
+        user.role = Role.trader.value
+        await db.commit()
+
+
+async def _events(client: AsyncClient, **params: str | int) -> dict:
+    r = await client.get("/v1/webhooks/events", params=params)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+async def test_the_event_list_refuses_anonymous_access(client: AsyncClient) -> None:
+    assert (await client.get("/v1/webhooks/events")).status_code == 401
+    assert (await client.get("/v1/webhooks/events/anything")).status_code == 401
+
+
+async def test_the_event_list_needs_the_broker_permission(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    await client.post("/auth/register", json=ALICE)
+    assert (await client.get("/v1/webhooks/events")).status_code == 403
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.email == ALICE["email"]))
+        assert user is not None
+        user.role = Role.trader.value
+        await db.commit()
+    assert (await client.get("/v1/webhooks/events")).status_code == 200
+
+
+async def test_an_accepted_alert_appears_in_the_event_list(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    posted = (await _post(client, alert_body())).json()
+    assert posted["status"] == "accepted"
+    await _trader(app, client)
+
+    body = await _events(client)
+    assert body["page"]["total"] == 1
+    row = body["items"][0]
+    assert row["status"] == "accepted"
+    assert row["auth_strength"] == "strong"
+    assert row["signal_id"] == posted["signal_id"]
+    assert row["error"] is None
+    assert row["idempotency_key"]
+
+
+async def test_a_refused_alert_appears_in_the_list_with_its_reason(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    """The case the read surface exists for. A rejection produces a
+    `webhook_events` row and no Signal, so no other route can reach it."""
+    r = await _post(client, alert_body(ticker="OANDA:NOTATICKER"))
+    assert r.status_code == 422
+    await _trader(app, client)
+
+    row = (await _events(client))["items"][0]
+    assert row["status"] == "rejected"
+    assert row["signal_id"] is None
+    assert row["error"]
+    assert row["idempotency_key"].startswith("tv:rej:")
+    assert await _count(app, Signal) == 0
+
+
+async def test_a_duplicate_creates_no_second_row_in_the_list(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    """The count is the count of distinct alerts, not of deliveries. That is
+    the idempotency guarantee the whole gateway exists for."""
+    body = alert_body(id="tv-alert-1")
+    assert (await _post(client, body)).json()["status"] == "accepted"
+    assert (await _post(client, body)).json()["status"] == "duplicate"
+    await _trader(app, client)
+    assert (await _events(client))["page"]["total"] == 1
+
+
+async def test_the_list_never_carries_the_payload(app: FastAPI, client: AsyncClient) -> None:
+    """A 200-row page cannot spill bodies."""
+    await _post(client, alert_body())
+    await _trader(app, client)
+    for row in (await _events(client))["items"]:
+        assert "payload" not in row
+
+
+async def test_the_stored_payload_has_no_secret_at_any_depth(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    """The HTTP-level counterpart to the `redact` unit test: secret-bearing
+    keys at any depth, and the secret inline in free text."""
+    await _post(
+        client,
+        alert_body(
+            note=f"placed with {SECRET}",
+            nested={"inner": {"token": SECRET, "api_key": SECRET}, "passphrase": SECRET},
+        ),
+    )
+    await _trader(app, client)
+    event_id = (await _events(client))["items"][0]["id"]
+
+    r = await client.get(f"/v1/webhooks/events/{event_id}")
+    assert r.status_code == 200
+    assert SECRET not in r.text
+
+    def keys(value: object) -> set[str]:
+        if isinstance(value, dict):
+            return set(value) | {k for v in value.values() for k in keys(v)}
+        if isinstance(value, list):
+            return {k for v in value for k in keys(v)}
+        return set()
+
+    from app.webhooks.schema import SECRET_KEYS
+
+    assert not (keys(r.json()["payload"]) & set(SECRET_KEYS))
+
+
+async def test_a_plain_text_alert_read_back_shows_the_secret_replaced(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    """A Pine `alert()` can send a bare string carrying the secret inline.
+    It is wrapped, authenticated weakly, and redacted by substring."""
+    await _post(client, f"buy EURUSD {SECRET}")
+    await _trader(app, client)
+    event_id = (await _events(client))["items"][0]["id"]
+
+    r = await client.get(f"/v1/webhooks/events/{event_id}")
+    assert r.status_code == 200
+    assert SECRET not in r.text
+    assert "[redacted]" in r.text
+    assert r.json()["auth_strength"] == "weak"
+
+
+async def test_the_recorded_error_text_never_carries_the_secret(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    """`error` is derived from the UNREDACTED payload -- `parse_alert` runs
+    against the raw body -- and the messages for an unsupported `action` and
+    an unparseable `time` each echo up to 32 characters of what the caller
+    sent. Serving that column over HTTP is new, so `parse_alert` now reads
+    the redacted copy and the echo reads `'[redacted]'`.
+
+    The assertion is on the first 32 characters deliberately. The whole
+    secret is 33, so an `assert SECRET not in error` would pass on the
+    truncation alone and prove nothing -- what this guards against is 32 of
+    a 33-character secret, which is not a near miss.
+    """
+    await _post(client, alert_body(action=SECRET))
+    await _post(client, alert_body(time=SECRET, id="second"))
+    await _trader(app, client)
+
+    body = await _events(client, status="rejected")
+    assert body["page"]["total"] == 2
+    for row in body["items"]:
+        assert row["error"]
+        assert SECRET not in row["error"]
+        assert SECRET[:32] not in row["error"], row["error"]
+        assert "[redacted]" in row["error"]
+
+
+async def test_an_unknown_status_filter_is_refused_rather_than_ignored(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    """Fail closed. A filtered-looking page that is actually the whole table
+    is a false statement about the record."""
+    await _post(client, alert_body())
+    await _trader(app, client)
+    r = await client.get("/v1/webhooks/events", params={"status": "accpeted"})
+    assert r.status_code == 422
+    detail = r.json()["error"]["detail"]
+    for allowed in ("accepted", "rejected", "duplicate"):
+        assert allowed in detail
+
+
+async def test_an_unknown_auth_strength_filter_is_refused(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    await _trader(app, client)
+    r = await client.get("/v1/webhooks/events", params={"auth_strength": "medium"})
+    assert r.status_code == 422
+    assert "strong" in r.json()["error"]["detail"]
+
+
+async def test_an_unknown_sort_field_is_refused_and_says_what_is_sortable(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    await _trader(app, client)
+    r = await client.get("/v1/webhooks/events", params={"sort": "payload"})
+    assert r.status_code == 422
+    assert "received_at" in r.json()["error"]["detail"]
+
+
+async def test_a_limit_above_the_ceiling_is_refused_rather_than_truncated(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    await _trader(app, client)
+    assert (await client.get("/v1/webhooks/events", params={"limit": 10000})).status_code == 422
+
+
+async def test_a_reversed_time_window_is_refused(app: FastAPI, client: AsyncClient) -> None:
+    await _trader(app, client)
+    r = await client.get(
+        "/v1/webhooks/events",
+        params={"from_time": "2026-09-05T00:00:00Z", "to_time": "2026-09-01T00:00:00Z"},
+    )
+    assert r.status_code == 422
+
+
+async def test_a_time_window_with_an_offset_filters_rather_than_raising(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    """`received_at` is stored naive-UTC and the caller may send an offset.
+    Comparing aware to naive raises on some drivers, so the bound is
+    normalised the same way the gateway normalises the write."""
+    await _post(client, alert_body())
+    await _trader(app, client)
+    past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    assert (await _events(client, from_time=past, to_time=future))["page"]["total"] == 1
+    assert (await _events(client, from_time=future))["page"]["total"] == 0
+
+
+async def test_the_list_is_newest_first_by_default(app: FastAPI, client: AsyncClient) -> None:
+    for n in range(3):
+        await _post(client, alert_body(id=f"tv-{n}"))
+    await _trader(app, client)
+    stamps = [row["received_at"] for row in (await _events(client))["items"]]
+    assert stamps == sorted(stamps, reverse=True)
+
+
+async def test_an_unknown_event_id_is_404(app: FastAPI, client: AsyncClient) -> None:
+    await _trader(app, client)
+    r = await client.get("/v1/webhooks/events/no-such-event")
+    assert r.status_code == 404
+    assert r.json()["error"]["request_id"]
+
+
+async def test_reading_the_event_log_writes_nothing(app: FastAPI, client: AsyncClient) -> None:
+    await _post(client, alert_body())
+    await _trader(app, client)
+    before = (await _count(app, WebhookEvent), await _count(app, Signal))
+    event_id = (await _events(client))["items"][0]["id"]
+    assert (await client.get(f"/v1/webhooks/events/{event_id}")).status_code == 200
+    assert (await _count(app, WebhookEvent), await _count(app, Signal)) == before
+
+
+async def test_the_read_surface_holds_no_secret() -> None:
+    """Structural, not behavioural: the read handlers do not reach the
+    gateway and the module imports no settings, so there is no live secret
+    in this path that could be put back into a redacted payload."""
+    import inspect
+
+    import app.api.v1.webhooks as module
+
+    for handler in (module.list_webhook_events, module.get_webhook_event):
+        # The function BODY. `inspect.getsource` on a routed handler includes
+        # the decorator, whose description talks about the secret in prose --
+        # asserting over that would be asserting about documentation.
+        source = inspect.getsource(handler)
+        body = source[source.index("async def ") :]
+        assert "_gateway" not in body
+        assert "webhook_gateway" not in body
+        assert "secret" not in body.lower()
+    names = set(dir(module))
+    assert not (names & {"Settings", "get_settings", "settings"})
+
+
+async def test_the_event_list_works_when_no_secret_is_configured(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    """Fail closed on write, still readable on read -- which is when an
+    operator most needs it. An unconfigured receiver refuses every alert and
+    stores nothing, and the list honestly shows an empty page."""
+    app.state.webhook_gateway = WebhookGateway(secret="", mode="paper")
+    assert (await _post(client, alert_body())).status_code == 401
+    await _trader(app, client)
+    body = await _events(client)
+    assert body["page"]["total"] == 0
+    assert body["items"] == []

@@ -256,6 +256,44 @@ class AuditLogOut(BaseModel):
     details: dict | None
 
 
+class WebhookEventOut(BaseModel):
+    """One recorded alert, metadata only.
+
+    The payload is deliberately absent: a 200-row page carrying bodies would
+    spill far more than the question "did our alert arrive" needs. Read one
+    event for it.
+    """
+
+    model_config = _ORM
+
+    id: str
+    provider: str
+    received_at: datetime
+    status: str
+    auth_strength: str
+    source_ip: str | None
+    signal_id: str | None
+    error: str | None
+    # For a rejection this is `tv:rej:<logical key>:<timestamp>`, because a
+    # rejection stored under the alert's own key would occupy the UNIQUE index
+    # and block the corrected resend. It is the only thing tying a rejection
+    # back to the alert it came from, so it is served as text and nothing
+    # joins on it.
+    idempotency_key: str
+
+
+class WebhookEventDetailOut(WebhookEventOut):
+    """The same row, with the payload exactly as it is stored.
+
+    It was redacted on write (`app/webhooks/gateway.py`), by the only code
+    that ever holds the secret. Nothing here re-redacts, for the reason
+    `AuditLogOut` does not: scrubbing on read would require handing the read
+    path the live secret, which is strictly worse than not having it.
+    """
+
+    payload: dict | None
+
+
 class TradingSafetyOut(BaseModel):
     """What the platform is allowed to do, and why it is not allowed to do more.
 

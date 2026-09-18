@@ -345,6 +345,7 @@ async def test_unmapped_provider_symbol_is_not_guessed(signed_in: AsyncClient) -
         "/v1/accounts/paper",
         "/v1/admin/audit-logs",
         "/v1/system/safety",
+        "/v1/webhooks/events",
     ],
 )
 async def test_every_data_route_refuses_anonymous_access(client: AsyncClient, path: str) -> None:
