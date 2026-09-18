@@ -1,8 +1,9 @@
 # PROJECT_STATUS.md
 
 Generated 2026-09-18 from the repository, the crash journal, the session logs,
-the ledger and a live read of the venue. Updated again that evening; see
-[What changed on 2026-09-18](#what-changed-on-2026-09-18).
+the ledger and a live read of the venue. Updated overnight on 2026-09-19; see
+[What changed overnight on 2026-09-19](#what-changed-overnight-on-2026-09-19)
+and [What changed on 2026-09-18](#what-changed-on-2026-09-18).
 
 **Current Status:** `HARNESS_FENCED` → `SOAK_REQUIRED`, and the soak is not
 producing clean evidence because the host keeps falling asleep.
@@ -32,15 +33,68 @@ and the fix that was supposed to prevent it does not work.**
 | **Trading Mode** | `paper` — `live_trading: false`, 12 live blockers, `assert_demo` in code |
 | **Account** | `5055473926 @ MetaQuotes-Demo` **[DEMO]** · **FLAT** as of 09-18 16:10 — 0 open positions, 0 pending, balance 99,919.45 USD, equity the same. 632 closed trades on the venue, 09-04 to 09-17, net −80.55 |
 | **Running processes** | none trading. MT5 terminal open and idle |
-| **Preflight** | `tools/preflight.py`, 11 checks, read-only. Last run **NOT_READY** on two counts: the machine is **on battery**, where Microsoft terminates execution power requests 5 minutes after the sleep timeout, and a Saturday deadline is outside the venue's week. Everything else green |
+| **Preflight** | `tools/preflight.py`, 11 checks, read-only. Re-run 2026-09-19 02:0x: **10 of 11 green, one FAIL**, and the FAIL is the guard working — a 06:00 deadline lands on the venue's Saturday. **The battery finding is cleared**: `on_ac_power` reports mains, so the execution power request has no documented expiry. Terminal connected, algo trading on, account flat |
 | **Operator entry point** | `run.bat` — double-click menu, 17 options, the three that send orders each behind a typed YES |
-| **CI** | **red since 2026-09-13** (`4305cd7` was the last green). Two separate causes, both now fixed; the run on `8385a5d` has 5 of 6 jobs green with `backend` still going. See [CI](#ci-was-red-for-five-days-and-only-half-of-it-was-new) |
+| **CI** | **GREEN.** All seven jobs on `fc17aff` and again on `53f33c8` (2026-09-19). The last failing step was `Run mypy`, red since `d5d47c9` because the local gate had only been run over `app/` while CI runs it over `app/` and `tests/`. See [CI](#ci-was-red-for-five-days-and-only-half-of-it-was-new) |
 | **TradingView Status** | gateway built (hmac, age check, idempotency, body cap). **Never exercised end to end** — no broker account registered |
 | **MT5 Status** | one adapter, one `order_send` on the platform path; 4 on the harness path, all four behind the Risk Engine — the opening order needs an `Approval`, the three closing ones are recorded and never refused |
 | **Risk Status** | 33+ veto codes — weekly loss, consecutive losses and correlation added at P4. RiskEngine is the final veto on **both** paths as of P2 |
 | **Windows Build Status** | **exists.** `dist/trade-research/` onedir, rebuilt 09-15 09:36, plus a legacy onefile `dist/trade-research.exe` from 09-12. Built by `build_exe.py`. *(This row said "none" until 09-18; it was stale.)* |
 | **Stability** | **three sessions have now reached a deadline; one of the three flushed clean.** The limiting factor is no longer the code path — it is the host sleeping. See [Modern standby](#modern-standby-is-eating-the-soak) |
-| **Tests** | **toolkit lane green: 108 passed in 7.8s** (re-run 09-18, including 8 new tests for the fixes below). Backend suite last recorded 09-12 at 2,976 passed / 0 failed (21m33s). `ruff` + `mypy` are clean over `backend/` — **and only `backend/`**: `.github/workflows/tests.yml` runs both with `working-directory: backend`, so `tools/` has never been lint- or type-gated and carries pre-existing findings in both |
+| **Tests** | **toolkit lane green: all ten files pass** (re-run 2026-09-19). **Backend suite green at 3242 passed, 12 skipped in 19:02** on the same date — up from 2,976 on 09-12, the difference being the Tier-1 work below. `ruff` + `mypy` are clean over `backend/` — **and only `backend/`**: `.github/workflows/tests.yml` runs both with `working-directory: backend`, so `tools/` has never been lint- or type-gated and carries pre-existing findings in both |
+
+## What changed overnight on 2026-09-19
+
+Four items off the Tier-1 wiring list, each one the same shape of defect:
+**a mechanism that was built, tested, and never given a caller.** None of
+them is new capability; all four are seats that were left empty.
+
+| | what had no caller | commit |
+|---|---|---|
+| **3** | `app/brokers/validation.py::validate_order` — written for one call and invoked by nothing in `app/`, so a volume the venue would refuse was discovered by the venue refusing it | `fc17aff` |
+| **4** | `OrderManager.reconcile` — the only exit from `unknown`, reachable only by a human POSTing to `/v1/orders/{id}/reconcile` | `24f44ad` |
+| **6** | `webhook_events` — a complete write path since L09 with no GET over it, so "did our alert arrive, and why did it not act" needed a database client | `53f33c8` |
+| **5** | `PositionMonitor` and all nine exit policies — `grep PositionMonitor app/` found the class, its module and a docstring, and no construction site | `542114d` |
+
+Three defects were found by adversarially reviewing item 3's own diff before
+it was pushed, and each fix was confirmed by reverting it and watching the
+matching test go red:
+
+* `_venue_spec` re-read the venue's **entire** symbol table on every attempt
+  for a symbol it does not list — on MT5 a full `symbols_get()` per signal —
+  while its docstring and its test both claimed one refresh.
+* Moving the spec check ahead of `place_order` silently removed the only
+  end-to-end cover of `submit`'s `except BrokerError` branch. That branch
+  could be deleted with the whole suite still green.
+* `MT5Adapter.get_symbols` turned `symbols_get() -> None` into `[]`, so an
+  unreadable terminal read as "this venue lists no symbols" — erasing the
+  exact distinction the two new refusal codes draw, and caching it for five
+  minutes.
+
+Item 5 carried two more of its own. The feed quote path in the close route
+**had never worked**: `service.get_quote(db, code)` against a method that
+takes `(db, internal_symbol, provider)` is a TypeError, swallowed by a bare
+`except Exception`, and the result's quote was then read at `.bid` rather
+than `.quote.bid`. Either defect alone made the fallback dead, so a position
+with no reachable venue could not be closed at all and the refusal read as
+"no usable quote" rather than as a bug. And nothing in `app/` had ever set
+`MarketState.atr`, so both stop movers would have refused on every tick — a
+configured deployment silently doing nothing.
+
+**Every new worker and every new exit defaults to OFF**, and for the exits
+that is a measurement rather than caution: a 3.0 ATR trail measured a median
+out-of-sample expectancy of −217 at D1 against −58 for the fixed 1.5×1.5
+bracket, across a 16×8 grid in which all eight exits were negative.
+
+`tools/project_state.py` was asking only the nginx proxy on `:8080` for the
+API's health. nginx is not in the default compose set, so regenerating
+`PROJECT_STATE.json` wrote `api_reachable: false` and nulled `trading_mode`,
+`live_trading` and `live_blockers` — the three fields the file exists for —
+while the API was up and healthy on `:8000`. It now tries the proxy first,
+falls back to the direct port, and records which door answered.
+
+**Nothing traded.** No session was started, no order was sent, and the
+account is unchanged at 0 open positions and 99,919.45.
 
 ## What changed on 2026-09-18
 
@@ -444,12 +498,14 @@ says READY.** Double-click `run.bat` and choose 17, or:
 python tools/preflight.py --until-hour 6
 ```
 
-It is currently **NOT_READY on two counts**, and the first is the one that
-matters: this machine is **on battery**, where Microsoft terminates system and
-execution power requests five minutes after the sleep timeout expires. A soak
-started that way lapses mid-session and produces another worthless night —
-the exact failure the last three weeks went into. The second is the calendar
-and resolves itself on Sunday.
+~~It is currently NOT_READY on two counts~~ — **one count, as of
+2026-09-19.** The battery finding is cleared: preflight reports `on_ac_power:
+on mains`, so the execution power request no longer has the five-minute
+expiry Microsoft applies on DC, and the soak can produce evidence worth
+having. What remains is the calendar, and it is not a fault: a 06:00 deadline
+lands on the venue's Saturday, where every close is refused with 10018. The
+dry run names the next one that works — **Mon 21 Sep 06:00, so start the
+evening before, Sun 20 Sep.**
 
 **3. Run one full-length session and read its timestamps.** The sleep fix and
 the wall-clock flush budget are in, but **the only thing that closes Critical
@@ -461,12 +517,14 @@ power request lapses by design and the run is worthless as evidence.
 **4.** ~~Decide whether the launcher starts a watchdog.~~ **Done 2026-09-18** —
 see High Issues. Full sessions are supervised; wind-downs are not.
 
-**5. Then the MT5 retcode table** — `tools/mt5_retcodes.py`, mapping the codes
-this project has actually observed (10018, 10031, 10030, `TRADE_RETCODE_DONE`)
-to `(class, retryable, transmitted)`, shared by the harness and
-`backend/app/brokers/mt5.py` so both paths classify a refusal the same way.
-Half a day, and it generalises the `UNKNOWN`-vs-`REJECTED` fix above rather
-than leaving it as one special case.
+**5.** ~~Then the MT5 retcode table.~~ **Done 2026-09-18** (`6e3ee22`) —
+`tools/mt5_retcodes.py`, seeded only from the eight codes this repository has
+actually observed across 2,180 ledger rows. An unseen code classifies as
+`UNCLASSIFIED` and is surfaced as its raw integer rather than guessed at. It
+carries two fields rather than one, and the second is the one callers use:
+`transmitted` asks whether the request reached the server, `booked` asks
+whether anything exists at the venue because of it. Finding a 10025 that had
+been treated as a failed repair cost one position.
 
 **6. Then a bounded, verified reconnect on `VenueUnreadable`** — Critical 4.
 Verify by identity, not by the call answering: re-read `account_info()` and
