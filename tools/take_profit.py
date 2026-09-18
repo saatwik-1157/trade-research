@@ -45,6 +45,7 @@ except (AttributeError, OSError):
 
 import kill_switch
 import mt5_paper
+import mt5_retcodes
 import risk_gate
 from mt5_paper import RefuseToTrade
 
@@ -591,8 +592,19 @@ def flush_until_flat(mt5, live: bool, attempts: int = FLUSH_ATTEMPTS,
         # Every refusal is "the market is shut". Say so once and stop, rather
         # than proving it five more times -- and say what it means, because
         # "still open" after a flush reads like a bug when it is a calendar.
-        market_closed = bool(failures) and all(
-            r.get("retcode") == MARKET_CLOSED for r in failures)
+        # ASK THE TABLE, not one integer. This compared against 10018 alone,
+        # so a flush refused for a reason retrying genuinely cannot fix --
+        # 10017, "trade disabled", which this account has actually seen --
+        # spent the whole budget proving it. The question is not "is it
+        # 10018", it is "is every refusal one the venue will not reconsider
+        # while we wait here", and `REFUSED_VENUE_STATE` with `AFTER_WAIT` or
+        # `NEVER` is exactly that set.
+        verdicts = [mt5_retcodes.classify_row(r) for r in failures]
+        unwaitable = bool(failures) and all(
+            v.cls is mt5_retcodes.Cls.REFUSED_VENUE_STATE
+            and v.retry in (mt5_retcodes.Retry.AFTER_WAIT, mt5_retcodes.Retry.NEVER)
+            for v in verdicts)
+        market_closed = unwaitable
         for r in failures:
             # The retcode is the whole point. 10031 is "no connection with the
             # trade server" and means try again; 10018 is a closed market and
@@ -647,12 +659,25 @@ def flush_until_flat(mt5, live: bool, attempts: int = FLUSH_ATTEMPTS,
                 failures = [{"ticket": None, "symbol": "?",
                              "status": "UNREADABLE_AFTER_CLOSE", "retcode": None}]
         if market_closed:
-            print(f"  [{stamp}] THE MARKET IS CLOSED (retcode {MARKET_CLOSED} on "
-                  f"all {len(failures)}). Retrying cannot change that, so the "
-                  f"flush stops here.", flush=True)
-            print(f"  [{stamp}] {len(failures)} position(s) stay open until the "
-                  "venue reopens. They carry financing and the opening gap.",
+            # Name the actual refusal instead of assuming it is the calendar.
+            # This said "THE MARKET IS CLOSED" for whatever the code was, so a
+            # 10017 -- trade disabled on the symbol, which this account has
+            # seen -- would have been reported as a weekend and waited out
+            # forever. The two need different actions and now read differently.
+            kinds = {v.name or f"retcode {v.code}" for v in verdicts}
+            reopens = all(v.retry is mt5_retcodes.Retry.AFTER_WAIT for v in verdicts)
+            print(f"  [{stamp}] THE VENUE IS REFUSING EVERY CLOSE "
+                  f"({', '.join(sorted(kinds))} on all {len(failures)}). "
+                  f"Retrying now cannot change that, so the flush stops here.",
                   flush=True)
+            if reopens:
+                print(f"  [{stamp}] {len(failures)} position(s) stay open until the "
+                      "venue reopens. They carry financing and the opening gap.",
+                      flush=True)
+            else:
+                print(f"  [{stamp}] {len(failures)} position(s) stay open and "
+                      "waiting will NOT clear this -- the venue is refusing the "
+                      "instrument, not the hour. Close them by hand.", flush=True)
             return closed, failures
         spent = time.monotonic() - started
         if attempt >= attempts and spent >= budget:

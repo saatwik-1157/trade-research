@@ -57,6 +57,7 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import mt5_retcodes
 import paths as _paths
 
 try:
@@ -640,8 +641,20 @@ def place(mt5, symbol: str, side: str, lot: float, sl_atr: float, tp_atr: float,
         })
         out["bracket_repaired"] = True
         out["bracket_repair_retcode"] = getattr(fix, "retcode", None)
-        if getattr(fix, "retcode", None) == mt5.TRADE_RETCODE_DONE:
+        # NO_CHANGES IS NOT A FAILED REPAIR. 10025 means the venue already
+        # held the levels being asked for, so the bracket is correct and
+        # there is nothing to escape from. Treating anything that is not DONE
+        # as a failure sent the emergency close on a position whose stops
+        # were fine -- and it happened: EURUSD, 2026-09-07, the one 10025 in
+        # the ledger, closed for no reason.
+        #
+        # This is the case the taxonomy was written for. A boolean "did it
+        # work" cannot express "it did not need to", and that gap cost a
+        # position.
+        repair = mt5_retcodes.classify(fix, action="modify")
+        if repair.cls in (mt5_retcodes.Cls.DONE, mt5_retcodes.Cls.MOOT):
             out["sl"], out["tp"] = round(new_sl, info.digits), round(new_tp, info.digits)
+            out["bracket_repair_moot"] = repair.cls is mt5_retcodes.Cls.MOOT
         else:
             # Could not fix it and cannot leave it: both exits are against the
             # position, so holding is a guaranteed loss with no upside branch.

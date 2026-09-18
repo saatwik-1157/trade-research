@@ -566,6 +566,51 @@ excluded by position id with `--exclude`, taken from the platform's own
 existing record's provenance rests on the fact that nothing else traded this
 login before that day - not on anything in the file.
 
+## Before branching on an MT5 retcode
+
+`tools/mt5_retcodes.py` holds the table, and it is seeded ONLY from codes this
+repository has actually observed. The manual lists dozens more; a row for one
+of those would be a figure nobody here measured. An unseen code classifies as
+`UNCLASSIFIED` and is surfaced as its raw integer rather than guessed at.
+
+Eight codes have evidence across 2,180 ledger rows: 10009 DONE (1,964),
+10018 market closed (82), 10031 no connection (85), 10016 invalid stops (10),
+10030 unsupported filling (1), 10017 trade disabled (1), 10025 no changes (1),
+and 10036, seen once with an empty comment and left deliberately unexplained.
+
+Two fields rather than one, and the second is the one callers actually use.
+`transmitted` asks whether the request reached the server; **`booked` asks
+whether anything exists at the venue because of it**, which is what decides
+whether a resend can open a SECOND position. Six of the eight are
+transmitted-yes and booked-no, which is the safe combination, so collapsing
+them loses the distinction. `retry` is five-valued for the same reason: four
+codes mean "resending THIS request is futile, a corrected one is fine", and a
+boolean licenses either a pointless loop or a missed recovery.
+
+**The action changes the answer for 10031.** On a close it is retryable now —
+the position is still there and closing it twice is not a second position. On
+an open it is not, because the order may have landed.
+
+**10016 at this broker is a clock, not a geometry fault.** All eight order
+refusals fall in the single minute 21:00–21:01 UTC, and *every* order attempt
+in that minute was refused — 8 of 8, against 2 of 1,141 at every other
+minute. 21:00 UTC is 00:00 server time, which is rollover, where the M1 range
+is already measured as exceeding the 1.5×ATR bracket 14.3% of the time. The
+venue is rejecting stops it cannot honour inside a band that wide. The
+brackets in those rows straddle their entries correctly, so the request was
+never the problem.
+
+That is a validity argument, not a cost one, and the two do not trade off —
+the rollover-hour filter was retired on cost grounds and this is separate. A
+refused order is not an expensive trade, it is no trade at all, and eight
+passes spent being refused observed nothing.
+
+**10025 is not a failed repair, and treating it as one cost a position.**
+`NO_CHANGES` means the venue already held the levels being asked for, so the
+bracket was correct. `place()` treated anything that was not DONE as a failed
+repair and fired the emergency close: EURUSD, 2026-09-07, the only 10025 in
+the ledger, closed for no reason. `MOOT` is its own class for exactly this.
+
 ## Read the fill, never the quote
 
 One live trade was a loss fixed at order time, and the order log hid it for

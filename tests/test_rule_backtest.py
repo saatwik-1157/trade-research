@@ -2618,6 +2618,10 @@ def main():
     test_a_done_that_leaves_the_position_open_is_not_flat()
     test_a_dry_run_does_not_wait_for_a_book_it_never_changed()
     test_supertrend_is_actually_supertrend()
+    test_the_retcode_table_only_holds_codes_this_repo_has_seen()
+    test_a_retcode_says_whether_a_resend_can_open_a_second_position()
+    test_no_connection_is_retryable_on_a_close_and_not_on_an_open()
+    test_no_changes_is_not_a_failed_bracket_repair()
     test_the_volume_rule_reads_nothing_it_should_not()
     test_an_unreadable_venue_at_the_deadline_does_not_kill_the_session()
     test_the_flush_budget_is_wall_clock_not_attempts()
@@ -2641,5 +2645,114 @@ def main():
     return 0
 
 
+def test_the_retcode_table_only_holds_codes_this_repo_has_seen():
+    """Seeded from the ledger, not from the manual.
+
+    A row for a code nobody here has observed is a figure this project did
+    not measure, which is the thing it refuses to write down. The MT5 manual
+    lists dozens; the ledger holds eight, and eight is what the table has.
+    """
+    print()
+    print("Retcodes - the table is evidence, not documentation")
+
+    import mt5_retcodes as R
+
+    seen = {10009, 10016, 10017, 10018, 10025, 10030, 10031}
+    check("the table holds exactly the codes with evidence",
+          set(R.TABLE) == seen, True)
+    check("and 10036, seen once and never explained, is NOT given a meaning",
+          10036 in R.TABLE, False)
+    check("but it is recorded as unexplained rather than forgotten",
+          10036 in R.UNEXPLAINED, True)
+    for code, v in R.TABLE.items():
+        check(f"  {code} cites its evidence", bool(v.evidence.strip()), True)
+
+
+def test_a_retcode_says_whether_a_resend_can_open_a_second_position():
+    """`transmitted` and `booked` are different questions.
+
+    The first asks whether the request reached the server. The second asks
+    whether anything exists at the venue because of it -- which is what
+    decides if a resend duplicates. For every refusal here the answers
+    differ, so collapsing them into one field would lose the distinction the
+    module exists for.
+    """
+    print()
+    print("Retcodes - transmitted is not booked")
+
+    import mt5_retcodes as R
+
+    refusals = [v for v in R.TABLE.values() if v.cls is not R.Cls.DONE]
+    check("every refusal reached the venue",
+          all(v.transmitted in (R.Tri.YES, R.Tri.UNKNOWN) for v in refusals), True)
+    check("and none of them booked anything it is sure about",
+          all(v.booked in (R.Tri.NO, R.Tri.UNKNOWN) for v in refusals), True)
+
+    done = R.TABLE[10009]
+    check("a DONE booked a position", done.booked, R.Tri.YES)
+    check("and is never resent", done.safe_to_resend, False)
+
+    # The one that cannot be answered, and must not be guessed.
+    nc = R.TABLE[10031]
+    check("no connection leaves BOTH unknown", (nc.transmitted, nc.booked),
+          (R.Tri.UNKNOWN, R.Tri.UNKNOWN))
+    check("so it is never safe to resend", nc.safe_to_resend, False)
+
+
+def test_no_connection_is_retryable_on_a_close_and_not_on_an_open():
+    """Same code, opposite instruction, and the difference is a second lot.
+
+    A close that did not answer can be retried: the position is still there
+    and closing it twice is not a second position. An open that did not
+    answer cannot, because the order may have landed.
+    """
+    print()
+    print("Retcodes - the action decides whether an unanswered send may be retried")
+
+    import mt5_retcodes as R
+
+    class Res:
+        retcode = 10031
+
+    check("a close retries now", R.classify(Res(), action="close").retry, R.Retry.NOW)
+    check("an open does not", R.classify(Res(), action="open").retry, R.Retry.UNKNOWN)
+
+    # An exception at the send is never a venue refusal.
+    exc = R.classify(None, send_error="OSError: IPC pipe closed")
+    check("a raised send is NO_ANSWER, not a refusal", exc.cls, R.Cls.NO_ANSWER)
+    check("and carries no retcode to misread", exc.code, None)
+
+    # A recorded row keeps that distinction, because it was written down.
+    check("a recorded UNKNOWN row reads back as NO_ANSWER",
+          R.classify_row({"status": "UNKNOWN", "send_error": "OSError"}).cls,
+          R.Cls.NO_ANSWER)
+    check("a recorded venue refusal reads back as the venue's answer",
+          R.classify_row({"status": "FAILED", "retcode": 10018}).cls,
+          R.Cls.REFUSED_VENUE_STATE)
+
+
+def test_no_changes_is_not_a_failed_bracket_repair():
+    """10025 cost a position, and a boolean could not express why.
+
+    `place()` treated anything that was not DONE as a failed repair and fired
+    the emergency close. 10025 means the venue ALREADY held the levels being
+    asked for -- the bracket was correct and there was nothing to escape. It
+    happened once, EURUSD on 2026-09-07, the only 10025 in the ledger.
+    """
+    print()
+    print("Retcodes - NO_CHANGES means it did not need doing, not that it failed")
+
+    import mt5_retcodes as R
+
+    v = R.TABLE[10025]
+    check("10025 is MOOT, not a refusal", v.cls, R.Cls.MOOT)
+    check("and nothing was booked by it", v.booked, R.Tri.NO)
+    check("MOOT counts as terminal - stop, do not retry", v.is_terminal, True)
+    check("and it is NOT the same class as a real refusal",
+          v.cls is R.TABLE[10030].cls, False)
+
+
+
 if __name__ == "__main__":
     sys.exit(main())
+
