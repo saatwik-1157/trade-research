@@ -183,6 +183,18 @@ class Gate:
     max_consecutive_losses: int | None = None
     max_open_positions: int | None = None
     max_risk_per_trade: float | None = None
+    #: Refuse an entry when the spread is wider than this, in points.
+    #:
+    #: The harness has MEASURED this since the spread work and never
+    #: configured it: mt5_paper.py computes spread_points on every cycle and
+    #: hands it to the engine, the engine has the check, and `gate_for` left
+    #: the limit None -- so every decision reported it `not_enforced` while
+    #: the number it needed was sitting in the same call.
+    #:
+    #: It matters on this venue specifically. The measured median spread runs
+    #: 3 points on EURUSD and 8 on NZDUSD, but hour 00 at the server is 4x
+    #: normal, and cost is the one lever this project has shown has a sign.
+    max_spread_points: float | None = None
     require_stop_loss: bool = True
 
     equity: float | None = None
@@ -204,6 +216,7 @@ class Gate:
                     max_consecutive_losses=self.max_consecutive_losses or None,
                     max_open_positions=self.max_open_positions or None,
                     max_risk_per_trade=_dec(self.max_risk_per_trade),
+                    max_spread_points=_dec(self.max_spread_points),
                     require_stop_loss=self.require_stop_loss,
                     one_position_per_symbol=True,
                 ),
@@ -395,6 +408,13 @@ def gate_for(args, account=None) -> Gate:
     reaches the order log: weekly loss and correlated exposure have no data
     source on this path yet, and an unfed limit that approved would read in an
     audit as one that was checked.
+
+    `max_spread_points` joined the fed list on 2026-09-18. It had been the
+    odd one out -- measured on every cycle and passed to the engine, but
+    never configured, so the check reported `not_enforced` with the number it
+    needed already in its hand. It stays None unless asked for, on the same
+    reasoning as --risk-usd and --cost-swap: every figure in the live record
+    was taken without it.
     """
     account = account or {}
     return Gate(
@@ -404,4 +424,5 @@ def gate_for(args, account=None) -> Gate:
         max_consecutive_losses=getattr(args, "max_consecutive_losses", 0) or None,
         max_open_positions=getattr(args, "max_positions", None),
         max_risk_per_trade=getattr(args, "max_risk_per_trade", None),
+        max_spread_points=getattr(args, "max_spread_points", None),
     )

@@ -1137,6 +1137,15 @@ def main() -> int:
     ap.add_argument("--tp-atr", type=float, default=1.5)
     ap.add_argument("--max-positions", type=int, default=5)
     ap.add_argument("--max-daily-loss", type=float, default=50.0)
+    ap.add_argument("--max-spread-points", type=float, default=None,
+                    metavar="POINTS",
+                    help="refuse an entry when the spread is wider than this. "
+                         "Off by default. The harness has measured the spread "
+                         "on every cycle since the spread work and handed it "
+                         "to the engine, which had the check and no limit to "
+                         "check against, so every decision reported it "
+                         "not_enforced. Median runs 3 points on EURUSD and 8 "
+                         "on NZDUSD; server hour 00 is about 4x normal")
     ap.add_argument("--max-risk-per-trade", type=float, default=None,
                     metavar="USD",
                     help="refuse an entry whose stop would cost more than this. "

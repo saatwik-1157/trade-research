@@ -1389,3 +1389,64 @@ def test_only_the_risk_engine_can_mint_an_approval() -> None:
         + ". The OMS accepts any Approval, so anything that can build one has "
         "bypassed the Risk Engine."
     )
+
+
+def test_every_risk_limit_is_reachable_from_the_api() -> None:
+    """A limit the API cannot set is a limit that does not exist.
+
+    `RiskLimits` had 23 fields and `LimitsBody` exposed 20. The three missing
+    ones -- max_weekly_loss, max_consecutive_losses, max_correlated_exposure
+    -- were built at P4 with their vetoes, their latching and their
+    fail-closed behaviour, and then had no way in. A limit no layer states is
+    reported `not_enforced` on every decision, so the weekly lock and the
+    correlation check were dead on the platform path: present in the code,
+    absent from every verdict.
+
+    Asserted on the types rather than by listing names, so the next field
+    added to `RiskLimits` fails here instead of being quietly unreachable for
+    another release. That is the whole point -- the gap was silent for as
+    long as it existed and nothing would have reported it.
+    """
+    from app.api.v1.risk import LimitsBody
+
+    declared = {f.name for f in fields(RiskLimits)}
+    exposed = set(LimitsBody.model_fields)
+
+    missing = declared - exposed
+    assert not missing, (
+        "RiskLimits fields with no API field, so nothing can ever set them: "
+        + ", ".join(sorted(missing))
+        + ". A limit that cannot be stated is reported not_enforced forever."
+    )
+
+    # And nothing in the body that the engine would ignore, which would be the
+    # opposite failure: an API that accepts a limit and silently drops it.
+    phantom = exposed - declared
+    assert not phantom, (
+        "LimitsBody accepts fields RiskLimits does not have, so they are "
+        "silently discarded: " + ", ".join(sorted(phantom))
+    )
+
+
+def test_the_three_p4_limits_actually_reach_the_engine() -> None:
+    """Reachable is not the same as wired. Round-trip them through the body.
+
+    `to_limits()` builds the dataclass the engine reads, so a field present
+    on the body but dropped in translation would still be dead. This asserts
+    the value arrives, which is the property the API field exists for.
+    """
+    from app.api.v1.risk import LimitsBody
+
+    body = LimitsBody(
+        max_weekly_loss=Decimal("500"),
+        max_consecutive_losses=3,
+        max_correlated_exposure=Decimal("2.5"),
+    )
+    limits = body.to_limits()
+
+    assert limits.max_weekly_loss == Decimal("500")
+    assert limits.max_consecutive_losses == 3
+    assert limits.max_correlated_exposure == Decimal("2.5")
+
+    # Unstated stays None, which is what `not_enforced` is derived from.
+    assert LimitsBody().to_limits().max_weekly_loss is None

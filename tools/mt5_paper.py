@@ -971,6 +971,15 @@ def main() -> int:
                          "(0 = off). Open positions keep being managed and "
                          "the wind-down still runs; nothing is ever sized up")
     ap.add_argument("--max-daily-loss", type=float, default=500.0)
+    ap.add_argument("--max-spread-points", type=float, default=None,
+                    metavar="POINTS",
+                    help="refuse an entry when the spread is wider than this. "
+                         "Off by default. The harness has measured the spread "
+                         "on every cycle since the spread work and handed it "
+                         "to the engine, which had the check and no limit to "
+                         "check against, so every decision reported it "
+                         "not_enforced. Median runs 3 points on EURUSD and 8 "
+                         "on NZDUSD; server hour 00 is about 4x normal")
     ap.add_argument("--max-risk-per-trade", type=float, default=None,
                     metavar="USD",
                     help="refuse an order whose stop would cost more than this. "

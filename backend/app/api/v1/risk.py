@@ -58,6 +58,20 @@ class LimitsBody(BaseModel):
 
     max_risk_per_trade: Decimal | None = None
     max_daily_loss: Decimal | None = None
+    # Added 2026-09-18. These three were built at P4 with their vetoes, their
+    # latching and their fail-closed behaviour, and then had no way in: the
+    # engine read them, `RiskLimits` declared them, and no API field or
+    # settings key could ever set them to anything but None. A limit no layer
+    # states is reported `not_enforced` on every decision, so the weekly lock
+    # and the correlation check were dead on the platform path -- present in
+    # the code, absent from every verdict.
+    #
+    # `test_every_risk_limit_is_reachable_from_the_api` now fails if a field
+    # is added to `RiskLimits` without one here, because this gap was silent
+    # for as long as it existed and nothing would have reported it.
+    max_weekly_loss: Decimal | None = None
+    max_consecutive_losses: int | None = None
+    max_correlated_exposure: Decimal | None = None
     max_drawdown_pct: Decimal | None = None
     max_exposure_per_currency: Decimal | None = None
     max_open_positions: int | None = None
