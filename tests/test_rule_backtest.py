@@ -1937,12 +1937,25 @@ def test_the_deadline_takes_an_execution_power_request():
     finally:
         take_profit.ctypes = real
 
-    check("a session with a deadline asks for EXECUTION",
-          take_profit.POWER_REQUEST_EXECUTION in with_deadline, True)
-    check("and for SYSTEM alongside it",
-          take_profit.POWER_REQUEST_SYSTEM in with_deadline, True)
-    check("a session with no deadline does NOT take the execution request",
-          take_profit.POWER_REQUEST_EXECUTION in without_deadline, False)
+    # PLATFORM-SPLIT, because the contract genuinely differs and the earlier
+    # version of this test asserted only the Windows half. It passed here and
+    # failed the whole CI matrix on Linux, where `power_request` returns at
+    # `os.name != "nt"` before taking anything -- so "asks for EXECUTION" is
+    # not merely unverifiable there, it is false by design. Stubbing ctypes
+    # does not help: the platform check runs first, which is the point of it.
+    if os.name == "nt":
+        check("a session with a deadline asks for EXECUTION",
+              take_profit.POWER_REQUEST_EXECUTION in with_deadline, True)
+        check("and for SYSTEM alongside it",
+              take_profit.POWER_REQUEST_SYSTEM in with_deadline, True)
+        check("a session with no deadline does NOT take the execution request",
+              take_profit.POWER_REQUEST_EXECUTION in without_deadline, False)
+    else:
+        # The documented no-op. A session off Windows must still RUN, and
+        # must not claim a hold it does not have -- a silent no-op here is a
+        # session that quietly sleeps through its own deadline.
+        check("off Windows no power request is taken at all", with_deadline, [])
+        check("and none without a deadline either", without_deadline, [])
 
 
 def test_a_refused_power_request_is_announced_not_swallowed():
