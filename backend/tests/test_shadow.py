@@ -20,7 +20,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from app.brokers.base import BrokerAdapter, NotConnected, OrderRequest, OrderStatus
+from app.brokers.base import BrokerAdapter, NotConnected, OrderRequest, OrderStatus, SymbolInfo
 from app.brokers.fake import FakeBroker
 from app.brokers.shadow import ShadowBroker, ShadowDecision
 from app.execution import ExecutionPipeline, IncomingSignal, StrategyState, created_an_order
@@ -28,6 +28,23 @@ from app.oms.registry import OrderManagerRegistry
 from app.risk.engine import RiskEngine, RiskLimits
 from app.sizing.calculator import SizingMethod
 from app.symbols.service import ContractSpec
+
+# The venue's own contract terms. Required since OrderManager.submit
+# began validating against them: FakeBroker.symbols defaults EMPTY, and
+# an absent spec is a refusal by design -- giving the simulator a
+# built-in default would make it the one path where an unspecced symbol
+# passes, which is the fail-open the check removes.
+VENUE_SPEC = SymbolInfo(
+    symbol="EURUSD",
+    digits=5,
+    point=Decimal("0.00001"),
+    contract_size=Decimal("100000"),
+    tick_size=Decimal("0.00001"),
+    tick_value=Decimal("1"),
+    volume_min=Decimal("0.01"),
+    volume_max=Decimal("100"),
+    volume_step=Decimal("0.01"),
+)
 
 BACKEND = Path(__file__).resolve().parents[1]
 
@@ -53,6 +70,12 @@ SPEC = ContractSpec(
 async def shadow() -> AsyncIterator[ShadowBroker]:
     broker = ShadowBroker()
     await broker.connect()
+    # The shadow venue needs the spec for the same reason the paper one does:
+    # OrderManager.submit validates against the adapter's contract terms, and
+    # this test's whole claim is that both adapters agree up to execution. A
+    # shadow refused for a missing spec while paper filled would be a
+    # difference in the harness, not in the venue.
+    broker.symbols["EURUSD"] = VENUE_SPEC
     yield broker
     await broker.disconnect()
 
@@ -197,6 +220,7 @@ async def test_shadow_and_paper_make_the_same_decision(shadow: ShadowBroker) -> 
     paper = FakeBroker(mode="paper")
     await paper.connect()
     paper.set_quote("EURUSD", "1.10000", "1.10002")
+    paper.symbols["EURUSD"] = VENUE_SPEC
     now = datetime.now(UTC) + timedelta(seconds=5)
 
     shadow_result = await _pipeline(shadow).process(_signal(), now=now)

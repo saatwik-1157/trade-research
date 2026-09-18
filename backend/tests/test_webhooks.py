@@ -20,6 +20,7 @@ from decimal import Decimal
 
 import pytest
 from app.auth.models import Role, User
+from app.brokers.base import SymbolInfo
 from app.core.settings import Settings
 from app.db.base import Base
 from app.main import create_app
@@ -40,6 +41,23 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
+
+# The venue's own contract terms. Required since OrderManager.submit
+# began validating against them: FakeBroker.symbols defaults EMPTY, and
+# an absent spec is a refusal by design -- giving the simulator a
+# built-in default would make it the one path where an unspecced symbol
+# passes, which is the fail-open the check removes.
+VENUE_SPEC = SymbolInfo(
+    symbol="EURUSD",
+    digits=5,
+    point=Decimal("0.00001"),
+    contract_size=Decimal("100000"),
+    tick_size=Decimal("0.00001"),
+    tick_value=Decimal("1"),
+    volume_min=Decimal("0.01"),
+    volume_max=Decimal("100"),
+    volume_step=Decimal("0.01"),
+)
 
 SECRET = "a-long-random-shared-secret-value"
 ALICE = {"email": "alice@tr-platform.io", "password": "correct horse battery"}
@@ -871,6 +889,7 @@ async def test_an_alert_becomes_an_order_through_the_deployed_wiring(
     venue = FakeBroker(mode="paper")
     await venue.connect()
     venue.set_quote("EURUSD", "1.10000", "1.10002")
+    venue.symbols["EURUSD"] = VENUE_SPEC
     app.state.order_managers.register("acct-a", venue, mode="paper", broker="fake")
 
     r = await _post(client, alert_body(strategy="rsi_reversion", sl="1.09500", tp="1.11000"))

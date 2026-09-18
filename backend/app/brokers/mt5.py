@@ -194,7 +194,16 @@ class MT5Adapter(BrokerAdapter):
 
     async def get_symbols(self) -> list[SymbolInfo]:
         mt5 = self._require()
-        rows = await self._call(mt5.symbols_get) or []
+        rows = await self._call(mt5.symbols_get)
+        if rows is None:
+            # `symbols_get()` answers None when the terminal cannot serve the
+            # request, and `or []` read that as "this venue lists nothing".
+            # The caller cannot tell those apart from the outside, and one of
+            # them is a reason to refuse an order for good while the other is
+            # a reason to say the venue could not be read -- `OrderManager`
+            # has a separate code for each. An empty TUPLE is still an empty
+            # answer and stays one.
+            raise NotConnected("the terminal returned no symbol list")
         out = []
         for info in rows:
             out.append(

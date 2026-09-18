@@ -21,12 +21,13 @@ from __future__ import annotations
 
 import ast
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from app.brokers.base import OrderResult, SymbolInfo
+from app.brokers.base import NotConnected, OrderResult, SymbolInfo
 from app.brokers.base import OrderStatus as BrokerOrderStatus
 from app.brokers.fake import FakeBroker
 from app.oms import (
@@ -84,9 +85,13 @@ def proposal(**overrides: object) -> OrderProposal:
 
 def approve(**overrides: object) -> Approval:
     """A genuine Approval. There is no other way to build one, which is the
-    guarantee the OMS rests on."""
+    guarantee the OMS rests on. `at` is the decision time; an approval
+    expires a minute after it, so a test that submits later must decide
+    later too."""
+    at = overrides.pop("at", T0)
+    assert isinstance(at, datetime)
     engine = RiskEngine(RiskLimits(require_stop_loss=False))
-    approval, verdict = engine.approve(proposal(**overrides), PortfolioState(), now=T0)
+    approval, verdict = engine.approve(proposal(**overrides), PortfolioState(), now=at)
     assert approval is not None, verdict.reason
     return approval
 
@@ -796,6 +801,7 @@ def test_the_status_report_states_the_retry_policy(oms: OrderManager) -> None:
         "orders_cancelled",
         "orders_rejected",
         "orders_failed",
+        "orders_refused_on_venue_spec",
         "orders_unknown",
         "orders_reconciled",
         "duplicate_orders_prevented",
@@ -1442,5 +1448,298 @@ def test_a_position_this_system_did_not_open_is_never_adopted(
 
     # Our own is taken, and a position with no magic still is -- the paper and
     # fake brokers do not set one and this must stay broker-agnostic.
-    assert oms._match_position(order, [harness, at(MAGIC)]).magic == MAGIC
+    own = oms._match_position(order, [harness, at(MAGIC)])
+    assert own is not None and own.magic == MAGIC
     assert oms._match_position(order, [at(None)]) is not None
+
+
+# ================== Tier-1 item 3: the venue's terms, checked before any send
+
+
+@dataclass
+class TermsVenue(FakeBroker):
+    """A FakeBroker whose contract-terms endpoint can be counted or broken
+    independently of its order endpoint, so a test can tell WHICH call an
+    order was refused on."""
+
+    reads: int = 0
+    terms_down: bool = False
+
+    async def get_symbols(self) -> list[SymbolInfo]:
+        self.reads += 1
+        if self.terms_down:
+            raise NotConnected("the terms endpoint is down; orders still accepted")
+        return await super().get_symbols()
+
+
+async def terms_venue(**overrides: object) -> TermsVenue:
+    venue = TermsVenue(mode="demo", **overrides)  # type: ignore[arg-type]
+    await venue.connect()
+    venue.set_quote("EURUSD", "1.10000", "1.10002")
+    venue.symbols["EURUSD"] = SPEC
+    return venue
+
+
+def refused_on_terms(order: ManagedOrder, code: str) -> str:
+    """Assert the refusal and hand back its reason, which is never empty."""
+    assert order.status is OrderStatus.failed, order.status
+    assert order.error_code == code, (order.error_code, order.reject_reason)
+    assert order.reject_reason
+    return order.reject_reason
+
+
+async def test_a_volume_off_the_venue_step_is_refused_before_anything_is_sent(
+    oms: OrderManager, broker: FakeBroker
+) -> None:
+    """`validate_order` existed for exactly this and had no caller; a volume
+    the venue would refuse was discovered by the venue refusing it. 0.037 is
+    a legal risk decision and an illegal MT5 volume at a 0.01 step."""
+    order = oms.create(
+        approve(volume=Decimal("0.037")), intent_id="i-1", account_id="acct-a", at=T0
+    ).order
+    out = await oms.submit(order, at=T0)
+    reason = refused_on_terms(out, "VENUE_SPEC_REFUSED")
+    assert "not a multiple of the step 0.01" in reason
+    assert "0.03" in reason, "the nearest legal volume is named, not applied"
+    assert broker._orders_placed == 0, "the venue was sent an order it would refuse"
+    assert oms.status()["orders_refused_on_venue_spec"] == 1
+
+
+async def test_a_volume_below_the_venue_minimum_is_refused(
+    oms: OrderManager, broker: FakeBroker
+) -> None:
+    order = oms.create(
+        approve(volume=Decimal("0.005")), intent_id="i-1", account_id="acct-a", at=T0
+    ).order
+    out = await oms.submit(order, at=T0)
+    reason = refused_on_terms(out, "VENUE_SPEC_REFUSED")
+    assert "below the venue minimum 0.01" in reason
+    assert broker._orders_placed == 0
+
+
+async def test_a_symbol_the_venue_does_not_list_is_refused(
+    oms: OrderManager, broker: FakeBroker
+) -> None:
+    """The venue answered, and the answer did not contain the symbol. That is
+    a refusal in its own right, not a missing input to default around."""
+    del broker.symbols["EURUSD"]
+    order = oms.create(approve(), intent_id="i-1", account_id="acct-a", at=T0).order
+    out = await oms.submit(order, at=T0)
+    reason = refused_on_terms(out, "VENUE_SPEC_REFUSED")
+    assert "no symbol specification for 'EURUSD'" in reason
+    assert broker._orders_placed == 0
+
+
+async def test_unreadable_venue_terms_refuse_rather_than_guess() -> None:
+    """The venue would have TAKEN the order -- `place_order` works -- and it
+    is still refused, because the terms could not be read and an order sent
+    without them is priced from a guess. Restoring the endpoint is enough:
+    no state is left behind by the refusal."""
+    venue = await terms_venue(terms_down=True)
+    oms = OrderManager(venue, mode="demo", broker="fake")
+
+    order = oms.create(approve(), intent_id="i-1", account_id="acct-a", at=T0).order
+    out = await oms.submit(order, at=T0)
+    reason = refused_on_terms(out, "VENUE_SPEC_UNREADABLE")
+    assert "NotConnected" in reason
+    assert "priced from a guess" in reason
+    assert venue._orders_placed == 0
+    assert oms.status()["orders_refused_on_venue_spec"] == 1
+
+    venue.terms_down = False
+    again = oms.create(approve(), intent_id="i-2", account_id="acct-a", at=T0).order
+    assert (await oms.submit(again, at=T0)).status is OrderStatus.filled
+    assert venue._orders_placed == 1
+
+
+async def test_a_venue_spec_refusal_never_looks_like_a_send(
+    oms: OrderManager, broker: FakeBroker
+) -> None:
+    """`submitting` is the evidence a send was in flight, and it is what a
+    restart reconciles against the venue. A refusal sends nothing, so it
+    must leave none of that evidence: `intent -> failed` in one step, and
+    not counted among the submitted."""
+    order = oms.create(
+        approve(volume=Decimal("0.037")), intent_id="i-1", account_id="acct-a", at=T0
+    ).order
+    out = await oms.submit(order, at=T0)
+    assert [(t.previous, t.new) for t in out.transitions] == [
+        (OrderStatus.intent, OrderStatus.failed)
+    ]
+    assert OrderStatus.submitting not in {t.new for t in out.transitions}
+    assert out.needs_reconciliation is False
+    status = oms.status()
+    assert status["orders_submitted"] == 0
+    assert status["orders_failed"] == 1
+    assert status["unresolved"] == []
+
+
+async def test_a_venue_spec_refusal_leaves_the_intent_free_to_resend(
+    oms: OrderManager, broker: FakeBroker
+) -> None:
+    """A refused-on-terms order is the one kind of failure a corrected order
+    may follow: nothing reached the venue, so a resend cannot make two."""
+    order = oms.create(
+        approve(volume=Decimal("0.037")), intent_id="i-1", account_id="acct-a", at=T0
+    ).order
+    await oms.submit(order, at=T0)
+    assert can_resend(order.status)
+    oms.guard_resend("i-1")  # would raise for `unknown` or `submitting`
+
+    corrected = oms.create(
+        approve(volume=Decimal("0.03")), intent_id="i-1-corrected", account_id="acct-a", at=T0
+    ).order
+    assert (await oms.submit(corrected, at=T0)).status is OrderStatus.filled
+    assert broker._orders_placed == 1
+
+
+async def test_the_venue_terms_are_read_once_per_cache_window() -> None:
+    """One `get_symbols` per window, not one per order: the read is a venue
+    round trip on the critical path of every send."""
+    venue = await terms_venue()
+    oms = OrderManager(venue, mode="demo", broker="fake")
+    assert oms.spec_cache_seconds == 300.0
+
+    for n, at in enumerate((T0, T0 + timedelta(seconds=60), T0 + timedelta(seconds=299))):
+        order = oms.create(approve(at=at), intent_id=f"i-{n}", account_id="acct-a", at=at).order
+        assert (await oms.submit(order, at=at)).status is OrderStatus.filled
+    assert venue.reads == 1
+
+    late = T0 + timedelta(seconds=300)
+    order = oms.create(approve(at=late), intent_id="i-late", account_id="acct-a", at=late).order
+    assert (await oms.submit(order, at=late)).status is OrderStatus.filled
+    assert venue.reads == 2
+
+
+async def test_a_changed_venue_step_is_honoured_once_the_cache_expires() -> None:
+    """The authority is the venue NOW, within the cache window. A step the
+    venue widens is enforced at the next read; inside the window the old
+    terms still apply, which is the trade-off the window buys and the reason
+    it is five minutes rather than an hour."""
+    venue = await terms_venue()
+    oms = OrderManager(venue, mode="demo", broker="fake")
+
+    first = oms.create(
+        approve(volume=Decimal("0.03")), intent_id="i-1", account_id="acct-a", at=T0
+    ).order
+    assert (await oms.submit(first, at=T0)).status is OrderStatus.filled
+
+    venue.symbols["EURUSD"] = replace(SPEC, volume_step=Decimal("0.05"))
+
+    inside = T0 + timedelta(seconds=120)
+    second = oms.create(
+        approve(at=inside, volume=Decimal("0.03")), intent_id="i-2", account_id="acct-a", at=inside
+    ).order
+    assert (await oms.submit(second, at=inside)).status is OrderStatus.filled, (
+        "the cached terms apply inside the window"
+    )
+
+    after = T0 + timedelta(seconds=301)
+    third = oms.create(
+        approve(at=after, volume=Decimal("0.03")), intent_id="i-3", account_id="acct-a", at=after
+    ).order
+    out = await oms.submit(third, at=after)
+    reason = refused_on_terms(out, "VENUE_SPEC_REFUSED")
+    assert "step 0.05" in reason
+    assert venue._orders_placed == 2
+
+
+async def test_a_symbol_missing_from_the_cache_forces_a_fresh_read() -> None:
+    """The venue can list an instrument after the cache was built. Answering
+    "no spec" from the stale map would refuse an order the venue would take,
+    so an absent symbol is one forced refresh, not a refusal."""
+    venue = await terms_venue()
+    oms = OrderManager(venue, mode="demo", broker="fake")
+
+    first = oms.create(approve(), intent_id="i-1", account_id="acct-a", at=T0).order
+    assert (await oms.submit(first, at=T0)).status is OrderStatus.filled
+    assert venue.reads == 1
+
+    venue.set_quote("GBPUSD", "1.30000", "1.30002")
+    venue.symbols["GBPUSD"] = replace(SPEC, symbol="GBPUSD")
+    soon = T0 + timedelta(seconds=1)
+    cable = oms.create(
+        approve(
+            symbol="GBPUSD",
+            entry_price=Decimal("1.3000"),
+            stop_loss=Decimal("1.2980"),
+            take_profit=Decimal("1.3040"),
+        ),
+        intent_id="i-2",
+        account_id="acct-a",
+        at=soon,
+    ).order
+    assert (await oms.submit(cable, at=soon)).status is OrderStatus.filled
+    assert venue.reads == 2, "the miss forced one refresh"
+
+    # And a symbol that is STILL absent after the refresh is refused, having
+    # cost exactly one more read rather than one per attempt. The SECOND
+    # attempt is the one that matters: `symbol not in self._specs` is true
+    # forever for a symbol the venue does not list, so without a memo of the
+    # miss every signal for it re-reads the whole symbol table.
+    venue.set_quote("USDJPY", "150.000", "150.002")
+    yen = oms.create(
+        approve(
+            symbol="USDJPY",
+            entry_price=Decimal("150.000"),
+            stop_loss=Decimal("149.800"),
+            take_profit=Decimal("150.400"),
+        ),
+        intent_id="i-3",
+        account_id="acct-a",
+        at=soon,
+    ).order
+    out = await oms.submit(yen, at=soon)
+    reason = refused_on_terms(out, "VENUE_SPEC_REFUSED")
+    assert "no symbol specification for 'USDJPY'" in reason
+    assert venue.reads == 3
+
+    again = oms.create(
+        approve(
+            symbol="USDJPY",
+            entry_price=Decimal("150.000"),
+            stop_loss=Decimal("149.800"),
+            take_profit=Decimal("150.400"),
+        ),
+        intent_id="i-4",
+        account_id="acct-a",
+        at=soon,
+    ).order
+    refused_on_terms(await oms.submit(again, at=soon), "VENUE_SPEC_REFUSED")
+    assert venue.reads == 3, "a symbol the venue does not list was re-read per attempt"
+
+    # The memo lasts exactly as long as the snapshot it describes. Once the
+    # window expires the venue is asked again, because it may list it now.
+    later = T0 + timedelta(seconds=301)
+    third = oms.create(
+        approve(
+            at=later,
+            symbol="USDJPY",
+            entry_price=Decimal("150.000"),
+            stop_loss=Decimal("149.800"),
+            take_profit=Decimal("150.400"),
+        ),
+        intent_id="i-5",
+        account_id="acct-a",
+        at=later,
+    ).order
+    refused_on_terms(await oms.submit(third, at=later), "VENUE_SPEC_REFUSED")
+    assert venue.reads == 4
+    assert venue._orders_placed == 2
+
+
+async def test_the_status_report_separates_terms_refusals_from_sends(
+    oms: OrderManager, broker: FakeBroker
+) -> None:
+    good = oms.create(approve(), intent_id="i-1", account_id="acct-a", at=T0).order
+    bad = oms.create(
+        approve(volume=Decimal("0.037")), intent_id="i-2", account_id="acct-a", at=T0
+    ).order
+    await oms.submit(good, at=T0)
+    await oms.submit(bad, at=T0)
+    status = oms.status()
+    assert status["orders_refused_on_venue_spec"] == 1
+    assert status["orders_submitted"] == 1
+    assert status["orders_filled"] == 1
+    assert status["orders_failed"] == 1
+    assert broker._orders_placed == 1

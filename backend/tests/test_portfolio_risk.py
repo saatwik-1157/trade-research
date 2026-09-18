@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
+from app.brokers.base import SymbolInfo
 from app.brokers.fake import FakeBroker
 from app.db.base import Base
 from app.execution.pipeline import ExecutionPipeline, IncomingSignal, StrategyState
@@ -35,6 +36,23 @@ from app.risk.engine import OrderProposal, PortfolioState, RiskEngine, RiskLimit
 from app.symbols.service import ContractSpec
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
+
+# The venue's own contract terms. Required since OrderManager.submit
+# began validating against them: FakeBroker.symbols defaults EMPTY, and
+# an absent spec is a refusal by design -- giving the simulator a
+# built-in default would make it the one path where an unspecced symbol
+# passes, which is the fail-open the check removes.
+VENUE_SPEC = SymbolInfo(
+    symbol="EURUSD",
+    digits=5,
+    point=Decimal("0.00001"),
+    contract_size=Decimal("100000"),
+    tick_size=Decimal("0.00001"),
+    tick_value=Decimal("1"),
+    volume_min=Decimal("0.01"),
+    volume_max=Decimal("100"),
+    volume_step=Decimal("0.01"),
+)
 
 T0 = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
 ACCOUNT = "acct-a"
@@ -260,6 +278,7 @@ async def _pipeline(portfolio: object | None) -> ExecutionPipeline:
     venue = FakeBroker(mode="paper")
     await venue.connect()
     venue.set_quote("EURUSD", "1.10000", "1.10002")
+    venue.symbols["EURUSD"] = VENUE_SPEC
     registry = OrderManagerRegistry()
     registry.register(ACCOUNT, venue, mode="paper", broker="fake")
 

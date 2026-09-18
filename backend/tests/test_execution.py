@@ -25,6 +25,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from app.brokers.base import SymbolInfo
 from app.brokers.fake import FakeBroker
 from app.execution import (
     NO_ORDER,
@@ -41,6 +42,23 @@ from app.paper.engine import AiVerdict
 from app.risk.engine import RiskEngine, RiskLimits
 from app.sizing.calculator import SizingMethod
 from app.symbols.service import ContractSpec
+
+# The venue's own contract terms. Required since OrderManager.submit
+# began validating against them: FakeBroker.symbols defaults EMPTY, and
+# an absent spec is a refusal by design -- giving the simulator a
+# built-in default would make it the one path where an unspecced symbol
+# passes, which is the fail-open the check removes.
+VENUE_SPEC = SymbolInfo(
+    symbol="EURUSD",
+    digits=5,
+    point=Decimal("0.00001"),
+    contract_size=Decimal("100000"),
+    tick_size=Decimal("0.00001"),
+    tick_value=Decimal("1"),
+    volume_min=Decimal("0.01"),
+    volume_max=Decimal("100"),
+    volume_step=Decimal("0.01"),
+)
 
 T0 = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
 
@@ -90,6 +108,7 @@ async def venue() -> AsyncIterator[FakeBroker]:
     fake = FakeBroker(mode="paper")
     await fake.connect()
     fake.set_quote("EURUSD", "1.10000", "1.10002")
+    fake.symbols["EURUSD"] = VENUE_SPEC
     yield fake
     await fake.disconnect()
 

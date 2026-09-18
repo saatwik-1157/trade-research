@@ -64,8 +64,10 @@ from app.brokers.base import (
     BrokerPosition,
     OrderRequest,
     OrderResult,
+    SymbolInfo,
 )
 from app.brokers.base import OrderStatus as BrokerOrderStatus
+from app.brokers.validation import validate_order
 from app.oms.events import event_for, payload_for
 from app.oms.fills import FillError, FillRecord
 from app.oms.order import ManagedOrder
@@ -78,6 +80,16 @@ from app.realtime.catalogue import EventType
 from app.risk.engine import Approval
 
 log = logging.getLogger("app.oms")
+
+#: How long a venue contract specification is reused before being re-read.
+#:
+#: Contract terms change on the schedule of broker announcements, not seconds,
+#: and a fresh `get_symbols()` before every send would put a venue round trip
+#: between the Risk Engine's snapshot and the order -- which is the gap
+#: `APPROVAL_TTL_SECONDS` exists to bound. A module constant rather than a
+#: setting because it is a cache lifetime, not a trading policy: nothing about
+#: it changes what the system is willing to trade.
+SPEC_CACHE_SECONDS = 300.0
 
 
 class OrderRefused(Exception):
@@ -114,6 +126,7 @@ class OrderManager:
         mode: str,
         broker: str | None = None,
         publish: Callable[[str, dict[str, object], ManagedOrder], Awaitable[None]] | None = None,
+        spec_cache_seconds: float = SPEC_CACHE_SECONDS,
     ) -> None:
         self.adapter = adapter
         self.mode = mode
@@ -129,6 +142,17 @@ class OrderManager:
         self._pending_events: list[tuple[str, dict[str, object], ManagedOrder]] = []
         self._queued: dict[str, int] = {}
         self._counts: Counter[str] = Counter()
+        # The venue's own contract terms, cached. Read from the ADAPTER and
+        # never from the database: `app/symbols/` holds a synced copy with a
+        # `spec_updated_at`, and a copy that can be stale is the wrong
+        # authority for "will the venue accept this volume". Reaching for it
+        # would also put a database read between the approval and the send.
+        self._specs: dict[str, SymbolInfo] = {}
+        self._specs_read_at: datetime | None = None
+        #: Symbols the current snapshot was asked for and did not contain.
+        #: Cleared whenever the snapshot is replaced.
+        self._missing: set[str] = set()
+        self.spec_cache_seconds = spec_cache_seconds
 
     # ============================================================== events
 
@@ -325,6 +349,46 @@ class OrderManager:
             },
         )
 
+    async def _venue_spec(self, symbol: str, now: datetime) -> SymbolInfo | None:
+        """The venue's current contract terms for a symbol, cached briefly.
+
+        Asked of the ADAPTER, so the answer is what the venue says now. The
+        database holds a synced copy carrying a `spec_updated_at`, and a copy
+        that can be stale is the wrong authority for "will this volume be
+        accepted" -- which is the whole reason this check is worth making
+        when the sizing calculator has already checked the same three
+        quantities against that copy.
+
+        A symbol absent from a filled cache forces one refresh: the venue can
+        list an instrument after the cache was built, and answering "no spec"
+        from a stale map would refuse an order the venue would have taken.
+        ONE refresh, not one per attempt -- a refreshed map is a complete
+        snapshot of what the venue listed at `_specs_read_at`, so a symbol
+        still missing from it has been answered rather than missed, and
+        `_missing` remembers that until the next refresh. Without that memo a
+        bot signalling a symbol the venue does not list (a broker suffix, a
+        delisted instrument) re-read the entire symbol table on every signal.
+
+        Exceptions propagate. The single refusal path lives in `submit`, so a
+        venue that cannot be asked and a venue that does not list the symbol
+        are refused in one place, for one reason, under one counter.
+        """
+        stale = (
+            self._specs_read_at is None
+            or (now - self._specs_read_at).total_seconds() >= self.spec_cache_seconds
+            or (symbol not in self._specs and symbol not in self._missing)
+        )
+        if stale:
+            rows = await self.adapter.get_symbols()
+            self._specs = {r.symbol: r for r in rows}
+            self._specs_read_at = now
+            self._missing.clear()
+        if symbol not in self._specs:
+            # Asked for and not there. That is an answer from this snapshot,
+            # and it stands until the snapshot is replaced.
+            self._missing.add(symbol)
+        return self._specs.get(symbol)
+
     # ==================================================================== submit
 
     async def submit(self, order: ManagedOrder, *, at: datetime | None = None) -> ManagedOrder:
@@ -332,7 +396,9 @@ class OrderManager:
 
         `intent -> submitting` happens and is observable BEFORE `place_order`
         is awaited, so a process that dies mid-call leaves evidence that a send
-        was in flight.
+        was in flight. The venue's contract terms are checked BEFORE that
+        transition: an order the venue would refuse on volume, side or
+        symbol goes `intent -> failed` without ever looking like a send.
         """
         now = at or _now()
         if order.status is not OrderStatus.intent:
@@ -350,14 +416,6 @@ class OrderManager:
             self._queue_events(order)
             return order
 
-        order.move(
-            OrderStatus.submitting,
-            at=now,
-            source="pipeline",
-            reason="persisted before transmission; a crash here is reconcilable",
-        )
-        self._counts["orders_submitted"] += 1
-
         request = OrderRequest(
             symbol=order.symbol,
             side=order.side,
@@ -367,6 +425,61 @@ class OrderManager:
             comment=f"oms:{order.client_order_id}"[:31],
             intent_id=order.client_order_id,
         )
+        # THE VENUE'S OWN TERMS, CHECKED BEFORE ANYTHING IS SENT -- and before
+        # `intent -> submitting`, because that transition is the evidence a
+        # send was in flight, and a refusal here sends nothing. An order
+        # refused on its terms goes `intent -> failed`, is not counted as
+        # submitted, and its intent may be resent once corrected.
+        #
+        # `app/brokers/validation.py` was written for exactly this call and
+        # had no caller: nothing in `backend/app/` invoked it, so a volume
+        # the venue would refuse was discovered by the venue refusing it.
+        # The sizing calculator checks the same three quantities, but against
+        # the DATABASE copy of the contract spec, which carries a
+        # `spec_updated_at` and can be stale or unsynced. This asks the
+        # adapter, so the authority is the venue now. It also checks the side
+        # and the sign of the protective levels, which sizing does not.
+        #
+        # `quote_bid` is deliberately NOT passed. validation.py says so
+        # itself: the bracket-straddles-quote test is a sanity gate and the
+        # authoritative check is against the FILL, downstream in
+        # `mt5_paper.bracket_is_sane` -- a bracket can straddle the quote and
+        # still sit the wrong side of where the order filled, which is how
+        # NZDUSD 10200315596 lost 279 points. Passing it would also add a
+        # `get_quote` on the critical path that raises whenever the market is
+        # closed, and under fail-closed that would refuse the order on a
+        # sanity gate's missing input while the real gate still runs.
+        try:
+            info = await self._venue_spec(order.symbol, now)
+        except Exception as exc:  # noqa: BLE001 - unreadable terms refuse
+            self._counts["orders_refused_on_venue_spec"] += 1
+            return self._fail(
+                order,
+                now,
+                f"the venue's contract terms for {order.symbol} could not be read "
+                f"({type(exc).__name__}: {exc}); refusing rather than sending an "
+                f"order priced from a guess",
+                "VENUE_SPEC_UNREADABLE",
+            )
+
+        report = validate_order(request, info)
+        if not report.ok:
+            self._counts["orders_refused_on_venue_spec"] += 1
+            return self._fail(
+                order,
+                now,
+                "; ".join(report.problems),
+                "VENUE_SPEC_REFUSED",
+            )
+
+        order.move(
+            OrderStatus.submitting,
+            at=now,
+            source="pipeline",
+            reason="persisted before transmission; a crash here is reconcilable",
+        )
+        self._counts["orders_submitted"] += 1
+
         started = _now()
         try:
             result = await self.adapter.place_order(request)
@@ -1098,6 +1211,7 @@ class OrderManager:
             "orders_modified": self._counts["orders_modified"],
             "orders_rejected": self._counts["orders_rejected"],
             "orders_failed": self._counts["orders_failed"],
+            "orders_refused_on_venue_spec": self._counts["orders_refused_on_venue_spec"],
             "orders_expired": self._counts["orders_expired"],
             "orders_unknown": self._counts["orders_unknown"],
             "orders_reconciled": self._counts["orders_reconciled"],

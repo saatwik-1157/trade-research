@@ -587,3 +587,37 @@ def test_the_toolkit_still_defaults_to_its_own_magic() -> None:
     for name in ("place", "close_own", "own_positions"):
         signature = inspect.signature(getattr(mt5_paper, name))
         assert signature.parameters["magic"].default == mt5_paper.MAGIC, name
+
+
+async def test_a_terminal_that_cannot_list_symbols_is_unreadable_not_empty() -> None:
+    """`symbols_get()` answers None when the terminal cannot serve, and `or
+    []` turned that into "this venue lists no symbols".
+
+    The difference reaches an order. `OrderManager.submit` reads the venue's
+    contract terms before sending, and it has two codes: VENUE_SPEC_REFUSED
+    for a symbol the venue does not list, and VENUE_SPEC_UNREADABLE for terms
+    it could not read. An empty list is the first; None is the second, and
+    collapsing them here would have made every order look like an unlisted
+    instrument whenever the terminal hiccupped -- and cached that empty
+    snapshot for five minutes.
+    """
+    from app.brokers.mt5 import MT5Adapter
+
+    adapter = MT5Adapter()
+    adapter._state = ConnectionState.connected
+
+    class Silent:
+        def symbols_get(self) -> None:
+            return None
+
+    adapter._mt5 = Silent()
+    with pytest.raises(NotConnected, match="no symbol list"):
+        await adapter.get_symbols()
+
+    class Empty:
+        def symbols_get(self) -> tuple[Any, ...]:
+            return ()
+
+    # An empty answer is still an answer, and stays one.
+    adapter._mt5 = Empty()
+    assert await adapter.get_symbols() == []

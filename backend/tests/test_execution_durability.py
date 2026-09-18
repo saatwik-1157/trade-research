@@ -36,6 +36,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from app.brokers.base import SymbolInfo
 from app.brokers.fake import FakeBroker
 from app.db.base import Base
 from app.execution import ExecutionPipeline, IncomingSignal, Outcome, StrategyState
@@ -51,6 +52,23 @@ from app.symbols.service import ContractSpec
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
+
+# The venue's own contract terms. Required since OrderManager.submit
+# began validating against them: FakeBroker.symbols defaults EMPTY, and
+# an absent spec is a refusal by design -- giving the simulator a
+# built-in default would make it the one path where an unspecced symbol
+# passes, which is the fail-open the check removes.
+VENUE_SPEC = SymbolInfo(
+    symbol="EURUSD",
+    digits=5,
+    point=Decimal("0.00001"),
+    contract_size=Decimal("100000"),
+    tick_size=Decimal("0.00001"),
+    tick_value=Decimal("1"),
+    volume_min=Decimal("0.01"),
+    volume_max=Decimal("100"),
+    volume_step=Decimal("0.01"),
+)
 
 T0 = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
 
@@ -175,6 +193,7 @@ async def venue() -> AsyncIterator[CountingBroker]:
     fake = CountingBroker(mode="paper")
     await fake.connect()
     fake.set_quote("EURUSD", "1.10000", "1.10002")
+    fake.symbols["EURUSD"] = VENUE_SPEC
 
     original = fake.place_order
     sends: list[object] = []
@@ -429,10 +448,20 @@ async def test_a_failed_send_is_refused_a_second_order_row(
     venue.force_disconnect()
     first = await boot(venue, sessions).process(signal(), now=T0)
     assert first.outcome is Outcome.execution_rejected
-    # One attempt, which the connection refused before it left the process --
-    # which is exactly what makes `failed` the one provably-safe state.
+    # ZERO attempts, and that is the stricter reading getting stricter.
+    #
+    # This asserted 1 until 2026-09-18: the send reached `place_order` and the
+    # disconnected fake refused it there. `OrderManager.submit` now reads the
+    # venue's contract terms before building the request, and a disconnected
+    # venue cannot report them -- `get_symbols()` requires a connection -- so
+    # the refusal happens one step earlier and nothing is ever handed to
+    # `place_order`. Same `failed` state, same safe-to-resend guarantee, same
+    # `NotConnected` in the reason; the only difference is that the order was
+    # refused before it was even constructed, which is the fail-closed rule
+    # applied sooner rather than later. The load-bearing check is below: the
+    # SECOND pass adds no sends, whatever the first pass counted.
     attempted = len(venue.sends)
-    assert attempted == 1
+    assert attempted == 0
 
     rows = await orders_for(sessions)
     assert [S(r.status) for r in rows] == [S.failed], (
@@ -702,3 +731,44 @@ async def test_an_order_that_reached_the_venue_cannot_be_discarded(
     with pytest.raises(OrderRefused, match="cannot be discarded"):
         manager.discard(order)
     assert manager.by_intent[INTENT] is order
+
+
+async def test_an_adapter_that_refuses_the_send_is_also_refused_a_second_row(
+    venue: CountingBroker, sessions: async_sessionmaker[AsyncSession]
+) -> None:
+    """The failed SEND, which the test above no longer reaches.
+
+    Since `OrderManager.submit` began reading the venue's contract terms
+    first, a disconnected venue is refused at that read and `place_order` is
+    never called -- so the test named for a failed send stopped covering the
+    `except BrokerError` branch that handles one, and deleting that branch
+    left every test in this suite green.
+
+    This is the case the branch exists for: the terms are readable, the
+    adapter accepts the call, and the SEND itself is refused before
+    transmission. `failed` is correct because the venue never saw it, and a
+    second pass over the same intent is still refused at the guard.
+    """
+    from app.brokers.base import NotConnected
+    from app.oms.state import OrderStatus as S
+
+    async def refusing(request: object) -> object:
+        venue.sends.append(request)
+        raise NotConnected("the terminal refused the send before transmitting it")
+
+    venue.place_order = refusing  # type: ignore[assignment,method-assign]
+
+    first = await boot(venue, sessions).process(signal(), now=T0)
+    assert first.outcome is Outcome.execution_rejected
+    assert len(venue.sends) == 1, "the send never reached the adapter"
+
+    rows = await orders_for(sessions)
+    assert [S(r.status) for r in rows] == [S.failed]
+    assert rows[0].error_code == "BROKER_ERROR", (
+        "an adapter refusal is not a contract-terms refusal, and the code must say which"
+    )
+
+    second = await boot(venue, sessions).process(signal(), now=T0)
+    assert second.outcome is Outcome.duplicate_signal
+    assert len(venue.sends) == 1, "a second send was attempted"
+    assert len(await orders_for(sessions)) == 1
