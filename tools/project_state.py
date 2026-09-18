@@ -77,16 +77,40 @@ def psql(sql: str, *, container: str = "tr-postgres", user: str = "trade") -> st
     return value or None
 
 
-def health() -> dict[str, Any]:
-    """The running API's own account of itself, or an explicit absence."""
-    try:
-        import urllib.error
-        import urllib.request
+#: Where to ask, in order. The nginx proxy is the path production takes, so
+#: it is asked first; the direct port is the one `docker-compose.override.yml`
+#: publishes "bypassing nginx" for development.
+#:
+#: Asking only the proxy is what this used to do, and it reported the platform
+#: unreachable whenever nginx was down even though the API was up and healthy
+#: -- which nulled `trading_mode`, `live_trading` and `live_blockers`, the
+#: three fields anybody reads this file for. "Nobody could reach the API" and
+#: "the proxy is not running" are different facts, and the second one was
+#: being written down as the first.
+HEALTH_URLS = (
+    ("proxy", "http://127.0.0.1:8080/api/health"),
+    ("direct", "http://127.0.0.1:8000/health"),
+)
 
-        with urllib.request.urlopen("http://127.0.0.1:8080/api/health", timeout=10) as r:
-            return dict(json.loads(r.read().decode()))
-    except Exception:
-        return {}
+
+def health() -> tuple[dict[str, Any], str | None]:
+    """The running API's own account of itself, and which door answered.
+
+    The door is recorded rather than dropped: "the API is up" and "the API is
+    up behind the proxy production uses" are different claims, and a file
+    that could not tell them apart would let a stack with no proxy read as a
+    fully working one.
+    """
+    import urllib.error
+    import urllib.request
+
+    for via, url in HEALTH_URLS:
+        try:
+            with urllib.request.urlopen(url, timeout=10) as r:
+                return dict(json.loads(r.read().decode())), via
+        except Exception:
+            continue
+    return {}, None
 
 
 def schema_head() -> str | None:
@@ -138,7 +162,7 @@ def build() -> dict[str, Any]:
             continue
         measured[name] = int(raw)
 
-    api = health()
+    api, reached_via = health()
     head = schema_head()
 
     return {
@@ -151,7 +175,10 @@ def build() -> dict[str, Any]:
         ],
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "generated_by": "tools/project_state.py",
-        "measurement_source": "the running deployment: tr-postgres and /api/health",
+        "measurement_source": (
+            "the running deployment: tr-postgres, and the API health endpoint "
+            "through the nginx proxy if it is up or on its own port if not"
+        ),
         "trading_mode": api.get("trading_mode"),
         "live_trading": api.get("live_trading"),
         "live_execution_allowed": api.get("live_execution_allowed"),
@@ -161,6 +188,7 @@ def build() -> dict[str, Any]:
             else None
         ),
         "api_reachable": bool(api),
+        "api_reached_via": reached_via,
         "schema_head": head,
         "measured": measured,
         "unmeasured": unmeasured,

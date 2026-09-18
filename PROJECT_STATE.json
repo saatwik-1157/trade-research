@@ -6,14 +6,15 @@
     "A figure that could not be measured is absent from `measured` and named",
     "in `unmeasured`. It is NEVER written as 0 -- zero is a measurement."
   ],
-  "generated_at": "2026-09-07T05:43:43.765290+00:00",
+  "generated_at": "2026-09-18T21:54:37.340236+00:00",
   "generated_by": "tools/project_state.py",
-  "measurement_source": "the running deployment: tr-postgres and /api/health",
+  "measurement_source": "the running deployment: tr-postgres, and the API health endpoint through the nginx proxy if it is up or on its own port if not",
   "trading_mode": "paper",
   "live_trading": false,
   "live_execution_allowed": false,
   "live_blockers": 12,
   "api_reachable": true,
+  "api_reached_via": "direct",
   "schema_head": "0027_capital_reservations",
   "measured": {
     "market_bars": 705,
@@ -24,14 +25,14 @@
     "training_runs": 3,
     "strategies": 2,
     "strategy_versions": 3,
-    "bots": 7,
-    "orders": 274,
+    "bots": 8,
+    "orders": 289,
     "trades": 252,
-    "positions_open": 1,
+    "positions_open": 2,
     "capital_reservations": 0,
-    "signals": 121,
+    "signals": 124,
     "accounts_paper": 7,
-    "accounts_broker": 0
+    "accounts_broker": 1
   },
   "unmeasured": [],
   "provenance": {
@@ -53,10 +54,10 @@
     "accounts_broker": "select count(*) from broker_accounts"
   },
   "repo": {
-    "backend_modules": 323,
-    "backend_test_files": 70,
+    "backend_modules": 332,
+    "backend_test_files": 79,
     "frontend_sources": 122,
-    "documents": 168,
+    "documents": 182,
     "migrations": 27
   },
   "safety": {
