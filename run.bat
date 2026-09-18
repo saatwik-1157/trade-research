@@ -84,6 +84,9 @@ echo   ---------------------------------------------------------------
 echo     1   Account       balance, open positions, closed-trade stats
 echo     2   Track record  merge new trades and print the R-multiple
 echo     3   Can I run tonight?   dry run, checks the venue's week
+echo     17  PREFLIGHT     ^<-- run this before any session. Eleven checks:
+echo                       power, standby, algo toggle, demo fence, the
+echo                       open book, the venue's week, and when it works
 echo.
 echo   ---------------------------------------------------------------
 echo     TRADE - these send REAL orders to the DEMO account
@@ -153,6 +156,7 @@ if "%CHOICE%"=="13" goto :svolume
 if "%CHOICE%"=="14" goto :ssuper
 if "%CHOICE%"=="15" goto :srules
 if "%CHOICE%"=="16" goto :scost
+if "%CHOICE%"=="17" goto :preflight
 if "%CHOICE%"=="0" goto :done
 echo.
 echo   "%CHOICE%" is not on the menu.
@@ -394,6 +398,21 @@ if not defined TVSEC goto :menu
 cls
 "%TR_PYTHON%" tools\tv_webhook.py --secret "%TVSEC%"
 echo.
+pause
+goto :menu
+
+:preflight
+cls
+echo   Harness preflight - read-only, sends nothing, changes nothing.
+echo.
+echo   Answers the forward-looking question that --dry-run cannot: it
+echo   refuses early on a weekend deadline and then reports nothing else,
+echo   so on a Friday it tells you the one thing you already knew. This
+echo   runs every check regardless and says which evening DOES work.
+echo.
+if not defined TR_MT5 goto :need_mt5
+"%TR_PYTHON%" tools\preflight.py --until-hour 6
+if errorlevel 1 echo   Fix the FAIL lines above before starting a session.
 pause
 goto :menu
 

@@ -74,10 +74,18 @@ negative in-sample for each rule (`reports/bracket_sweep.json`,
 A 41-candidate search across 10 rule families (RSI, MA crosses, Donchian,
 Bollinger, momentum, and the inverse of each) found nothing either
 (`reports/rule_search.json`). Best in-sample t was 1.29 and went negative out of
-sample. It does clear the permutation null in sample (0.74 was the null's best
-over the same 41 candidates), which is a reminder that beating the null is the
-weakest of the three gates - it says the ranking is not pure exposure, not that
-the rule works. Zero cleared 1.96 out of sample against ~1 expected by chance,
+sample. **It does NOT clear the permutation null, and the earlier claim here
+that it did was an artefact of sampling the null three times.** Corrected
+2026-09-18: at `--null-rounds 20` the null's best is 1.00 and the candidate
+scores 0.98 (`reports/rule_search_nullcheck.json`). The two 3-round runs on
+file put the null at 0.42 and at 1.40 — same code, windows three weeks apart —
+and the first of those is what produced the original `beats_permutation_null:
+True`. See the note in `rule_search.py`'s docstring; the default is now 10.
+
+This makes the result stronger rather than weaker. The 41-candidate search
+now fails ALL THREE gates rather than two of three, and the one time anything
+in this project ever passed a gate, it turned out to be noise in the gate.
+Zero cleared 1.96 out of sample against ~1 expected by chance,
 and every family's median out-of-sample expectancy is negative - all ten of
 them.
 
@@ -95,7 +103,10 @@ move-to-breakeven - so the trend families got exits that do not cap a winner
 outscored the best real candidate (2.89 vs 1.42, and 2.77 vs 2.23). The exit
 search produced the only candidate ever to beat its null in-sample, at t=3.10,
 and it went to -1.83 out of sample; three combinations cleared 1.96 out of
-sample against 4.9 expected by chance.
+sample against 4.9 expected by chance. **That null was also measured at 3
+rounds**, so "beat its null" there carries the same caveat as the 41-candidate
+result above and has not been re-checked at 20. It failed out of sample either
+way, which is why it is not worth re-running to find out.
 
 Re-run 2026-09-12 on the current toolkit, and the verdict reproduces on numbers
 of its own: H4 best 1.65 against a null reaching 1.98, D1 best 2.18 against a

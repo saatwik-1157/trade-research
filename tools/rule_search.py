@@ -13,6 +13,27 @@ when there is definitionally nothing to find:
     of permutation give a distribution for "best of N under no skill".
   * Candidates are ranked in-sample; the winner's out-of-sample result is what
     counts.
+
+**THE NULL WAS UNDER-SAMPLED UNTIL 2026-09-18 AND IT FLIPPED A VERDICT.**
+`--null-rounds` defaulted to 3, and three draws do not estimate "the best of N
+under no skill" well enough to judge anything against. Measured on the volume
+search, identical data and identical code with only the round count changed:
+the null's best came out at 1.57 over 3 rounds and 0.92 over 25, a 41% swing
+from sampling alone.
+
+On this file's own 41-candidate baseline that noise decided a gate. The run
+recorded in `reports/rule_search.json` reports `beats_permutation_null: True`
+against a null of 0.42. A rerun three weeks later, same code, put the null at
+1.40 and the same candidate FAILED. Settled at 20 rounds: the null is **1.00**
+and `boll_fade_50_2.0` scores **0.98**, so it does not clear it
+(`reports/rule_search_nullcheck.json`).
+
+So the default is now 10, and the correction is recorded rather than quietly
+applied: **every figure in CLAUDE.md measured before 2026-09-18 was taken at
+3 rounds.** None of them changes a verdict except this one, because every
+other candidate failed the null by a wide margin or failed the other two gates
+anyway. A candidate landing within about 0.5 of its null should be re-run at
+20 or more before either result is believed.
   * A Bonferroni threshold is computed over the true number of candidates.
   * Inference is clustered by entry date. Seven USD majors share a leg, so one
     dollar move opens correlated trades in all of them and a pooled t-statistic
@@ -433,8 +454,11 @@ def main():
     ap.add_argument("--split", type=float, default=0.70)
     ap.add_argument("--sl-atr", type=float, default=1.5)
     ap.add_argument("--tp-atr", type=float, default=1.5)
-    ap.add_argument("--null-rounds", type=int, default=3,
-                    help="permutation draws of the whole candidate set")
+    ap.add_argument("--null-rounds", type=int, default=10,
+                    help="permutation draws of the whole candidate set. 3 is "
+                         "too few and was the default until 2026-09-18; see "
+                         "the note in the module docstring before comparing "
+                         "a new run against an older report.")
     ap.add_argument("--spread-source", default="median", choices=["median", "p90", "live"])
     ap.add_argument("--min-trades", type=int, default=100)
     ap.add_argument("--timeframe", default="H1",
