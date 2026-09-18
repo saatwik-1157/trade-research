@@ -1337,6 +1337,91 @@ def test_a_refused_flush_is_retried_and_named():
         mt5_paper._log = real_log
 
 
+def test_supertrend_is_actually_supertrend():
+    """The indicator, before any result computed from it is believed.
+
+    A search against a wrongly-computed indicator produces a null that means
+    nothing and looks exactly like the six real nulls this project has already
+    produced -- so it would be filed as a seventh and never questioned. The
+    ratchet is the part worth checking: it is what makes Supertrend something
+    other than a renamed ATR channel, and it is easy to write code that
+    computes the bands correctly and forgets to carry them.
+
+    Two defects were found by these checks when they were first run, and
+    neither would have shown up in the search output:
+
+    * the seed. Every Supertrend has to guess a direction for its first bar,
+      and the usual guess is +1. Seeded that way, a series that opens in a
+      downtrend emits a correcting SELL a few bars later that it never earned
+      -- measured at bar 16 of a clean falling ramp. It is now seeded from the
+      direction of the warm-up window.
+    * the flip counter in the check itself said 12 flips for a series that
+      flips once, because `NaN != NaN` is True and every warm-up bar counted.
+      Worth keeping as a comment: the first version of this test was wrong in
+      the direction that would have hidden a real defect.
+    """
+    print()
+    print("Supertrend - the indicator is verified before any search using it")
+
+    import supertrend_search as st
+
+    def ramp(a, b, n):
+        c = np.linspace(a, b, n)
+        return c + 0.5, c - 0.5, c
+
+    # A clean trend must end pointing the way it went.
+    h, l, c = ramp(100.0, 200.0, 300)
+    check("a clean uptrend ends bullish",
+          st.supertrend_direction(h, l, c, 10, 3.0)[-1], 1.0)
+    h, l, c = ramp(200.0, 100.0, 300)
+    check("a clean downtrend ends bearish",
+          st.supertrend_direction(h, l, c, 10, 3.0)[-1], -1.0)
+
+    # A V flips exactly once, and LATE. An early flip means the band is
+    # tracking price instead of ratcheting.
+    vc = np.concatenate([np.linspace(200.0, 100.0, 150),
+                         np.linspace(100.0, 200.0, 150)])
+    d = st.supertrend_direction(vc + 0.5, vc - 0.5, vc, 10, 3.0)
+    fin = np.isfinite(d)
+    flips = int(np.sum(fin[1:] & fin[:-1] & (d[1:] != d[:-1])))
+    check("a V flips exactly once", flips, 1)
+    flip_at = int(np.argmax((d[1:] == 1.0) & (d[:-1] == -1.0))) + 1
+    check("and lags the turn rather than leading it", flip_at > 150, True)
+
+    rng = np.random.default_rng(7)
+    noisy = 100 + np.cumsum(rng.normal(0.15, 1.0, 400))
+    nh = noisy + rng.uniform(0.2, 1.0, 400)
+    nl = noisy - rng.uniform(0.2, 1.0, 400)
+
+    sig = st.make_supertrend(10, 3.0)(noisy, nh, nl, noisy)
+    check("the signal is sparse - it trades flips, not states",
+          np.count_nonzero(sig) < 40, True)
+    check("and is only ever -1, 0 or 1",
+          set(np.unique(sig).tolist()) <= {-1, 0, 1}, True)
+
+    # THE CHECK THAT MATTERS. Truncating the series must not change a single
+    # earlier signal, or the rule is reading bars it has not reached.
+    full = st.make_supertrend(10, 3.0)(noisy, nh, nl, noisy)
+    half = st.make_supertrend(10, 3.0)(noisy[:250], nh[:250], nl[:250], noisy[:250])
+    check("no look-ahead: truncation leaves earlier signals identical",
+          bool(np.array_equal(full[:250], half)), True)
+
+    # An RSI gate is a filter. A filter that ADDS a signal is not a filter.
+    gated = st.make_supertrend_rsi(10, 3.0)(noisy, nh, nl, noisy)
+    added = int(np.count_nonzero((gated != 0) & (full == 0)))
+    check("the RSI gate only ever removes signals", added, 0)
+
+    inv = st.make_supertrend(10, 3.0, invert=True)(noisy, nh, nl, noisy)
+    check("the inverse is an exact negation",
+          bool(np.array_equal(inv, -full)), True)
+
+    # The seed must never be read from the future. A negative index does not
+    # raise in numpy, it wraps to the end of the array.
+    atr = rb.atr_series(nh, nl, noisy, 10)
+    start = int(np.argmax(np.isfinite(atr)))
+    check("the seed reference index is not negative", start - 10 >= 0, True)
+
+
 def test_the_flush_budget_is_wall_clock_not_attempts():
     """The 2026-09-14 defect: six retries inside fifty seconds.
 
@@ -2358,6 +2443,7 @@ def main():
     test_a_refused_flush_is_retried_and_named()
     test_a_done_that_leaves_the_position_open_is_not_flat()
     test_a_dry_run_does_not_wait_for_a_book_it_never_changed()
+    test_supertrend_is_actually_supertrend()
     test_the_flush_budget_is_wall_clock_not_attempts()
     test_a_sleep_mid_flush_restarts_the_budget_and_says_so()
     test_a_closed_market_is_not_retried()

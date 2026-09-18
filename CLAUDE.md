@@ -395,6 +395,62 @@ same space with more parameters, which is the condition under which the 36-cell
 bracket sweep scored the RANDOM rule at 1.76 against the best real candidate's
 0.83.
 
+Supertrend is the seventh search and the first that came from outside this
+project. Three public trading repositories were read for a strategy worth
+measuring — `TraderAlice/OpenAlice`, `HKUDS/AI-Trader` and
+`studiogangster/next-gen-algo-trading-bot`. Two contain no testable rule at
+all: OpenAlice is an orchestrator that delegates research to agents, and
+AI-Trader's `research/` is an A/B experiment about how 5,289 LLM agents POST
+on a social copy-trading platform, with no broker adapter anywhere. The third
+ships exactly one: `strategies/supertrend_rsi.py`, buy when Supertrend flips
+bullish and RSI > 50, sell when it flips bearish and RSI < 50, at
+Supertrend(10, 3.0) and RSI(14).
+
+It earned a run because it is not a rename. MACD is an EMA cross, a breakout
+is Donchian, a moving-average trend filter is an MA cross — Supertrend is none
+of those, because of its RATCHET: the band only ever moves toward price and
+never away, so the flip level carries state from every bar since the last
+flip. Donchian is a pure function of the last n bars and Bollinger of the last
+n closes; nothing searched here had that property.
+
+`tools/supertrend_search.py` runs 14 candidates through `rule_search`'s own
+pipeline — same permutation null, same Bonferroni threshold, same era blocks,
+walk-forward and date clustering, same measured spread — over 19,851 H1 bars
+per symbol across the seven majors, 2023-07-07 to 2026-09-18
+(`reports/supertrend_search_h1.json`).
+
+**The strategy loses, and significantly.** `st_rsi_10_3`, the source rule as
+written, scores an in-sample t of **-2.27** (-2.28 date-clustered against a
+2.042 threshold) and an out-of-sample t of **-4.07** (-2.95 date-clustered).
+Net expectancy runs -10.56 points in sample and -25.1 out. It is negative in
+**all seven pairs**, at per-symbol t-stats from -1.37 to -2.95, and positive in
+**one of four eras**. Per-symbol win rates run 44-48% against the 50.5-52.7%
+breakeven `cost_hurdle.py` measures — it is below the hurdle before any t-stat
+is consulted.
+
+The gross/net split is the useful part and it is the same finding as
+everywhere else. `supertrend_10_3` is -5.36 points gross and -10.51 net, so
+the spread costs about 5.15 points a trade. Its INVERSE is +1.40 gross and
+-3.75 net — the same 5.15. Flipping the rule turns the sign of the timing and
+changes nothing about the cost, which is why the inverses cluster just under
+break-even rather than mirroring the winners. Out of sample the four inverted
+candidates score +8 to +11 points at t-stats of 1.65 to 1.85, none clearing
+1.96 and all collapsing to 0.42-1.37 under date clustering.
+
+Nothing clears any gate. Best in-sample t across all 14 is **-0.50**, and the
+permutation null over the same 14 averaged **-0.14** — the shuffle timed these
+rules better than the rules did, which is what `shape_search` also found. Zero
+of 14 cleared 1.96 out of sample against 0.4 expected by chance. The
+walk-forward is 1 of 3 folds positive and its selection step is the familiar
+one: it picked on training t-stats of 0.95, -0.24 and -0.43, and the 0.95 pick
+lost -31.85 points at t = -4.11 in the block it had not seen.
+
+Read this as closing the outside-contribution question rather than as a
+seventh null. The families this platform can compute have now been searched,
+and a public repository with a working strategy in it was searched too. Its
+strategy is significantly negative on this venue's data, before costs and
+worse after them.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
