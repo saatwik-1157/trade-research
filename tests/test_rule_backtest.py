@@ -1422,6 +1422,77 @@ def test_supertrend_is_actually_supertrend():
     check("the seed reference index is not negative", start - 10 >= 0, True)
 
 
+def test_the_volume_rule_reads_nothing_it_should_not():
+    """The look-ahead checks, on the one axis that had never been measured.
+
+    A look-ahead here would manufacture a positive on genuinely new ground,
+    and it would be the most believable false finding this project could
+    produce: an input nobody had tried, a plausible mechanism, and a t-stat to
+    match. Nothing about the search output would look wrong.
+
+    Two properties carry the weight. The volume baseline must EXCLUDE today,
+    or today's spike damps the very thing the rule exists to detect. And the
+    trailing quantile must be computed from bars strictly before t, or the bar
+    being judged sits inside the distribution judging it -- a leak small
+    enough to survive review and concentrated exactly at the tails, which is
+    the only place this rule fires.
+    """
+    print()
+    print("Volume rule - no look-ahead, and the control is genuinely a control")
+
+    import volume_search as vs
+
+    rng = np.random.default_rng(11)
+    n = 900
+    c = 100 + np.cumsum(rng.normal(0, 1.0, n))
+    v = rng.lognormal(10, 0.6, n)
+
+    # Spiking one bar's volume must change that bar's score and NOTHING
+    # before it.
+    v2 = v.copy()
+    v2[500] = v[500] * 1000
+    fa, fb = vs.conviction(c, v, 20), vs.conviction(c, v2, 20)
+    check("today's volume moves today's score",
+          not np.isclose(fa[500], fb[500]), True)
+    ok = np.isfinite(fa[:500]) & np.isfinite(fb[:500])
+    check("and moves nothing before it",
+          bool(np.allclose(fa[:500][ok[:500]], fb[:500][ok[:500]])), True)
+
+    fn = vs.make_conviction(20, 0.10)
+    full = fn(c, c, c, c, v)
+    half = fn(c[:600], c[:600], c[:600], c[:600], v[:600])
+    check("truncation leaves earlier signals identical",
+          bool(np.array_equal(full[:600], half)), True)
+
+    # The control must be a control. If volume leaks into it, the comparison
+    # that the whole run rests on is meaningless.
+    ctrl = vs.make_conviction(None, 0.10)
+    check("the unweighted control ignores volume entirely",
+          bool(np.array_equal(ctrl(c, c, c, c, v), ctrl(c, c, c, c, v * 7.0))), True)
+
+    # Matched firing rates are what make the null isolate the WEIGHTING
+    # rather than the trade count.
+    a = np.count_nonzero(ctrl(c, c, c, c, v))
+    b = np.count_nonzero(fn(c, c, c, c, v))
+    check("control and weighted arms fire at a comparable rate",
+          abs(a - b) < max(10, a * 0.2), True)
+
+    # Absent volume must yield no signal, never a substitute. MT5's tick
+    # count is a different quantity wearing the same name.
+    check("v=None yields no signal",
+          int(np.count_nonzero(fn(c, c, c, c, None))), 0)
+    check("all-NaN volume yields no signal",
+          int(np.count_nonzero(fn(c, c, c, c, np.full(n, np.nan)))), 0)
+
+    # The ratio is clipped, or one listing event dominates the sample.
+    r = vs.conviction(c, None, None)
+    f = vs.conviction(c, v, 20)
+    both = np.isfinite(r) & np.isfinite(f) & (r != 0)
+    check("weighting never flips the sign of a return",
+          bool(np.all(np.sign(r[both]) == np.sign(f[both]))), True)
+    check("the volume ratio is clipped above", vs.VMAX <= 10.0, True)
+
+
 def test_the_flush_budget_is_wall_clock_not_attempts():
     """The 2026-09-14 defect: six retries inside fifty seconds.
 
@@ -2444,6 +2515,7 @@ def main():
     test_a_done_that_leaves_the_position_open_is_not_flat()
     test_a_dry_run_does_not_wait_for_a_book_it_never_changed()
     test_supertrend_is_actually_supertrend()
+    test_the_volume_rule_reads_nothing_it_should_not()
     test_the_flush_budget_is_wall_clock_not_attempts()
     test_a_sleep_mid_flush_restarts_the_budget_and_says_so()
     test_a_closed_market_is_not_retried()

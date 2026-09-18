@@ -451,6 +451,53 @@ and a public repository with a working strategy in it was searched too. Its
 strategy is significantly negative on this venue's data, before costs and
 worse after them.
 
+Volume is the eighth search and the last untested input. Every family above
+is a pure function of OHLC, and this file recorded volume as untested with
+MT5's limitation as the reason -- `real_volume` is 0 on spot FX and
+`tick_volume` counts quote updates rather than size. That reasoning is right
+about MT5 and was never true of crypto, where a ccxt exchange reports size
+actually traded and `crypto_market.py` had been downloading it in column 5
+and discarding it since the universe was added.
+
+`tools/volume_search.py` tests a conviction-weighted return: today's return
+times how unusual today's volume is against its own recent baseline, so a 1%
+move on triple volume and a 3% move on a third of it score the same. Six
+candidates over the same seven Binance pairs and 3,000 D1 bars the crypto
+search used, 2018-07-03 to 2026-09-18 (`reports/volume_search_d1.json`).
+
+**Two of the six are unweighted controls, and they are the point.** The
+return leg alone is momentum at n=1, which is already refuted, so the novelty
+is strictly the weighting and a run without the control could not attribute a
+result to it. The trigger is a trailing quantile rather than the source's
+absolute cut, because an absolute cut makes the two arms fire a different
+number of times and frequency is the one lever here with a measured sign. It
+works: 1,324 control trades against 1,411 weighted at q=0.10.
+
+**The weighting makes it worse, in all four pairwise comparisons.**
+
+| q | control | volume-weighted (n=5) | volume-weighted (n=20) |
+|---|---|---|---|
+| 0.10 | **+0.50** | -0.01 | +0.26 |
+| 0.20 | **-0.34** | -0.83 | -1.18 |
+
+Out-of-sample expectancy in points. At both quantiles the arm that ignores
+volume beats both arms that use it. Nothing clears any gate either: best
+in-sample t across the six is **0.14**, the permutation null over the same
+six averaged **1.57** — the shuffle beat the real rules by more than a full
+t-stat — and zero cleared 1.96 out of sample against 0.2 expected by chance.
+Era blocks are 2 of 4 positive for every candidate, which is a coin flip, and
+the walk-forward is 1 of 3 at a -0.40 mean, selecting on train t-stats of
+0.57, 0.10 and 0.50.
+
+`signs_disagree` is true for the best candidate, so its pooled and per-date
+means point opposite ways — one more reason not to read anything into it.
+
+The result worth keeping is not "volume fails". It is that **the control beat
+the treatment**, which is only visible because the control was in the run.
+Six of the seven previous searches had no equivalent, and their nulls are
+weaker for it: they establish that a family did not work, not that the thing
+being added subtracted.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
