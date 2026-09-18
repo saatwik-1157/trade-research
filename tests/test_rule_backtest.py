@@ -1493,6 +1493,96 @@ def test_the_volume_rule_reads_nothing_it_should_not():
     check("the volume ratio is clipped above", vs.VMAX <= 10.0, True)
 
 
+def test_an_unreadable_venue_at_the_deadline_does_not_kill_the_session():
+    """The deadline branch was the one place the file's own rule was not applied.
+
+    The top of the loop says it outright: ONE PASS MUST NOT BE ABLE TO END THE
+    SESSION, because the flush that makes the account flat runs AFTER the loop.
+    That guard was put on `harvest` and not on the `--flat-by` branch, where
+    `flatten` and `own_positions` were both unprotected.
+
+    The consequence is precise and bad. A `VenueUnreadable` at the deadline
+    escapes `run()`, `main()` has no handler, and the process dies before
+    `flush_until_flat` -- the function written specifically to survive a venue
+    refusing at the deadline, with a wall-clock budget and retries of its own.
+
+    And the deadline is exactly when the venue is least readable: it fires the
+    moment the machine wakes, which is when the trade server is least likely
+    to be back. Every ingredient of the 09-14 abandoned book, with the code
+    that would have saved it one line out of reach.
+    """
+    print()
+    print("Wind-down - an unreadable venue at the deadline must not end the session")
+
+    class DeadAtDeadline(HarvestMT5):
+        """Answers until the deadline, then stops answering entirely."""
+
+        def __init__(self, positions):
+            super().__init__(positions)
+            self.dead = False
+
+        def positions_get(self):
+            if self.dead:
+                raise mt5_paper.VenueUnreadable("positions_get() returned None")
+            return tuple(self._positions)
+
+    real_log = mt5_paper._log
+    mt5_paper._log = lambda r: None
+    # STUB THE FLUSH, and record that it was called. That is the whole claim:
+    # the session survives the deadline and control REACHES the function
+    # written to handle it. Letting the real one run tests its retry budget
+    # instead, which is ten minutes of an unreadable venue and is covered by
+    # its own tests.
+    #
+    # Clamping take_profit.FLUSH_BUDGET_SECONDS was tried first and does
+    # nothing: it is a DEFAULT ARGUMENT, bound when the function was defined,
+    # so rebinding the module constant never reaches the call. Worth the
+    # comment because the patch looks like it works.
+    reached = []
+    real_flush = take_profit.flush_until_flat
+    take_profit.flush_until_flat = lambda *a, **k: (reached.append(True), (0, []))[1]
+
+    # REACH THE BRANCH. `flat_at = monotonic() + seconds_until(flat_by)`, and
+    # `seconds_until` always rolls forward to the next occurrence of the hour,
+    # so with a real clock the in-loop deadline branch is hours away and the
+    # loop has long since stopped. That is the normal configuration and the
+    # reason the post-loop flush exists at all.
+    #
+    # The branch IS reachable in the configuration the flag is written for --
+    # `--flat-by` EARLIER than the stop time, "stop at 06:00, be flat by
+    # 05:45" -- so the hour is collapsed rather than the situation faked.
+    real_until = take_profit.seconds_until
+    take_profit.seconds_until = lambda _hhmm: 0.0
+    buf = io.StringIO()
+    raised = None
+    try:
+        c = DeadAtDeadline([pos(41, profit=-2.25)])
+        args = types.SimpleNamespace(
+            minutes=0.05, interval=0, min_profit=0.50, relax_over=45.0,
+            flat_by="05:45", harvest_only=True, live=True)
+        c.dead = True          # unreadable by the time the deadline fires
+        with contextlib.redirect_stdout(buf):
+            out = take_profit.run(c, args)
+    except Exception as exc:  # noqa: BLE001 - the defect: it used to land here
+        raised = exc
+    finally:
+        mt5_paper._log = real_log
+        take_profit.flush_until_flat = real_flush
+        take_profit.seconds_until = real_until
+
+    if raised is not None:
+        check(f"run() must NOT raise ({type(raised).__name__}: {raised})", False, True)
+        return
+
+    text = buf.getvalue()
+    check("the session survived an unreadable deadline", isinstance(out, dict), True)
+    check("and said why it left the loop",
+          "THE DEADLINE PASS RAISED" in text, True)
+    # The whole point. Before the guard, control never got here.
+    check("control REACHED the wind-down", reached, [True])
+    check("an uncountable book is UNKNOWN, never 0", out["still_open"], None)
+
+
 def test_the_flush_budget_is_wall_clock_not_attempts():
     """The 2026-09-14 defect: six retries inside fifty seconds.
 
@@ -2529,6 +2619,7 @@ def main():
     test_a_dry_run_does_not_wait_for_a_book_it_never_changed()
     test_supertrend_is_actually_supertrend()
     test_the_volume_rule_reads_nothing_it_should_not()
+    test_an_unreadable_venue_at_the_deadline_does_not_kill_the_session()
     test_the_flush_budget_is_wall_clock_not_attempts()
     test_a_sleep_mid_flush_restarts_the_budget_and_says_so()
     test_a_closed_market_is_not_retried()

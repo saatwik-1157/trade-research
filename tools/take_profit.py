@@ -54,6 +54,23 @@ from mt5_paper import RefuseToTrade
 #: enough to ride out a reconnect, short enough not to spin all night.
 MAX_CONSECUTIVE_MISSES = 10
 
+#: Reconnect backoff, in seconds, and the wall-clock cap on the whole attempt.
+#:
+#: The 09-16 session is the case this exists for. `positions_get()` started
+#: returning None, ten passes failed, and the session gave up and recorded the
+#: account UNKNOWN. That was correct -- it refused to trade blind -- but it
+#: never tried to RECONNECT, and a terminal that has dropped its pipe usually
+#: comes back. Ten passes at 20s spent 200 seconds proving the same thing ten
+#: times instead of spending them reopening the connection.
+#:
+#: Capped in WALL-CLOCK for the same reason the flush budget is: an attempt
+#: count says nothing about how long the venue has had to come back, and a
+#: reconnect loop that outlives its own deadline is a session that misses the
+#: flush. The cap is further clamped to the time left before `--flat-by`,
+#: because being flat matters more than being connected.
+RECONNECT_BACKOFF = (5.0, 10.0, 20.0, 40.0, 60.0)
+RECONNECT_BUDGET_SECONDS = 180.0
+
 #: Called once per pass with (passes, state) when a wrapper sets it, so a
 #: session's last known state survives a kill. `run_overnight.py` points this
 #: at `crash_report.beat`. Left None here because take_profit.py is also run
@@ -368,6 +385,97 @@ def keep_awake(need_the_deadline: bool = False):
                     pass
 
 
+def reconnect_budget(args, flat_at: float) -> float:
+    """How long a reconnect may take: the smaller of the cap and the deadline.
+
+    Being flat matters more than being connected. A session with eleven
+    minutes left before `--flat-by` must not spend three of them reopening a
+    pipe, so the budget is clamped to the time actually remaining and the
+    flush keeps its own allowance. With no deadline set there is nothing to
+    protect and the cap stands alone.
+    """
+    if args.flat_by is None:
+        return RECONNECT_BUDGET_SECONDS
+    remaining = flat_at - time.monotonic()
+    return max(0.0, min(RECONNECT_BUDGET_SECONDS, remaining - FLUSH_BUDGET_SECONDS))
+
+
+def reconnect(mt5, expect_login: int, budget: float = RECONNECT_BUDGET_SECONDS) -> bool:
+    """Drop the terminal connection and rebuild it. Verified BY IDENTITY.
+
+    **The verification is the point, not the reconnect.** `initialize()`
+    returning True means a pipe was opened, not that it was opened to the
+    account this session has been trading. A terminal that was restarted
+    against a different login, or that came back with no account attached at
+    all, satisfies every check except the one that matters -- and this project
+    has already met the partial version of that failure, where `positions_get`
+    answered while `account_info` returned None. So success here means the
+    login READS BACK EQUAL to the one captured at session start, and nothing
+    less counts.
+
+    Failing that check is treated as failure to reconnect rather than as a
+    reason to stop the session: the caller keeps failing closed, and the
+    operator sees the mismatch named.
+
+    Bounded in wall-clock, never in attempts, and the caller clamps the budget
+    to the time left before the deadline. A reconnect loop that runs past
+    `--flat-by` has traded a connection for an abandoned book.
+    """
+    # ONLY THE REAL PACKAGE CAN BE RECONNECTED, and the check is explicit
+    # rather than implied. A reconnect means "close the terminal IPC and
+    # reopen it", which is meaningless for anything else -- and without this
+    # guard the function reaches `mt5_paper.connect()` and tries to open a
+    # real MetaTrader connection from inside a unit test driving a fake.
+    # Found exactly that way: the suite hung for 135 seconds of backoff
+    # against a terminal the test had never heard of.
+    if getattr(mt5, "__name__", "") != "MetaTrader5":
+        return False
+
+    started = time.monotonic()
+    for i, wait in enumerate(RECONNECT_BACKOFF, start=1):
+        if time.monotonic() - started >= budget:
+            break
+        stamp = datetime.now().strftime("%H:%M:%S")
+        print(f"  [{stamp}] RECONNECT attempt {i}: closing the terminal handle "
+              f"and reopening", flush=True)
+        try:
+            mt5.shutdown()
+        except Exception:  # noqa: BLE001, S110 - already broken; nothing to save
+            pass
+        time.sleep(min(wait, max(0.0, budget - (time.monotonic() - started))))
+        try:
+            fresh = mt5_paper.connect()
+            acct = fresh.account_info()
+        except Exception as exc:  # noqa: BLE001 - reported, then retried
+            stamp = datetime.now().strftime("%H:%M:%S")
+            print(f"  [{stamp}] RECONNECT attempt {i} failed: "
+                  f"{type(exc).__name__}: {exc}", flush=True)
+            continue
+
+        stamp = datetime.now().strftime("%H:%M:%S")
+        if acct is None:
+            print(f"  [{stamp}] RECONNECT attempt {i}: the pipe opened and "
+                  f"account_info() still returned None. That is the partial "
+                  f"disconnect, not a recovery.", flush=True)
+            continue
+        login = getattr(acct, "login", None)
+        if login != expect_login:
+            # Louder than a retry, because it is not a transient fault. Never
+            # trade an account the session did not start on.
+            print(f"  [{stamp}] RECONNECT attempt {i}: THE ACCOUNT CHANGED. "
+                  f"Expected {expect_login}, got {login}. Refusing to treat "
+                  f"this as the same session.", flush=True)
+            return False
+        print(f"  [{stamp}] RECONNECTED to {login} after {i} attempt(s), "
+              f"{time.monotonic() - started:.0f}s", flush=True)
+        return True
+
+    stamp = datetime.now().strftime("%H:%M:%S")
+    print(f"  [{stamp}] reconnect gave up after {time.monotonic() - started:.0f}s; "
+          f"the session keeps failing closed", flush=True)
+    return False
+
+
 def net_floating(position) -> float:
     """Floating P&L including carry.
 
@@ -670,6 +778,11 @@ def run(mt5, args) -> dict:
             "answering, so the session has no balance to measure against"
         )
     start_balance = opening.balance
+    # Captured once, and the only thing a reconnect is allowed to verify
+    # against. A terminal that comes back attached to a different login is a
+    # different account, and nothing about the session's limits, its open
+    # book or its ledger carries over to it.
+    start_login = getattr(opening, "login", None)
 
     # A suspended session leaves no error, only a hole between two pass lines.
     # On the night of 2026-09-14 there were two of nearly three hours each and
@@ -699,12 +812,39 @@ def run(mt5, args) -> dict:
             # worth, and the count is reported separately from `harvested` --
             # a position that was flushed did not reach its target, and
             # pooling the two would hide exactly that.
-            left = flatten(mt5, args.live)
-            gone = [r for r in left if r.get("status") in ("CLOSED", "DRY_RUN")]
-            flushed += len(gone)
-            for r in gone:
-                print(f"  [{stamp}] FLAT    {r.get('symbol', '?'):<8} #{r['ticket']}")
-            still = len(mt5_paper.own_positions(mt5))
+            # GUARDED, and this branch is the one that most needed it.
+            #
+            # The rule at the top of this loop -- one pass must not be able to
+            # end the session -- was applied to `harvest` and not here, so
+            # `flatten` and `own_positions` were both unprotected in the
+            # branch that fires at the deadline. A `VenueUnreadable` here
+            # escapes `run()`, `main()` has no handler, and the process dies
+            # BEFORE the post-loop `flush_until_flat` -- the function written
+            # specifically to survive a venue that is refusing at the
+            # deadline, with its own wall-clock budget and its own retries.
+            #
+            # And the deadline is exactly when the venue is least readable:
+            # it fires the moment the machine wakes, which is when the trade
+            # server is least likely to be back. The session died holding the
+            # book at the one moment the code that saves it was one line away.
+            #
+            # BREAK rather than loop, and break WITHOUT halting. `halted`
+            # skips the flush by design -- a risk halt is not the deadline --
+            # so setting it here would reproduce the bug by another route.
+            # Breaking cleanly hands the problem to the function built for it.
+            try:
+                left = flatten(mt5, args.live)
+                gone = [r for r in left if r.get("status") in ("CLOSED", "DRY_RUN")]
+                flushed += len(gone)
+                for r in gone:
+                    print(f"  [{stamp}] FLAT    {r.get('symbol', '?'):<8} #{r['ticket']}")
+                still = len(mt5_paper.own_positions(mt5))
+            except Exception as exc:  # noqa: BLE001 - must not end the session
+                print(f"  [{stamp}] THE DEADLINE PASS RAISED: "
+                      f"{type(exc).__name__}: {exc}. Leaving the loop so the "
+                      f"wind-down can run -- it has its own budget and its own "
+                      f"retries, and it is the thing built for this.", flush=True)
+                break
             print(f"  [{stamp}] flat-by reached: closed {len(gone)}, {still} still open",
                   flush=True)
             if not still:
@@ -726,6 +866,16 @@ def run(mt5, args) -> dict:
             misses += 1
             print(f"  [{stamp}] PASS FAILED ({misses}/{MAX_CONSECUTIVE_MISSES}): "
                   f"{type(exc).__name__}: {exc}", flush=True)
+            # HALFWAY THROUGH THE BUDGET, TRY TO FIX IT RATHER THAN KEEP
+            # COUNTING. The 09-16 session spent ten passes and 200 seconds
+            # proving the same thing ten times and never once reopened the
+            # pipe, which is usually all a dropped terminal needs. Reconnect
+            # once, at the midpoint: early enough to leave passes in hand if
+            # it works, late enough not to fire on a single transient error.
+            if misses == MAX_CONSECUTIVE_MISSES // 2 and args.live:
+                if reconnect(mt5, start_login, budget=reconnect_budget(args, flat_at)):
+                    misses = 0
+                    continue
             if misses >= MAX_CONSECUTIVE_MISSES:
                 print(f"  [{stamp}] giving up after {misses} consecutive failures; "
                       "the terminal is not answering and a flush would fail too",
