@@ -509,42 +509,107 @@ Six of the seven previous searches had no equivalent, and their nulls are
 weaker for it: they establish that a family did not work, not that the thing
 being added subtracted.
 
+Both the supertrend search and the 41-candidate baseline were re-run on
+2026-09-19 against 19,855 H1 bars per pair to 2026-09-18, and both reproduce
+on numbers of their own.
+
+`st_rsi_10_3`, the rule taken from `studiogangster/next-gen-algo-trading-bot`,
+scores an in-sample t of **-2.18** and an out-of-sample **-4.24** (-3.18
+date-clustered) at -26.07 points a trade, against -2.27 / -4.07 / -2.95 and
+-25.1 on the first run. Best in-sample across the 14 is -0.58, and the
+permutation null over the same 14 averaged **+0.10** - the shuffle timed
+these rules better than the rules did, for the second time. The walk-forward
+selected on a training t of 0.94 and then lost -30.91 points at t = -3.94 in
+the block it had not seen.
+
+The 41-candidate baseline still fails all three gates. Best in-sample is 0.98
+(`boll_fade_50_2.0`) against a 3.234 Bonferroni threshold and a permutation
+null averaging **0.91** - within noise of the real thing - and **zero of 41**
+cleared 1.96 out of sample against 1.0 expected by chance. The walk-forward is
+1 of 3.
+
+That best candidate is also a live example of the `signs_disagree` warning
+below: its pooled out-of-sample t is **-0.34** while its date-clustered t is
+**+3.9**, because the losses land on crowded dates. `rule_search.py` reports
+`best_survives_date_clustering: false` rather than quoting the +3.9, which is
+the behaviour to expect and the reason to check the flag before quoting
+either number.
+
+A replication matters here for the reason it did at H4 and D1: a single
+search that finds nothing can be dismissed as one unlucky draw, and two on
+different windows cannot.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
 position_id, so the sample accumulates instead of expiring with the broker's
 history window (`reports/track_record.json`). Re-running it is idempotent.
 
-The record is 27 trades and +3.44 USD on a 100,000 demo deposit, and it must be
-quoted by regime, because two incompatible bracket geometries are in it:
+The record is **882 trades and -102.78 USD** on a 100,000 demo deposit,
+2026-08-24 to 2026-09-17 (re-merged 2026-09-19), and it must be quoted by
+regime, because two incompatible bracket geometries are in it:
 
-| reward:risk | trades | net | win rate | pooled t |
-|---|---|---|---|---|
-| 0.2 (sl 3.0xATR, tp 0.5xATR) | 14 | +5.50 | 93% | **9.33** |
-| 1.0 (sl 1.5xATR, tp 1.5xATR) | 13 | -2.06 | 23% | -0.79 |
+| reward:risk | trades | net | win rate | pooled t | by date | threshold |
+|---|---|---|---|---|---|---|
+| 0.2 (sl 3.0xATR, tp 0.5xATR) | 36 | +6.20 | 92% | 2.81 | 2.26 | 4.303 |
+| 1.0 (sl 1.5xATR, tp 1.5xATR) | 832 | **-105.69** | 81% | **-2.11** | **-2.58** | 2.131 |
 
-That t of 9.33 is the most instructive number this project has produced,
-because it is meaningless and looks decisive. `data/highwin_session*.log`
-record the rule that generated it: `rule=random`. A random entry with a
-6:1 adverse bracket wins about six times in seven by construction, so the
-93% win rate, the profit factor of 5.3 and the 13-win streak are all
-arithmetic rather than evidence - the losses had not landed yet. Thirteen of
-those fourteen wins opened between 11:05 and 13:32 on one day across six
-pairs, every one on the same side of the dollar, which is the shared-move
-clustering the FX searches already document.
+**The 1.0 row is the first live result this project has produced that reaches
+significance, and it is a loss.** It clears the bar on all three statistics --
+pooled -2.11, date-clustered -2.58 against a 2.131 threshold, symbol-clustered
+-2.58 against 2.447 -- with 2 of 7 pairs positive over 16 entry dates. Read it
+beside the 81% win rate, because the two together are the whole finding: the
+harvest loop books winners and holds losers, so a high win rate is the
+mechanism rather than an edge, and the losses have now landed. Nothing here
+tested a rule; what is significant is the cost of trading this way, which is
+the same effect the `random` rule showed at t = -3.60 and `body_ride_0.6` at
+-4.65.
+
+The 0.2 row still must NOT be read as its mirror image. Its pooled 2.81 and
+its symbol-clustered 5.14 look decisive and are not: date clustering puts it
+at 2.26 against a 4.303 threshold, because 36 trades fall on **three** entry
+dates. Three days is not a sample, and the paragraph below says what made
+those three days look so good.
+
+On its first 14 trades that row scored a pooled t of **9.33**, and that
+remains the most instructive number this project has produced, because it
+was meaningless and looked decisive. `data/highwin_session*.log` record the
+rule that generated it: `rule=random`. A random entry with a 6:1 adverse
+bracket wins about six times in seven by construction, so the 93% win rate,
+the profit factor of 5.3 and the 13-win streak were arithmetic rather than
+evidence - the losses had not landed yet. Thirteen of those fourteen wins
+opened between 11:05 and 13:32 on one day across six pairs, every one on the
+same side of the dollar, which is the shared-move clustering the FX searches
+already document.
+
+It has since decayed from 9.33 to 2.81 on 22 more trades, without anything
+changing but the sample. That decay is the same shape as the R-multiple's
+below, and it is why a live t-stat is quoted with its trade count or not at
+all.
 
 Net currency cannot be pooled across those two rows. A trade's size is set by
 its stop distance, and 5x separates them - structurally the metals-points
 error, and `track_record.py` raises the same class of data gap at a 2x fence.
 The R-multiple pools, because dividing by the money at risk removes the
-regime: **+0.023R over 27 trades, pooled t 0.26, date-clustered -0.80,
-symbol-clustered -0.19.** At that effect size the pooled t reaches 1.96 after
-about 1,500 more trades.
+regime: **-0.0247R over 863 trades, pooled t -1.76, date-clustered -1.57
+against a 2.131 threshold, symbol-clustered -2.34 against 2.447**, 2 of 7
+pairs positive. Pooled across both regimes it does NOT reach significance;
+about 213 more trades would, at this effect size. (863 of 882, because 14
+trades predate the order log and have no bracket to divide by.)
 
-The sequence matters more than any single reading. On 20 trades this account
-scored +4.60 at a pooled t of 3.27; seven trades later it was +3.44 at 1.15,
-and -0.10 clustered by entry hour. Nothing changed except that the sample
-grew. Do not quote a live t-stat without saying how many trades it rests on.
+**The sequence is the lesson, and this section is the worked example.** It
+said, until 2026-09-19: "+0.023R over 27 trades, pooled t 0.26 ... reaches
+1.96 after about 1,500 more trades." Every figure in that sentence was
+correct when written. The sample then grew from 27 to 863 and the mean went
+from +0.023R to -0.025R -- the sign flipped, the early positive was noise,
+and the trades still needed fell from ~1,500 to 213 because the effect being
+measured got bigger rather than because anything improved. Earlier still, on
+20 trades, this account scored +4.60 at a pooled t of 3.27.
+
+So: +3.27, then +0.26, then -1.76, on one account whose rules did not change.
+**Do not quote a live t-stat without saying how many trades it rests on**, and
+do not treat a stale one as a starting point -- re-run `track_record.py
+--merge` and read the number that comes out.
 
 Check whose trades a merge is about to take. `mt5_account.closed_trades` pairs
 every deal on the ACCOUNT, not every deal this tool opened, so anything else
