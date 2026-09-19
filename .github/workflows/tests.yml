@@ -78,6 +78,14 @@ jobs:
       - name: The single entry point dispatches where it says
         run: python tests/test_cli.py
 
+      # A GAP in a session's pass ladder is the host having slept, and it is
+      # the evidence Critical 1 turns on. Reading it used to mean eyeballing
+      # a 160 KB log, which is how `overnight-20260915-201059` was recorded
+      # as a session that reached its deadline while 112 minutes of it were
+      # inside a gap.
+      - name: A gap in the pass ladder is measured, not eyeballed
+        run: python tests/test_session_gaps.py
+
   # Platform backend (L02+). Unit tests only: nothing here needs Postgres,
   # Redis or an MT5 terminal, and readiness checks are proven honest against
   # a closed port rather than a running service.

@@ -588,6 +588,11 @@ if /i not "%OK%"=="YES" goto :menu
 cls
 "%TR_PYTHON%" tools\run_overnight.py --until-hour 6 --paper
 echo.
+echo   ----------------------------------------------------------------
+echo     THE RESULT. A GAP in the pass ladder is the failure.
+echo   ----------------------------------------------------------------
+"%TR_PYTHON%" tools\session_gaps.py --expect-hours 10
+echo.
 pause
 goto :menu
 
