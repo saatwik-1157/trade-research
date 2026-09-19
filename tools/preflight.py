@@ -204,7 +204,7 @@ def check_venue(until_hour: int):
     return out, mt5
 
 
-def check_deadline(mt5, until_hour: int):
+def check_deadline(mt5, until_hour: int, paper: bool = False):
     """Is tonight's deadline inside the venue's week, and if not, when is it?
 
     The forward-looking half is the point. `run_overnight --dry-run` refuses
@@ -215,6 +215,16 @@ def check_deadline(mt5, until_hour: int):
         import run_overnight
     except Exception as exc:  # noqa: BLE001
         return _r("deadline_viable", UNKNOWN, f"could not import run_overnight: {exc}")
+
+    if paper:
+        # `run_overnight` exempts a --paper run from the weekend guard because
+        # it sends no orders, so there is no book a weekend close could
+        # strand. Reporting FAIL here for a run the launcher will accept
+        # would send the operator away from the one session that is safe to
+        # start into a shut market.
+        return _r("deadline_viable", OK,
+                  "a --paper run opens nothing, so the venue's week does not "
+                  "bound it; the launcher exempts it for the same reason")
 
     try:
         _minutes, target = run_overnight.minutes_until(until_hour)
@@ -246,12 +256,12 @@ def check_deadline(mt5, until_hour: int):
               f"--flat-by cannot be honoured{when}")
 
 
-def run(until_hour: int):
+def run(until_hour: int, paper: bool = False):
     results = [check_deps(), check_power(), check_standby(),
                check_kill_switch(), check_no_session(), check_disk()]
     venue, mt5 = check_venue(until_hour)
     results.extend(venue)
-    results.append(check_deadline(mt5, until_hour))
+    results.append(check_deadline(mt5, until_hour, paper))
     if mt5 is not None:
         try:
             mt5.shutdown()
@@ -282,16 +292,20 @@ def main() -> int:
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--strict", action="store_true",
                     help="exit 1 unless the verdict is READY")
+    ap.add_argument("--paper", action="store_true",
+                    help="check for a run that sends NO orders: the venue's "
+                         "week does not bound it, because it opens nothing")
     args = ap.parse_args()
 
-    report = run(args.until_hour)
+    report = run(args.until_hour, args.paper)
 
     if args.json:
         print(json.dumps(report, indent=2))
     else:
         mark = {OK: "  ok  ", WARN: " warn ", FAIL: " FAIL ", UNKNOWN: "  ??  "}
         print()
-        print(f"  harness preflight for a {args.until_hour:02d}:00 deadline")
+        kind = " (--paper: no orders)" if args.paper else ""
+        print(f"  harness preflight for a {args.until_hour:02d}:00 deadline{kind}")
         print("  " + "-" * 68)
         for r in report["checks"]:
             print(f"  [{mark[r['status']]}] {r['check']:<20} {r['detail']}")

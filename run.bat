@@ -85,6 +85,9 @@ echo     1   Account       balance, open positions, closed-trade stats
 echo     2   Track record  merge new trades and print the R-multiple
 echo     3   Can I run tonight?   dry run, checks the venue's week
 echo     17  PREFLIGHT     ^<-- run this before any session. Eleven checks:
+echo     18  SLEEP TEST    ^<-- overnight run that sends NO ORDERS. It
+echo                       proves the machine stays awake to the deadline,
+echo                       which is the one thing blocking a real soak.
 echo                       power, standby, algo toggle, demo fence, the
 echo                       open book, the venue's week, and when it works
 echo.
@@ -157,6 +160,7 @@ if "%CHOICE%"=="14" goto :ssuper
 if "%CHOICE%"=="15" goto :srules
 if "%CHOICE%"=="16" goto :scost
 if "%CHOICE%"=="17" goto :preflight
+if "%CHOICE%"=="18" goto :sleeptest
 if "%CHOICE%"=="0" goto :done
 echo.
 echo   "%CHOICE%" is not on the menu.
@@ -554,6 +558,38 @@ echo       .venv\Scripts\python.exe -m pip install -r requirements.txt
 echo.
 pause
 exit /b 1
+
+:sleeptest
+cls
+echo   ================================================================
+echo     SLEEP TEST - an overnight run that sends NO ORDERS.
+echo   ================================================================
+echo.
+echo     It runs the full loop until 06:00 and holds the machine awake,
+echo     but passes no --live, so nothing reaches the venue and there is
+echo     no book to strand. That is also why it may start while the
+echo     market is shut: it opens nothing a weekend close could catch.
+echo.
+echo     What it proves: the host stayed awake for the whole session.
+echo     Read the pass log afterwards - a GAP in it is the failure.
+echo.
+echo     NOTE: while AC sleep is set to never, the machine will not try
+echo     to sleep at all, so a clean run proves the session survives but
+echo     NOT that the power request works. Lower the AC sleep timeout
+echo     first if it is the fix itself you want to test.
+echo.
+if not defined TR_MT5 goto :need_mt5
+"%TR_PYTHON%" tools\preflight.py --paper --until-hour 6
+echo.
+set "OK="
+set /p "OK=  Type YES to start the no-order run, anything else to go back: "
+if defined OK set "OK=%OK:"=%"
+if /i not "%OK%"=="YES" goto :menu
+cls
+"%TR_PYTHON%" tools\run_overnight.py --until-hour 6 --paper
+echo.
+pause
+goto :menu
 
 :no_input
 echo.

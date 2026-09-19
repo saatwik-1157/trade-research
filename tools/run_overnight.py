@@ -633,7 +633,44 @@ def wants_watchdog(harvest_only: bool, no_watchdog: bool) -> str:
     return ""
 
 
-def start_watchdog(until_hour: int):
+def session_args_for(argv: list[str]) -> list[str]:
+    """The operator's own flags, so a RESTART is the same session.
+
+    `watchdog.start_session` rebuilds `run_overnight.py --until-hour N` plus
+    whatever `--session-arg` it was given, and it was given nothing: this
+    function had no caller, which is the same defect as the watchdog itself
+    had before P1b. Every flag the operator passed was therefore dropped on
+    restart and `run_overnight`'s own defaults took over.
+
+    That is not a cosmetic loss. A `--paper` session came back **live** and
+    sending orders; a session capped at `--max-daily-loss 50` came back at
+    200; `--rule rsi_reversion` came back as `random`; two symbols came back
+    as seven. A supervisor that restarts a DIFFERENT, looser session than
+    the one that died is a hazard wearing a safety net's clothes.
+
+    `--until-hour` is dropped because the watchdog passes its own, already
+    parsed and validated. `--no-watchdog` is dropped because a session that
+    asked for no supervisor never reaches here.
+    """
+    drop_with_value = {"--until-hour"}
+    drop_alone = {"--no-watchdog"}
+    out: list[str] = []
+    i = 0
+    while i < len(argv):
+        token = argv[i]
+        head = token.split("=", 1)[0]
+        if head in drop_with_value:
+            i += 1 if "=" in token else 2
+            continue
+        if head in drop_alone:
+            i += 1
+            continue
+        out.append(token)
+        i += 1
+    return out
+
+
+def start_watchdog(until_hour: int, session_args: list[str] | None = None):
     """Start `tools/watchdog.py --adopt` beside this session. **P1b, closed.**
 
     The watchdog has existed, tested, since P1b, and nothing launched it.
@@ -673,8 +710,15 @@ def start_watchdog(until_hour: int):
         print("  note: tools/watchdog.py is missing; the session runs unsupervised")
         return None
 
+    # Forwarded so a restart reproduces THIS session rather than the
+    # defaults. Repeatable by design on the watchdog's side.
+    forwarded: list[str] = []
+    for arg in session_args or []:
+        forwarded += ["--session-arg", arg]
+
     if getattr(sys, "frozen", False):
-        cmd = [sys.executable, "watchdog", "--adopt", "--until-hour", str(until_hour)]
+        cmd = [sys.executable, "watchdog", "--adopt", "--until-hour", str(until_hour),
+               *forwarded]
     else:
         exe = sys.executable
         # pythonw where we have it: the watchdog outlives this process and a
@@ -683,7 +727,7 @@ def start_watchdog(until_hour: int):
         cand = exe.replace("python.exe", "pythonw.exe")
         if cand != exe and os.path.exists(cand):
             exe = cand
-        cmd = [exe, script, "--adopt", "--until-hour", str(until_hour)]
+        cmd = [exe, script, "--adopt", "--until-hour", str(until_hour), *forwarded]
 
     logs = os.path.join(root, "logs")
     os.makedirs(logs, exist_ok=True)
@@ -818,7 +862,19 @@ def main() -> int:
     # --harvest-only takes none, and it is the exact command an operator runs
     # to clean up a book the weekend caught. Refusing it would block the remedy
     # with a warning about the problem.
-    weekend = None if args.harvest_only else deadline_in_the_weekend(target)
+    # A --paper run is exempt for the SAME reason, and this file already
+    # states it twice: --paper passes no --live, so it sends no orders, and
+    # `other_sessions` does not count such a process as a session because it
+    # "holds no position slot". There is no book for a weekend close to
+    # strand. Without this exemption the one run that can safely SPAN the
+    # reopen -- the overnight test that proves the host stays awake -- is
+    # the one thing refused, and the refusal below then advises starting
+    # exactly the session it just declined.
+    weekend = (
+        None
+        if (args.harvest_only or args.paper)
+        else deadline_in_the_weekend(target)
+    )
     if weekend is not None and not args.force:
         target_server, offset, live, last_tick = weekend
         sign = "+" if offset.total_seconds() >= 0 else "-"
@@ -858,17 +914,24 @@ def main() -> int:
             print(f"    evening before -- {viable - timedelta(days=1):%a %d %b}.")
             print()
         else:
-            print("    The venue's week reopens Sunday 17:00 New York. The first")
-            print("    deadline inside it is the morning after, so a session")
-            print("    started that evening or later is fine. No date is given")
-            print("    here because the only clock available is a dead tick and")
-            print("    a day computed from it would be wrong.")
+            print("    The venue's week reopens Sunday 17:00 New York, so a")
+            print("    deadline the morning after IS inside the week. No date is")
+            print("    given here because the only clock available is a dead tick")
+            print("    and a day computed from it would be wrong.")
+            print()
+            print("    Note that starting on Sunday evening does NOT clear this")
+            print("    by itself: the market is still shut then, so the offset is")
+            print("    still unmeasurable and this guard refuses for the same")
+            print("    reason. A session that SPANS the reopen has to say so.")
             print()
         print("    Nothing was started and no order was sent. Options:")
         print("      - run it on a night whose deadline is inside the week")
         print("      - --until-hour N, with a deadline before the close")
+        print("      - --paper, for a run that sends NO orders: it is exempt,")
+        print("        because it opens nothing a weekend close could strand")
         print("      - --force, if holding the book over the weekend is what")
-        print("        you actually want")
+        print("        you actually want. It also waives the running-session")
+        print("        guard, so do not use it unattended.")
         print()
         return 1
 
@@ -928,7 +991,7 @@ def main() -> int:
         if skip:
             print(f"  no watchdog: {skip}")
         else:
-            start_watchdog(args.until_hour)
+            start_watchdog(args.until_hour, session_args_for(sys.argv[1:]))
 
         import take_profit
 

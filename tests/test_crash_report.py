@@ -437,6 +437,130 @@ def test_a_weekend_deadline_is_refused_in_the_venues_week_not_ours():
     check("a Saturday-here, Friday-there deadline is allowed", got, None)
 
 
+def test_a_paper_run_is_exempt_from_the_weekend_guard():
+    """A --paper run sends no orders, so there is no book a weekend close
+    could strand -- the same reason `--harvest-only` is exempt, and the same
+    reason `other_sessions` does not count one as a session.
+
+    This is load-bearing rather than tidy. The one run that can safely SPAN
+    the venue's reopen is the overnight test that proves the host stays
+    awake, and it necessarily starts into a shut market. Before the
+    exemption that run was the single thing the guard refused, while the
+    refusal text advised starting exactly then.
+    """
+    print()
+    print("a --paper run opens nothing, so the weekend close has nothing to strand")
+    import ast
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "tools" / "run_overnight.py").read_text(
+        encoding="utf-8")
+    tree = ast.parse(source)
+
+    exempt = None
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Assign) and len(node.targets) == 1):
+            continue
+        target = node.targets[0]
+        if isinstance(target, ast.Name) and target.id == "weekend":
+            exempt = node.value
+    check("the guard is applied conditionally", exempt is not None, True)
+    names = {n.attr for n in ast.walk(exempt) if isinstance(n, ast.Attribute)}
+    check("--harvest-only is exempt", "harvest_only" in names, True)
+    check("--paper is exempt too", "paper" in names, True)
+
+    # And the refusal must not tell the operator to do the thing it refuses.
+    check("it no longer calls a Sunday-evening start 'fine'",
+          "started that evening or later is fine" in source, False)
+    check("it says a spanning session must say so",
+          "SPANS the reopen" in source, True)
+    check("it offers --paper as the no-order route",
+          "--paper, for a run that sends NO orders" in source, True)
+    check("and warns --force also waives the running-session guard",
+          "waives the running-session" in source, True)
+
+
+def test_the_offset_from_a_dead_tick_is_not_a_measurement():
+    """`server_now` is the last TICK's stamp, so it freezes when the market
+    shuts. Measured 2026-09-19: the tick stopped at Sat 05:29:55 and stayed
+    there, so an offset taken against a Sunday-evening local clock reads
+    -38.5h against a true -2.5h.
+
+    The guard errs toward refusing on that, which is the safe direction and
+    is documented. This pins the arithmetic so nobody later 'fixes' the
+    guard by trusting the number.
+    """
+    print()
+    print("a frozen tick yields an offset that is wrong by more than a day")
+    from datetime import datetime, timedelta
+
+    dead_tick = datetime(2026, 9, 19, 5, 29, 55)     # frozen when the week closed
+    local = datetime(2026, 9, 20, 20, 0)             # Sunday evening
+    target = datetime(2026, 9, 21, 6, 0)             # Monday 06:00 -- inside the week
+
+    bogus = run_overnight.weekend_deadline(target, dead_tick, local)
+    check("the dead tick makes a Monday deadline look like a weekend",
+          bogus is not None, True)
+    check("and it names the wrong day", bogus[0].strftime("%A"), "Saturday")
+    check("the fabricated offset is over a day out",
+          abs((dead_tick - local).total_seconds()) > 24 * 3600, True)
+
+    # The same instant, judged with a clock that is actually ticking.
+    live = local - timedelta(hours=2, minutes=30)    # venue UTC+3 against IST
+    check("a live clock allows the very same deadline",
+          run_overnight.weekend_deadline(target, live, local), None)
+
+
+def test_the_watchdog_restarts_the_session_it_was_watching():
+    """**A supervisor that restarts a different, looser session is a hazard.**
+
+    `watchdog.start_session` rebuilds `run_overnight.py --until-hour N` plus
+    its `--session-arg` list, and `start_watchdog` passed none -- so every
+    flag the operator gave was dropped and `run_overnight`'s defaults took
+    over. A `--paper` run came back LIVE and sending orders. A session
+    capped at `--max-daily-loss 50` came back at 200. `--rule
+    rsi_reversion` came back as `random`.
+
+    `--session-arg` existed, was tested, and had no caller: the same defect
+    the watchdog itself had before P1b, one layer in.
+    """
+    print()
+    print("a restart reproduces THIS session, not run_overnight's defaults")
+    import ast
+    from pathlib import Path
+
+    kept = run_overnight.session_args_for(
+        ["--until-hour", "6", "--paper", "--max-daily-loss", "50"])
+    check("--paper survives a restart", "--paper" in kept, True)
+    check("so does the tightened risk limit",
+          kept[kept.index("--max-daily-loss") + 1], "50")
+    check("the hour is not duplicated", "--until-hour" in kept, False)
+
+    check("the = form is handled too",
+          run_overnight.session_args_for(["--until-hour=6", "--rule", "x"]),
+          ["--rule", "x"])
+    check("--no-watchdog is not forwarded",
+          run_overnight.session_args_for(["--no-watchdog", "--paper"]), ["--paper"])
+
+    # And the launcher actually hands them over.
+    source = (Path(__file__).resolve().parents[1] / "tools" / "run_overnight.py").read_text(
+        encoding="utf-8")
+    tree = ast.parse(source)
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "start_watchdog"
+    ]
+    check("start_watchdog is called", len(calls), 1)
+    check("with the session's own arguments", len(calls[0].args), 2)
+    check("built by session_args_for",
+          any(isinstance(n, ast.Name) and n.id == "session_args_for"
+              for n in ast.walk(calls[0])), True)
+    check("and forwarded as --session-arg", '"--session-arg", arg' in source, True)
+
+
 def test_a_session_that_failed_its_flush_is_not_completed():
     print()
     print("'completed' is not the same as 'finished as it was asked to'")
@@ -550,6 +674,9 @@ def main():
     test_a_stuck_record_can_be_resolved_and_only_a_stuck_one()
     test_liveness_is_unknown_rather_than_dead()
     test_a_weekend_deadline_is_refused_in_the_venues_week_not_ours()
+    test_a_paper_run_is_exempt_from_the_weekend_guard()
+    test_the_offset_from_a_dead_tick_is_not_a_measurement()
+    test_the_watchdog_restarts_the_session_it_was_watching()
     test_the_refusal_says_when_the_answer_changes()
     test_a_session_that_failed_its_flush_is_not_completed()
     test_a_full_session_is_supervised_and_a_wind_down_is_not()
