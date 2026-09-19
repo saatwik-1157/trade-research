@@ -824,9 +824,22 @@ def run(mt5, args) -> dict:
         now_mono = time.monotonic()
         overslept = now_mono - last_pass_at
         if overslept > max(3 * args.interval, args.interval + 60):
+            # Re-read rather than remembered: a laptop can be unplugged
+            # mid-session, and "was it on mains WHEN it slept" is the whole
+            # question afterwards. On DC the hold is documented to lapse; on
+            # AC a sleep means the hold did not do its job.
+            power = on_ac_power()
+            where = (
+                "ON MAINS -- the execution power request did NOT hold"
+                if power == AC_ONLINE
+                else "on battery, where the hold is documented to lapse"
+                if power == 0
+                else "power source unknown"
+            )
             print(f"  [{stamp}] THE MACHINE SLEPT: {overslept / 60:.0f} minutes passed "
                   f"between passes, not {args.interval}s. Nothing was managed in that "
-                  f"window and the venue connection may need to re-establish",
+                  f"window and the venue connection may need to re-establish. "
+                  f"It was {where}",
                   flush=True)
         last_pass_at = now_mono
 
@@ -1222,10 +1235,23 @@ def main() -> int:
                           f"execution-state flag prevents it")
                 else:
                     print(f"  {power} (the display may still sleep)")
+                # State the power source EITHER WAY. It named mains and said
+                # nothing on battery, which is silent in the one case that
+                # explains a sleep: on DC Windows ends an execution power
+                # request five minutes after the sleep timeout expires, so
+                # the hold is not the same promise. Reading
+                # `overnight-20260915-201059.log` afterwards -- a session
+                # that slept 112 minutes with the screen hold in force --
+                # there is no way to tell whether the fix failed or was
+                # never applicable, because the log does not say which.
                 if ac == AC_ONLINE:
-                    print("  on mains, so the hold has no documented expiry\n")
+                    print("  ON MAINS, so the hold has no documented expiry\n")
+                elif ac == 0:
+                    print("  ON BATTERY: Windows ends an execution power request five")
+                    print("  minutes after the sleep timeout expires on DC, so this")
+                    print("  hold WILL lapse and a gap in the pass log is expected\n")
                 else:
-                    print()
+                    print("  power source UNKNOWN, so whether the hold expires is too\n")
             out = run(mt5, args)
             # The heartbeat's last state is the last PASS, taken before the
             # flush. A completed session whose record still says 7 open is

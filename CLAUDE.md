@@ -810,13 +810,55 @@ hour the loop breaks one interval early and no pass ever begins after the
 deadline - the in-loop branch alone would have closed nothing and reported a
 clean finish.
 
-**It holds the machine awake.** A session closes nothing while the laptop is
-asleep, and idle standby is far shorter than an overnight run: 300 minutes on
-AC here against a session needing 514. Without the hold the deadline arrives
-with the process suspended and the log simply stops mid-evening, every position
-open, no error to explain it. It holds the SYSTEM and not the display, releases
-in a `finally`, and does not defeat closing the lid - which is not an idle
-timeout, so a closed lid still suspends the session.
+**It holds the machine awake, and that hold has failed once with the fix in
+place.** A session closes nothing while the laptop is asleep. Without the hold
+the deadline arrives with the process suspended and the log simply stops
+mid-evening, every position open, no error to explain it. It holds the SYSTEM
+and, on S0, the display too; it releases in a `finally`, and it does not
+defeat closing the lid - which is not an idle timeout, so a closed lid still
+suspends the session.
+
+Measured across the 38 session logs on this machine with
+`tools/session_gaps.py`, which reads the ladder of `pass N` lines and names
+every gap:
+
+| session | span | gaps | lost | hold in force |
+|---|---|---|---|---|
+| 2026-09-07 23:06 | 6.67h | 0 | - | system only |
+| 2026-09-10 22:46 | 7.21h | 0 | - | system only |
+| 2026-09-11 22:50 | 7.16h | 0 | - | system only |
+| 2026-09-14 23:16 | 6.66h | **4** | **239 min** | system only |
+| 2026-09-15 20:10 | 8.93h | **1** | **112 min** | **system AND screen (S0 fix)** |
+
+**Read the last row before believing the fix.** `overnight-20260915-201059`
+ran with the screen hold in force -- its banner says "this machine only has
+S0 standby, and holding the system alone does not work there" -- and the
+machine still slept from 03:14:39 to 05:06:48. The harness detected it
+(`THE MACHINE SLEPT: 112 minutes passed between passes`), lost the venue with
+it, refused all seven closes at the 06:00 deadline with retcode 10031, and
+did not go flat until 08:13. So the S0 fix has one recorded run and it
+failed; Critical 1 is not "awaiting a clean night" but "failed the last
+night it was tried".
+
+What that log cannot tell you is whether it was on mains, because until
+2026-09-19 the banner named AC and said NOTHING on battery -- silent in the
+one case that explains a sleep, since on DC Windows ends an execution power
+request five minutes after the sleep timeout. It now states the power source
+either way, and re-reads it AT the sleep, because a laptop can be unplugged
+mid-session and "was it on mains WHEN it slept" is the whole question
+afterwards.
+
+**Check the machine's own timeouts before reading a clean run as a pass.**
+On 2026-09-19 this machine reported AC sleep/display/hibernate all `never`
+and DC 30/30/60 minutes. With AC sleep disabled the host will not attempt to
+sleep on mains at all, so an unbroken ladder shows the session survived and
+shows NOTHING about the power request. Testing the hold means lowering the
+AC timeout below the session length first; `run.bat` option 18 says so
+rather than letting a green run close Critical 1 for the wrong reason.
+
+`--paper` is the safe way to run that test: it sends no orders, so a sleep
+costs an abandoned book nothing, and the weekend guard exempts it for the
+same reason it exempts `--harvest-only`.
 
 **A second session is refused.** The guard is a `psutil` scan of local
 processes and cannot see another machine; `psutil` absent, it prints one line
