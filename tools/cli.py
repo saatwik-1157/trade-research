@@ -55,6 +55,7 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "shape-search": ("shape_search", "candle-shape and volatility-regime rules"),
     "backtest": ("backtest", "does the composite score separate forward returns"),
     "swap": ("swap", "overnight financing, in points"),
+    "carry-check": ("carry_check", "does a paid long side survive the spot drift"),
 }
 
 RECORDS: dict[str, tuple[str, str]] = {

@@ -52,6 +52,14 @@ jobs:
       - name: Swap units, night count and plausibility fence
         run: python tests/test_swap.py
 
+      # The carry verdict is the only positive number on this account, so the
+      # way it fails is by getting more confident than the data allows. Judged
+      # on one window it reads CARRY_EXCEEDS_DRIFT for a pair that is negative
+      # five years further back; the test pins the hedged verdict and the
+      # seventy-five-year horizon that makes it moot.
+      - name: Carry against spot drift, across windows
+        run: python tests/test_carry_check.py
+
       # Eight overnight sessions in a row were terminated from outside and
       # not one left a record of why. The journal that fixes that must never
       # be able to end a session itself, so "it reports failure rather than

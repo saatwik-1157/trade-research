@@ -539,6 +539,65 @@ A replication matters here for the reason it did at H4 and D1: a single
 search that finds nothing can be dismissed as one unlucky draw, and two on
 different windows cannot.
 
+Carry is the ninth search and the only one whose candidate is not a rule.
+Every family above is a pattern fitted to price and judged against a shuffle
+of itself. Overnight financing is a TERM OF THE CONTRACT: the broker publishes
+it, it is known before any trade, and it does not have to clear a permutation
+null because there is no timing in it to shuffle. On this account three long
+sides are PAID rather than charged -- AUDUSD +4.49 points a night, NZDUSD
++1.60, USDCHF +0.08 -- against a charge on every other side of every other
+symbol (`reports/swap_profile.json`, `reports/carry_check.json`).
+
+That is worth taking seriously for a reason none of the eight rule searches
+could claim: **it is the one candidate here that pays you for not trading.**
+The live loop pays the spread on all 1,382 opens a night; a carry position
+pays it once and earns every night after. At AUDUSD's rate the spread repays
+in **4.2 nights**.
+
+**It still does not clear the bar, and the arithmetic is worth keeping
+because it is a different failure from the other eight.** AUDUSD carry is
+1,638 points a year, 2.30% at current price. Net of realised spot drift over
+five windows it runs +4,211 (3y), +1,353 (5y), +1,467 (10y), **-817 (15y)**
+and +2,205 (25y) points a year. The carry term is a constant -- it is today's
+contract -- so every one of those differences is the spot term, and the spot
+term moves by 5,028 points a year depending only on where the history is cut.
+The first version of `carry_check.py` judged one window, returned
+CARRY_EXCEEDS_DRIFT at ten years, and would have been confidently wrong at
+fifteen.
+
+The rebuttal to that is correct and has to be answered rather than waved at:
+if spot is a martingale then the drift term has expectation zero, its
+variation across windows is sampling noise rather than evidence, and a
+contractual carry is positive expected value however the history is cut. The
+answer is a calculation. At 2.30% a year against 10.14% annual volatility the
+ratio is **0.227**, so a t-statistic growing as Sharpe*sqrt(T) needs
+**74.6 years** to reach 1.96. One standard error of the ten-year drift
+estimate is 3.20% a year, and the carry is **0.72** of it -- the noise in the
+thing that could eat the carry is larger than the carry, and stays larger
+until about twenty years. Worst peak-to-trough on the pair is **-48%**.
+
+So the honest statement is not "carry does not work". It is that the carry is
+real, is positive in expectation if spot is unforecastable, and is **too small
+relative to the volatility it rides on to be demonstrated within a working
+lifetime** -- which is the same shape as `cost_hurdle.py`'s 4,300 trades and
+the 6,600 in the composite note, in the units a hold rather than a trade is
+measured in. A -48% drawdown collecting 2.3% a year is the carry risk premium
+behaving exactly as the literature describes: payment for crash risk, not an
+inefficiency.
+
+Two cautions for anyone re-running this. **The swap rate is a snapshot and
+the history is not.** MT5 reports what the broker charges today; the AUD-USD
+policy differential has changed sign inside every window above, so the carry
+column does NOT describe what a position would have earned over that history
+and `carry_check.py` refuses to multiply the two into an equity curve. And
+**the conversion is the trap it is everywhere else in this repository**: the
+first version of the tool divided the raw swap by `trade_tick_value` and
+skipped the base-to-deposit step, reporting AUDUSD at 6.3 points a night
+against the true 4.49 -- a 40% overstatement of the only positive number on
+the account, in the direction that manufactures an edge. It now calls
+`swap.swap_points_per_night`, which was already correct, rather than
+restating the arithmetic.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
