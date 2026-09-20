@@ -5,8 +5,10 @@ the ledger and a live read of the venue. Updated overnight on 2026-09-19; see
 [What changed overnight on 2026-09-19](#what-changed-overnight-on-2026-09-19)
 and [What changed on 2026-09-18](#what-changed-on-2026-09-18).
 
-**Current Status:** `HARNESS_FENCED` → `SOAK_REQUIRED`, and the soak is not
-producing clean evidence because the host keeps falling asleep.
+**Current Status:** `HARNESS_FENCED` → `SOAK_REQUIRED`. The soak stopped
+producing clean evidence because the host kept falling asleep, and as of
+2026-09-20 that is understood: **it is the charger, not the code.** On mains
+this machine cannot sleep at all; on battery no fix can keep it awake.
 
 > **RESOLVED 2026-09-18 16:10: the account is FLAT.** It had been unreadable
 > since 09-16 08:46, when session `20260916-082522` lost the venue mid-flight,
@@ -25,8 +27,13 @@ session claimed to be flat when it could not prove it.
 
 What is left before `PAPER_READY` is still evidence rather than construction.
 The new finding is that the evidence is being spoiled by the machine, not by
-the code: **Windows modern standby is putting the host to sleep mid-session,
-and the fix that was supposed to prevent it does not work.**
+the code: **Windows modern standby was putting the host to sleep
+mid-session.** As of 2026-09-20 the shape of that is clear: it happens on
+BATTERY, where Windows ends an execution power request five minutes after
+the sleep timeout however the hold is written. On mains this machine is
+configured never to sleep, and the three long sessions that ran on mains
+have no gap in them. The rule is to plug it in; `preflight.py` FAILS on
+`on_ac_power` and that refusal is the control.
 
 | | |
 |---|---|
@@ -40,7 +47,7 @@ and the fix that was supposed to prevent it does not work.**
 | **MT5 Status** | one adapter, one `order_send` on the platform path; 4 on the harness path, all four behind the Risk Engine — the opening order needs an `Approval`, the three closing ones are recorded and never refused |
 | **Risk Status** | 33+ veto codes — weekly loss, consecutive losses and correlation added at P4. RiskEngine is the final veto on **both** paths as of P2 |
 | **Windows Build Status** | **exists.** `dist/trade-research/` onedir, rebuilt 09-15 09:36, plus a legacy onefile `dist/trade-research.exe` from 09-12. Built by `build_exe.py`. *(This row said "none" until 09-18; it was stale.)* |
-| **Stability** | **three sessions have now reached a deadline; one of the three flushed clean.** The limiting factor is no longer the code path — it is the host sleeping. See [Modern standby](#modern-standby-is-eating-the-soak) |
+| **Stability** | **Measured 2026-09-20 with `tools/session_gaps.py` over all 38 session logs.** The three long sessions on mains ran **6.7–7.2h with no gap at all**; the two that gapped lost 239 and 112 minutes and were almost certainly on battery. AC sleep is `never` on this host across all four power schemes (Armoury Crate enforces it), so on mains the failure mode does not exist. See [Modern standby](#modern-standby-is-eating-the-soak) |
 | **Tests** | **toolkit lane green: all ten files pass** (re-run 2026-09-19). **Backend suite green at 3242 passed, 12 skipped in 19:02** on the same date — up from 2,976 on 09-12, the difference being the Tier-1 work below. `ruff` + `mypy` are clean over `backend/` — **and only `backend/`**: `.github/workflows/tests.yml` runs both with `working-directory: backend`, so `tools/` has never been lint- or type-gated and carries pre-existing findings in both |
 
 ## What changed overnight on 2026-09-19

@@ -810,8 +810,9 @@ hour the loop breaks one interval early and no pass ever begins after the
 deadline - the in-loop branch alone would have closed nothing and reported a
 clean finish.
 
-**It holds the machine awake, and that hold has failed once with the fix in
-place.** A session closes nothing while the laptop is asleep. Without the hold
+**It holds the machine awake, and on this host the thing that decides
+whether that matters is the CHARGER.** A session closes nothing while the
+laptop is asleep. Without the hold
 the deadline arrives with the process suspended and the log simply stops
 mid-evening, every position open, no error to explain it. It holds the SYSTEM
 and, on S0, the display too; it releases in a `finally`, and it does not
@@ -830,35 +831,52 @@ every gap:
 | 2026-09-14 23:16 | 6.66h | **4** | **239 min** | system only |
 | 2026-09-15 20:10 | 8.93h | **1** | **112 min** | **system AND screen (S0 fix)** |
 
-**Read the last row before believing the fix.** `overnight-20260915-201059`
-ran with the screen hold in force -- its banner says "this machine only has
-S0 standby, and holding the system alone does not work there" -- and the
-machine still slept from 03:14:39 to 05:06:48. The harness detected it
-(`THE MACHINE SLEPT: 112 minutes passed between passes`), lost the venue with
-it, refused all seven closes at the 06:00 deadline with retcode 10031, and
-did not go flat until 08:13. So the S0 fix has one recorded run and it
-failed; Critical 1 is not "awaiting a clean night" but "failed the last
-night it was tried".
+**The sleep problem is a BATTERY problem, and the table says so once you
+know the machine's power configuration.** Measured 2026-09-20: AC sleep,
+display and hibernate are all `never` on this host, DC is 30/30/60 minutes,
+and the `never` holds across **all four** power schemes (Performance,
+Balanced, Silent, Turbo). It is not a group policy -- there is none on
+`Sleep after`, and the setting reports itself writable -- it is Armoury
+Crate: `AsusOptimization`, `ArmouryCrate.Service` and a dozen ASUS services
+re-apply the profile, and `powercfg /change standby-timeout-ac 30` does not
+survive them, elevated or not.
 
-What that log cannot tell you is whether it was on mains, because until
-2026-09-19 the banner named AC and said NOTHING on battery -- silent in the
-one case that explains a sleep, since on DC Windows ends an execution power
-request five minutes after the sleep timeout. It now states the power source
-either way, and re-reads it AT the sleep, because a laptop can be unplugged
-mid-session and "was it on mains WHEN it slept" is the whole question
-afterwards.
+So **on mains this host cannot sleep at all**, which is exactly what the
+three unbroken 6.7-7.2h sessions show. The two that gapped were almost
+certainly on battery, where Windows ends an execution power request five
+minutes after the sleep timeout expires and no code prevents it.
 
-**Check the machine's own timeouts before reading a clean run as a pass.**
-On 2026-09-19 this machine reported AC sleep/display/hibernate all `never`
-and DC 30/30/60 minutes. With AC sleep disabled the host will not attempt to
-sleep on mains at all, so an unbroken ladder shows the session survived and
-shows NOTHING about the power request. Testing the hold means lowering the
-AC timeout below the session length first; `run.bat` option 18 says so
-rather than letting a green run close Critical 1 for the wrong reason.
+That reframes `overnight-20260915-201059`. It ran with the screen hold in
+force and still slept 112 minutes; the harness caught it (`THE MACHINE
+SLEPT`), lost the venue with it, refused all seven closes at the 06:00
+deadline with retcode 10031 and did not go flat until 08:13. Read as a
+verdict on the fix that looks damning. Read against the power
+configuration it is most likely a DC session doing the documented thing.
+**The S0 fix is therefore not disproven -- and not proven either.** It
+cannot be tested on this machine on AC, because the host will not attempt
+to sleep however the hold behaves.
 
-`--paper` is the safe way to run that test: it sends no orders, so a sleep
-costs an abandoned book nothing, and the weekend guard exempts it for the
-same reason it exempts `--harvest-only`.
+What the log could NOT tell you is which it was, because until 2026-09-19
+the banner named mains and said NOTHING on battery -- silent in the one
+case that explains a sleep. It now states the source either way and
+re-reads it AT the sleep, since a laptop can be unplugged mid-session.
+Every session from here answers the question for itself.
+
+**The operational rule is the charger, not the code.** Plug it in and the
+failure mode is gone; run on battery and no fix exists to save the session.
+`preflight.py` FAILS on `on_ac_power` for that reason, and that refusal is
+the whole control -- on 2026-09-20 it correctly stopped a scheduled session
+from starting on battery.
+
+So do not read a clean overnight run on mains as evidence that the power
+request works. It shows the session survived, which is worth having, and
+shows nothing about the hold. `run.bat` option 18 says this in its own
+banner rather than letting a green ladder close Critical 1 for the wrong
+reason.
+
+`--paper` is the safe way to run any of this: it sends no orders, so a
+sleep costs an abandoned book nothing, and the weekend guard exempts it for
+the same reason it exempts `--harvest-only`.
 
 **A second session is refused.** The guard is a `psutil` scan of local
 processes and cannot see another machine; `psutil` absent, it prints one line
