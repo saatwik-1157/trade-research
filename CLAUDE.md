@@ -598,6 +598,69 @@ the account, in the direction that manufactures an edge. It now calls
 `swap.swap_points_per_night`, which was already correct, rather than
 restating the arithmetic.
 
+The cross-section is the tenth search and the first that is not a
+time-series rule at all. Every family above judges each symbol on its own
+history and pools the seven results, and that construction carries the
+confound this file keeps correcting for: the majors share a dollar leg, one
+dollar move opens correlated trades in all of them, and `clustered_by_date`
+exists entirely to undo the double counting. It has dissolved the two best
+results the project ever produced.
+
+`tools/cross_search.py` removes the leg BY CONSTRUCTION instead. Rank the
+seven foreign currencies against the dollar, go long the strongest n and
+short the weakest n, and a pure dollar move lifts every leg together and
+cancels -- measured exactly, not approximately: a synthetic common move
+returns 0.0 to the last bit. Three things change with it. The observation
+unit becomes one portfolio return per bar, so there is **no date clustering
+left to undo** and the t-statistic is the honest one rather than a pooled
+figure awaiting correction. The null has to change too: shuffling through
+TIME would leave the cross-section intact, so the null permutes weights
+ACROSS SYMBOLS at each rebalance, holding leg count, gross exposure and
+turnover fixed while destroying which currency is strongest. And cost is
+charged on **turnover** -- `sum(|w_new - w_old| * spread)` -- because a leg
+held through a rebalance is free.
+
+**It finds nothing, and the null is a well-behaved one.** At D1 over 2,618
+bars and ten years, the best of 24 candidates is `rev_k60_n2_h20` at an
+in-sample t of **1.27** against a 3.078 Bonferroni threshold and a shuffle
+that reached **2.58** -- the shuffle beat the real thing, for the fourth time
+in this project. Out of sample it is 0.50. **Zero candidates** cleared 1.96
+out of sample against 1.2 expected by chance, and median out-of-sample Sharpe
+across the 24 is **-0.076**.
+
+H1 over three years is the one that needed a second look. `rev_k24_n2_h120`
+scores an in-sample **2.47** and CLEARS its permutation null at 1.90 -- and
+the gap of 0.57 is barely outside the 0.5 fence this file sets for re-running
+an under-sampled null. Re-run at 25 rounds the null rises to **2.16** and the
+margin falls to 0.31, inside the fence, which is the documented behaviour
+rather than a surprise. It fails Bonferroni either way, posts **0.56** out of
+sample, and again zero of 24 cleared against 1.2 expected.
+
+One pattern is consistent enough to note and not strong enough to trade: at
+both timeframes **every** leading candidate is `rev` rather than `mom` --
+short-horizon relative-currency reversal, the opposite of the trend families
+that led the indices and crypto searches. Twelve of twelve at H1. It is a
+curiosity on the same footing as those, because it does not clear a gate.
+
+**The engine was verified to have power before its null was believed**, which
+none of the earlier searches in this file can say. A planted persistent
+currency is found at t = **+11.16** by momentum and -11.16 by reversal, so a
+real cross-sectional effect of that size would not have been missed. Pure
+noise returns 0.49.
+
+The defect caught on the way is worth more than the result. A cross-sectional
+signal is a cumulative past return sliced out of a cumsum, and an off-by-one
+there does not break anything visibly -- it manufactures an edge. Introduced
+deliberately, contaminating only 1/k of the signal, it scored an in-sample
+**2.47 and CLEARED BOTH Bonferroni and the permutation null**; only the
+out-of-sample gate caught it. Worse, `test_cross_search.py` did not catch it
+either, because the test RESTATED the signal construction instead of
+importing it and so never executed the line that was wrong. `momentum_signal`
+is now a function in the tool, the test imports it, and the check is
+algebraic -- a single planted return must be invisible at the bar it is acted
+on and visible on the next -- rather than a t-statistic hoping to notice.
+Reverting the off-by-one now turns three checks red.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by

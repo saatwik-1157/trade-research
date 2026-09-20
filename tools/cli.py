@@ -56,6 +56,7 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "backtest": ("backtest", "does the composite score separate forward returns"),
     "swap": ("swap", "overnight financing, in points"),
     "carry-check": ("carry_check", "does a paid long side survive the spot drift"),
+    "cross-search": ("cross_search", "dollar-neutral cross-sectional currency portfolios"),
 }
 
 RECORDS: dict[str, tuple[str, str]] = {

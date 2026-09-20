@@ -60,6 +60,14 @@ jobs:
       - name: Carry against spot drift, across windows
         run: python tests/test_carry_check.py
 
+      # A cross-sectional search is the one construction where a lookahead is
+      # both easy to introduce and profitable-looking: an off-by-one that
+      # contaminates 1/k of the signal scored an in-sample t of 2.47, clearing
+      # both Bonferroni and the permutation null. The test asserts the signal
+      # algebra directly rather than hoping a t-statistic notices.
+      - name: Cross-sectional portfolios, lookahead and neutrality
+        run: python tests/test_cross_search.py
+
       # Eight overnight sessions in a row were terminated from outside and
       # not one left a record of why. The journal that fixes that must never
       # be able to end a session itself, so "it reports failure rather than
