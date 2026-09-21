@@ -50,7 +50,7 @@ have no gap in them. The rule is to plug it in; `preflight.py` FAILS on
 | **MT5 Status** | one adapter, one `order_send` on the platform path; 4 on the harness path, all four behind the Risk Engine — the opening order needs an `Approval`, the three closing ones are recorded and never refused |
 | **Risk Status** | 33+ veto codes — weekly loss, consecutive losses and correlation added at P4. RiskEngine is the final veto on **both** paths as of P2 |
 | **Windows Build Status** | **exists.** `dist/trade-research/` onedir, rebuilt 09-15 09:36, plus a legacy onefile `dist/trade-research.exe` from 09-12. Built by `build_exe.py`. *(This row said "none" until 09-18; it was stale.)* |
-| **Stability** | **A live session slept 41 minutes ON MAINS on 2026-09-21** (`overnight-20260921-191852`, last pass 20:30:33, resumed 21:11:38; Windows events 506 at 20:30:45 and 507 at 21:11:39), with AC sleep reading `0x00000000` = never and the power request held. Seven positions were open and unmanaged. The harness detected it, re-established the venue and harvested on the next pass — recovery works, prevention does not. The earlier reading that the 239- and 112-minute gaps were "almost certainly battery" rested on mains being safe and is withdrawn. See [Modern standby](#modern-standby-is-eating-the-soak) |
+| **Stability** | **A live session slept 41 minutes ON MAINS on 2026-09-21** (`overnight-20260921-191852`, last pass 20:30:33, resumed 21:11:38; Windows events 506 at 20:30:45 and 507 at 21:11:39), with AC sleep reading `0x00000000` = never and the power request held. Cost: **69 cents of equity on seven positions**, because the bracket is broker-side and keeps working while the harness does not. The harness detected the gap, re-established the venue and harvested on the next pass — recovery works, prevention does not. The earlier reading that the 239- and 112-minute gaps were "almost certainly battery" rested on mains being safe and is withdrawn. See [Modern standby](#modern-standby-is-eating-the-soak) |
 | **Tests** | **toolkit lane green: all ten files pass** (re-run 2026-09-19). **Backend suite green at 3242 passed, 12 skipped in 19:02** on the same date — up from 2,976 on 09-12, the difference being the Tier-1 work below. `ruff` + `mypy` are clean over `backend/` — **and only `backend/`**: `.github/workflows/tests.yml` runs both with `working-directory: backend`, so `tools/` has never been lint- or type-gated and carries pre-existing findings in both |
 
 ## What changed overnight on 2026-09-19
@@ -417,9 +417,9 @@ venue's week is Mon 21 Sep."*
    2026-09-21 — this was marked fixed-pending-soak and the soak refuted
    it.** `PowerRequestExecutionRequired` is the right API and it is
    verified GRANTED, and the host entered Modern Standby anyway: 41
-   minutes on a LIVE session, on mains, with AC sleep at `never`, seven
-   positions open and unmanaged. Windows events 506/507 confirm it
-   independently of the harness's own detection.
+   minutes on a LIVE session, on mains, with AC sleep at `never`.
+   Windows events 506/507 confirm it independently of the harness's
+   own detection.
 
    Three things this does NOT mean. It is not a battery problem — it
    happened on mains. It is not a misconfiguration — the idle timeout
@@ -429,10 +429,21 @@ venue's week is Mon 21 Sep."*
 
    **Stop trying to prevent it and price it instead.** The harness
    already detects the gap, names it, re-establishes the venue and
-   resumes — it did all four tonight. The open question is no longer
-   "how do we stay awake" but "what is the worst a 41-minute blind
-   window can cost a book with seven positions and a 1.5xATR stop", and
-   that is answerable from the data rather than from Windows.
+   resumes — it did all four tonight.
+
+   And the price is lower than "unmanaged" implies. `sl` and `tp` go
+   WITH the order as absolute GTC levels (`mt5_paper.py:538`), so the
+   bracket is enforced at the VENUE while the harness sleeps — a
+   sleeping session is not a naked book. Across tonight's 41 minutes
+   balance did not move at all and equity moved **69 cents on seven
+   positions**. What a blind window really costs is missed harvests
+   (bounded by the stop), missed entries (a saving at negative
+   expectancy), and — the expensive one — a flush that does not run
+   if the window overlaps 06:00, which is what cost
+   `overnight-20260915-201059` seven refused closes and two hours
+   past its deadline. So the open question is narrower than stated an
+   hour ago: not "what can the market do to seven positions" but
+   "what happens when a sleep overlaps the flush".
    Detail in [Modern standby](#modern-standby-is-eating-the-soak).
 2. ~~**The flush retry budget is counted in attempts, not wall-clock.**~~
    **Fixed 2026-09-18.** Attempts are a floor, the budget is 10 minutes of

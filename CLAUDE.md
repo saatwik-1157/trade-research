@@ -1006,12 +1006,41 @@ exactly why the banner now re-reads it AT the sleep. Tonight's line is the
 first time that re-read has actually answered the question, and the answer
 was the unwelcome one.
 
-**The operational consequence.** A session on mains can lose 41 minutes with
-positions open and nothing prevents it. What survives the gap is the harness:
-it DETECTED the sleep, said so, re-established the venue and harvested on the
-next pass. Treat detection and recovery as the control, not prevention, and
-do not read an unbroken ladder as evidence the hold works -- it is evidence
-the host happened not to sleep.
+**The operational consequence.** A session on mains can lose 41 minutes
+and nothing prevents it. What survives the gap is the harness: it DETECTED
+the sleep, said so, re-established the venue and harvested on the next pass.
+Treat detection and recovery as the control, not prevention, and do not read
+an unbroken ladder as evidence the hold works -- it is evidence the host
+happened not to sleep.
+
+**What a blind window actually costs, which is less than "unmanaged"
+suggests and is not zero.** `mt5_paper.place` sends `sl` and `tp` WITH the
+order, as absolute levels at `ORDER_TIME_GTC` (`tools/mt5_paper.py:538`), so
+the bracket lives at the VENUE and is enforced while the harness is asleep.
+A sleeping session is not a naked book. Tonight measured it: across the 41
+minutes, balance did not move at all (99,927.63 both sides, so no stop or
+target was touched) and equity went 99,919.98 to 99,919.29 -- **69 cents on
+seven positions.**
+
+Three things are genuinely lost, and only the third is expensive:
+
+  * **Harvests.** The loop cannot close at the profit floor, so a position
+    that would have been booked at +0.50 can give it back. Bounded below by
+    the stop.
+  * **Entries.** None open. At a measured negative expectancy this is a
+    saving rather than a cost, which is worth saying plainly.
+  * **The deadline.** This is the one that hurt. A sleep spanning 06:00
+    means the flush does not run when it should, and
+    `overnight-20260915-201059` is the worked example: it woke near the
+    deadline, was refused on all seven closes with retcode 10031, and did
+    not go flat until 08:13. `--flat-by`'s retry budget was made
+    wall-clock-based on 2026-09-18 for exactly this, and a mid-flush sleep
+    now restarts the budget rather than spending it -- untested against a
+    real mid-flush sleep.
+
+So the risk to price is not "what can the market do to seven open positions
+in 41 minutes" -- the bracket answers that. It is "what happens when the
+blind window overlaps the flush", and that is a much narrower question.
 
 `--paper` is the safe way to run any of this: it sends no orders, so a
 sleep costs an abandoned book nothing, and the weekend guard exempts it for
