@@ -204,7 +204,17 @@ def start_session(until_hour: int, extra: list[str]) -> subprocess.Popen:
     return subprocess.Popen(cmd, cwd=root, stdout=capture, stderr=capture)
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The command line, as a function so the other side can be tested against it.
+
+    `run_overnight.start_watchdog` builds the argv this parses, and on
+    2026-09-20 it built one this REFUSED: `--session-arg --paper` exits 2 with
+    "expected one argument", because argparse will not take a value beginning
+    with "-". The watchdog died on its first line and the session ran
+    unsupervised for 3.7 hours. Neither side's tests caught it, because
+    neither side's tests crossed the boundary - the argv was built in one
+    process and parsed in another, and nothing ever did both.
+    """
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--until-hour", type=int, default=6)
     ap.add_argument("--max-restarts", type=int, default=MAX_RESTARTS)
@@ -214,7 +224,11 @@ def main() -> int:
     ap.add_argument("--session-arg", action="append", default=[],
                     metavar="ARG",
                     help="passed through to run_overnight.py; repeatable")
-    args, _ = ap.parse_known_args()
+    return ap
+
+
+def main() -> int:
+    args, _ = build_parser().parse_known_args()
 
     now = datetime.now()
     target = now.replace(hour=args.until_hour, minute=0, second=0, microsecond=0)

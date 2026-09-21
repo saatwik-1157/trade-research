@@ -558,7 +558,15 @@ def test_the_watchdog_restarts_the_session_it_was_watching():
     check("built by session_args_for",
           any(isinstance(n, ast.Name) and n.id == "session_args_for"
               for n in ast.walk(calls[0])), True)
-    check("and forwarded as --session-arg", '"--session-arg", arg' in source, True)
+    # This check used to read: '"--session-arg", arg' in source. That string
+    # IS the bug -- the space form argparse rejects -- so the test asserted
+    # the defect and passed for every day the watchdog was dead, and would
+    # have failed the fix. A source-text assertion cannot tell a correct
+    # spelling from an incorrect one; it can only tell you the spelling did
+    # not change. The real check builds the argv and parses it with the
+    # watchdog's own parser, at the end of this file.
+    check("and forwarded as --session-arg",
+          "--session-arg=" in run_overnight.watchdog_argv(6, ["--paper"])[-1], True)
 
 
 def test_a_session_that_failed_its_flush_is_not_completed():
@@ -649,10 +657,16 @@ def test_the_watchdog_adopts_rather_than_starting_a_second_session():
           watchdog._is_session("python tools/run_overnight.py --dry-run"), False)
 
     # The flag the launcher must pass. Without it the watchdog starts one.
-    src = inspect.getsource(run_overnight.start_watchdog)
-    check("the launcher passes --adopt", "--adopt" in src, True)
+    # Behavioural rather than textual: build the argv and read it. The two
+    # checks above this used to grep the function body, which is how the
+    # space-form bug survived -- the text was stable and wrong.
+    argv = run_overnight.watchdog_argv(6, [])
+    check("the launcher passes --adopt", "--adopt" in argv, True)
     check("and hands over the parsed hour, not a default",
-          "str(until_hour)" in src, True)
+          argv[argv.index("--until-hour") + 1], "6")
+    check("a different hour actually reaches the argv",
+          run_overnight.watchdog_argv(23, [])[argv.index("--until-hour") + 1], "23")
+    src = inspect.getsource(run_overnight.start_watchdog)
     check("and never lets a failed launch end the session",
           "return None" in src, True)
 
@@ -681,6 +695,7 @@ def main():
     test_a_session_that_failed_its_flush_is_not_completed()
     test_a_full_session_is_supervised_and_a_wind_down_is_not()
     test_the_watchdog_adopts_rather_than_starting_a_second_session()
+    test_the_watchdog_handoff_parses_on_the_other_side()
 
     if FAILED:
         print(f"\n{len(FAILED)} check(s) failed")
@@ -688,6 +703,65 @@ def main():
     print("\nall crash-journal checks passed")
     return 0
 
+
+from run_overnight import session_args_for, watchdog_argv
+from watchdog import build_parser
+
+
+def test_the_watchdog_handoff_parses_on_the_other_side():
+
+
+    # ---------------------------------------------------------------------------
+    # The watchdog handoff. This is a CONTRACT between two programs: run_overnight
+    # builds an argv and watchdog parses it, in a different process. Both sides
+    # were individually correct and the pair was broken, which is why the check
+    # has to build with one and parse with the other rather than assert on either
+    # alone.
+    #
+    # Measured 2026-09-20. The session of 20:42 printed "watchdog: pid 24268,
+    # adopting this session", and watchdog.log recorded
+    #   watchdog.py: error: argument --session-arg: expected one argument
+    # argparse will not accept a value that begins with "-", and EVERY value
+    # forwarded here is itself a flag. So the watchdog exited 2 on its first line,
+    # the session ran unsupervised for 3.7 hours, and when it stopped at 00:25
+    # nothing restarted it. On a --paper night that cost nothing; on a live night
+    # it is seven positions left open with no supervisor and no flush.
+
+    for flags in (
+        ["--paper"],
+        ["--paper", "--max-daily-loss", "50"],
+        ["--rule", "rsi_reversion", "--symbols", "EURUSD,GBPUSD"],
+        ["--harvest-only"],
+        [],
+    ):
+        argv = watchdog_argv(6, flags)
+        try:
+            parsed = build_parser().parse_args(argv)
+            ok = parsed.session_arg == flags
+        except SystemExit:
+            ok = False
+        check(f"watchdog parses the argv built for {' '.join(flags) or '(no flags)'}",
+              ok, True)
+
+    # The specific shape that failed: a value beginning with "-" must survive.
+    argv = watchdog_argv(6, ["--paper"])
+    check("the forwarded flag uses the = form, not a bare pair",
+          "--session-arg=--paper" in argv, True)
+    check("and the space form is not emitted at all",
+          "--session-arg" in argv, False)
+
+    # End to end from the operator's own command line, which is how it is called.
+    forwarded = session_args_for(["--until-hour", "6", "--paper"])
+    check("a --paper session forwards --paper and drops --until-hour",
+          forwarded, ["--paper"])
+    check("and that round-trips through the watchdog's parser",
+          build_parser().parse_args(watchdog_argv(6, forwarded)).session_arg,
+          ["--paper"])
+    # --until-hour is the watchdog's own, passed once and not duplicated.
+    check("--until-hour is passed exactly once",
+          watchdog_argv(6, forwarded).count("--until-hour"), 1)
+    check("and --adopt is always present, or it would start a SECOND session",
+          "--adopt" in watchdog_argv(6, forwarded), True)
 
 if __name__ == "__main__":
     raise SystemExit(main())

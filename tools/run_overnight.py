@@ -670,6 +670,25 @@ def session_args_for(argv: list[str]) -> list[str]:
     return out
 
 
+def watchdog_argv(until_hour: int, session_args: list[str] | None = None) -> list[str]:
+    """The watchdog's command line, without spawning anything.
+
+    Separated from `start_watchdog` so a test can hand it to
+    `watchdog.build_parser()` and check the two agree. They did not: the
+    space form `["--session-arg", "--paper"]` is rejected by argparse,
+    because every value forwarded here is ITSELF a flag and argparse will not
+    read a token beginning with "-" as an option's value. The `=` form is the
+    only one that works, and it works for all of them.
+
+    Measured 2026-09-20: the 20:42 session printed "watchdog: pid 24268,
+    adopting this session", the watchdog exited 2 on that line, and the
+    session ran unsupervised for 3.7h before stopping at 00:25 with nothing
+    to restart it. The bug was in neither program - it was between them.
+    """
+    forwarded = [f"--session-arg={arg}" for arg in session_args or []]
+    return ["--adopt", "--until-hour", str(until_hour), *forwarded]
+
+
 def start_watchdog(until_hour: int, session_args: list[str] | None = None):
     """Start `tools/watchdog.py --adopt` beside this session. **P1b, closed.**
 
@@ -712,13 +731,19 @@ def start_watchdog(until_hour: int, session_args: list[str] | None = None):
 
     # Forwarded so a restart reproduces THIS session rather than the
     # defaults. Repeatable by design on the watchdog's side.
-    forwarded: list[str] = []
-    for arg in session_args or []:
-        forwarded += ["--session-arg", arg]
-
+    #
+    # The `=` form is REQUIRED, not a style choice. Every value forwarded here
+    # is itself a flag, so `["--session-arg", "--paper"]` makes argparse see a
+    # token starting with "-" where it wants a value, and it exits 2 with
+    # "expected one argument" before the watchdog does anything. Measured
+    # 2026-09-20: the session of 20:42 printed "watchdog: pid 24268, adopting
+    # this session", the watchdog died on that line instantly, and the session
+    # ran UNSUPERVISED for 3.7h and then stopped at 00:25 with nothing to
+    # restart it. The space form fails for exactly the flags it exists to
+    # carry -- it would only have worked for a value that is not a flag, and
+    # there are none.
     if getattr(sys, "frozen", False):
-        cmd = [sys.executable, "watchdog", "--adopt", "--until-hour", str(until_hour),
-               *forwarded]
+        cmd = [sys.executable, "watchdog", *watchdog_argv(until_hour, session_args)]
     else:
         exe = sys.executable
         # pythonw where we have it: the watchdog outlives this process and a
@@ -727,7 +752,7 @@ def start_watchdog(until_hour: int, session_args: list[str] | None = None):
         cand = exe.replace("python.exe", "pythonw.exe")
         if cand != exe and os.path.exists(cand):
             exe = cand
-        cmd = [exe, script, "--adopt", "--until-hour", str(until_hour), *forwarded]
+        cmd = [exe, script, *watchdog_argv(until_hour, session_args)]
 
     logs = os.path.join(root, "logs")
     os.makedirs(logs, exist_ok=True)
