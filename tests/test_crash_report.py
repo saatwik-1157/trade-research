@@ -781,21 +781,33 @@ def test_the_guard_does_not_refuse_on_its_own_launcher():
     """
     print()
     print("The duplicate-session guard - a launcher stub is not a rival")
-    import psutil
 
-    me = psutil.Process()
-    ancestors = [p.pid for p in me.parents()]
-    check("this process has at least one ancestor to confuse it with",
-          len(ancestors) >= 1, True)
+    # psutil is NOT in requirements.txt - it is suggested in a comment - so CI
+    # is exactly the machine where it is missing, the same reasoning as
+    # `process_alive` above. A bare `import psutil` here took all three
+    # interpreters down with an ImportError. Only the live-process-table check
+    # needs it, and that is the WEAK half; the checks that actually catch the
+    # bug drive `is_rival_session` directly and run everywhere.
+    try:
+        import psutil
+    except ImportError:
+        print("  SKIP  the live process table (psutil absent, as on CI)")
+    else:
+        me = psutil.Process()
+        ancestors = [p.pid for p in me.parents()]
+        check("this process has at least one ancestor to confuse it with",
+              len(ancestors) >= 1, True)
 
-    # Against the LIVE process table: the guard must never name this process
-    # or one of its ancestors. Necessary but weak on its own - this process
-    # runs test_crash_report.py, so its ancestors do not match
-    # SESSION_SCRIPTS and would be skipped even by the broken version.
-    mine = {me.pid, *ancestors}
-    named = {pid for pid, _started, _cmd in run_overnight.other_sessions()}
-    check("the guard never names this process or an ancestor of it",
-          sorted(named & mine), [])
+        # Against the LIVE process table: the guard must never name this
+        # process or one of its ancestors. Necessary but weak on its own -
+        # this process runs test_crash_report.py, so its ancestors do not
+        # match SESSION_SCRIPTS and would be skipped even by the broken
+        # version. It passed WITH the bug present; the fabricated table below
+        # is what caught it.
+        mine = {me.pid, *ancestors}
+        named = {pid for pid, _started, _cmd in run_overnight.other_sessions()}
+        check("the guard never names this process or an ancestor of it",
+              sorted(named & mine), [])
 
     # The check that actually bites, against a fabricated table. STUB is the
     # venv launcher: same cmdline as the session, different pid, and a
