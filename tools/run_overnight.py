@@ -728,6 +728,75 @@ def watchdog_argv(until_hour: int, session_args: list[str] | None = None) -> lis
     return ["--adopt", "--until-hour", str(until_hour), *forwarded]
 
 
+def rotate_watchdog_log(out_path: str, keep: int = 14) -> str | None:
+    """Move an existing watchdog log aside so each session starts a clean one.
+
+    Returns the archive path, or None when there was nothing to rotate.
+
+    This has to happen HERE, immediately before the open below, because that
+    is the only moment the file belongs to nobody. The handle `start_watchdog`
+    opens is inherited by the detached watchdog as both stdout and stderr and
+    stays open until the deadline, so a running session cannot be rotated
+    around. Measured on Windows 2026-09-21: `os.rename` on the live file
+    raises PermissionError WinError 32, and truncating it in place leaves the
+    inherited file pointer where it was, so the next line the watchdog prints
+    lands after a run of NUL bytes -- destroying the restart record on exactly
+    the night it would be read.
+
+    Why bother: the log was append-only across every run, so the argparse
+    failure of 2026-09-20 -- the night the session ran 3.7 hours unsupervised
+    -- sat at the top of the file while a healthy session ran below it, and
+    telling the two apart meant dating the lines by hand.
+
+    It never raises into the launch. A session that trades is worth more than
+    the tidiness of its supervisor's log, so any failure falls back to the
+    previous behaviour of appending to whatever is already there.
+    """
+    try:
+        if not os.path.exists(out_path) or os.path.getsize(out_path) == 0:
+            return None
+        base, ext = os.path.splitext(out_path)
+        stamp = datetime.fromtimestamp(os.path.getmtime(out_path))
+        archive = f"{base}-{stamp:%Y%m%d-%H%M%S}{ext}"
+        n = 1
+        while os.path.exists(archive):
+            archive = f"{base}-{stamp:%Y%m%d-%H%M%S}.{n}{ext}"
+            n += 1
+        os.rename(out_path, archive)
+    except OSError:
+        return None
+
+    try:
+        _prune_watchdog_archives(base, ext, keep)
+    except OSError:
+        pass
+    return archive
+
+
+def _prune_watchdog_archives(base: str, ext: str, keep: int) -> None:
+    """Keep the newest `keep` rotated logs and delete the rest.
+
+    Matches only names this module writes -- `<base>-YYYYMMDD-HHMMSS<ext>`
+    and its `.N` collision form. `logs/watchdog-launch.log` sits beside these
+    and is NOT a rotation, so the digit check is what keeps it alive.
+    """
+    stem = os.path.basename(base) + "-"
+    folder = os.path.dirname(base) or "."
+    found = []
+    for name in os.listdir(folder):
+        if not name.startswith(stem) or not name.endswith(ext):
+            continue
+        middle = name[len(stem):-len(ext)] if ext else name[len(stem):]
+        parts = middle.split(".")[0].split("-")
+        if len(parts) != 2 or not all(p.isdigit() for p in parts):
+            continue
+        if len(parts[0]) != 8 or len(parts[1]) != 6:
+            continue
+        found.append(os.path.join(folder, name))
+    for stale in sorted(found, key=os.path.getmtime, reverse=True)[keep:]:
+        os.remove(stale)
+
+
 def start_watchdog(until_hour: int, session_args: list[str] | None = None):
     """Start `tools/watchdog.py --adopt` beside this session. **P1b, closed.**
 
@@ -796,6 +865,7 @@ def start_watchdog(until_hour: int, session_args: list[str] | None = None):
     logs = os.path.join(root, "logs")
     os.makedirs(logs, exist_ok=True)
     out_path = os.path.join(logs, "watchdog.log")
+    rotated = rotate_watchdog_log(out_path)
 
     # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP. Without the new group a
     # Ctrl-C or console-close aimed at the session reaches the watchdog too,
@@ -815,6 +885,9 @@ def start_watchdog(until_hour: int, session_args: list[str] | None = None):
 
     print(f"  watchdog: pid {proc.pid}, adopting this session until "
           f"{until_hour:02d}:00 (log logs/watchdog.log)")
+    if rotated:
+        print(f"  the previous watchdog log was rotated to "
+              f"logs/{os.path.basename(rotated)}")
     print("  it will NOT restart past a risk halt, a deliberate stop or the "
           "kill switch")
     return proc

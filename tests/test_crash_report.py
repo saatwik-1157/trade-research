@@ -11,6 +11,7 @@ are about what survives rather than what is computed:
 """
 from __future__ import annotations
 
+import io
 import json
 import inspect
 import os
@@ -671,6 +672,84 @@ def test_the_watchdog_adopts_rather_than_starting_a_second_session():
           "return None" in src, True)
 
 
+def test_the_watchdog_log_is_rotated_so_a_stale_failure_cannot_pass_for_now():
+    """Each session starts a clean watchdog log, and keeps the old one.
+
+    The log was append-only across every run. On 2026-09-20 the watchdog died
+    on its first line with an argparse error, and that block stayed at the top
+    of the file while later healthy sessions appended below it -- so the file
+    showed a fatal error and a working supervisor at once, and only the dates
+    told them apart. Rotating at launch is what makes `tail watchdog.log` mean
+    "this session" again.
+    """
+    print("\nthe watchdog log is rotated at launch")
+    folder = tempfile.mkdtemp(prefix="wdrot-")
+    try:
+        log = os.path.join(folder, "watchdog.log")
+        io.open(log, "w", encoding="utf-8").write(
+            "watchdog.py: error: argument --session-arg: expected one argument\n")
+
+        archive = run_overnight.rotate_watchdog_log(log)
+        check("the stale log was moved aside", archive is not None, True)
+        check("so the live path is free for a clean one",
+              os.path.exists(log), False)
+        # `or ""` so a regression that stops rotating reports a readable FAIL
+        # on every line below instead of a TypeError on the first one.
+        safe = archive or ""
+        check("and nothing was destroyed to do it",
+              os.path.exists(safe), True)
+        check("the archive is dated, not overwritten each night",
+              os.path.basename(safe).startswith("watchdog-"), True)
+        check("the old error survives, in the archive",
+              "expected one argument" in (
+                  io.open(safe, encoding="utf-8").read()
+                  if os.path.exists(safe) else ""),
+              True)
+
+        # Rotating when there is nothing there must not invent a file.
+        check("a missing log rotates to nothing",
+              run_overnight.rotate_watchdog_log(log), None)
+        io.open(log, "w", encoding="utf-8").write("")
+        check("and an empty one is left alone",
+              run_overnight.rotate_watchdog_log(log), None)
+
+        # `logs/watchdog-launch.log` lives beside the rotations and is not one.
+        launch = os.path.join(folder, "watchdog-launch.log")
+        io.open(launch, "w", encoding="utf-8").write("not a rotation\n")
+        for i in range(20):
+            stamp = os.path.join(folder, f"watchdog-2026091{i % 10}-00000{i % 10}.log")
+            io.open(stamp, "w", encoding="utf-8").write("old\n")
+        run_overnight._prune_watchdog_archives(
+            os.path.join(folder, "watchdog"), ".log", keep=5)
+        check("pruning never touches watchdog-launch.log",
+              os.path.exists(launch), True)
+        kept = [n for n in os.listdir(folder)
+                if n.startswith("watchdog-2026")]
+        check("and keeps only the newest few", len(kept), 5)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_rotation_can_never_stop_a_session_starting():
+    """A log that will not rotate is a cosmetic problem, not a fatal one."""
+    print("\nrotation failure is stepped over, not raised")
+    folder = tempfile.mkdtemp(prefix="wdrot2-")
+    try:
+        # A directory where the log should be: every path in here raises OSError.
+        wedged = os.path.join(folder, "watchdog.log")
+        os.makedirs(wedged)
+        os.makedirs(os.path.join(wedged, "busy"))
+        io.open(os.path.join(wedged, "busy", "x"), "w").write("x")
+        got = "no exception"
+        try:
+            run_overnight.rotate_watchdog_log(wedged)
+        except Exception as exc:  # noqa: BLE001 - the point is that none escapes
+            got = f"{type(exc).__name__}"
+        check("a log that cannot be rotated raises nothing", got, "no exception")
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
 def main():
     print("crash journal and console guard checks")
     test_a_record_is_written_and_readable()
@@ -697,6 +776,8 @@ def main():
     test_the_watchdog_adopts_rather_than_starting_a_second_session()
     test_the_watchdog_handoff_parses_on_the_other_side()
     test_the_guard_does_not_refuse_on_its_own_launcher()
+    test_the_watchdog_log_is_rotated_so_a_stale_failure_cannot_pass_for_now()
+    test_rotation_can_never_stop_a_session_starting()
 
     if FAILED:
         print(f"\n{len(FAILED)} check(s) failed")
