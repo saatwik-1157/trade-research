@@ -7,8 +7,11 @@ and [What changed on 2026-09-18](#what-changed-on-2026-09-18).
 
 **Current Status:** `HARNESS_FENCED` → `SOAK_REQUIRED`. The soak stopped
 producing clean evidence because the host kept falling asleep, and as of
-2026-09-20 that is understood: **it is the charger, not the code.** On mains
-this machine cannot sleep at all; on battery no fix can keep it awake.
+2026-09-21 the shape of it is known and it is worse than the previous
+entry here claimed: **the host sleeps on MAINS, with AC sleep set to
+`never` and the execution power request held.** Measured on a live
+session -- 41 minutes, Windows events 506/507. Prevention has failed;
+what works is detection and recovery.
 
 > **RESOLVED 2026-09-18 16:10: the account is FLAT.** It had been unreadable
 > since 09-16 08:46, when session `20260916-082522` lost the venue mid-flight,
@@ -47,7 +50,7 @@ have no gap in them. The rule is to plug it in; `preflight.py` FAILS on
 | **MT5 Status** | one adapter, one `order_send` on the platform path; 4 on the harness path, all four behind the Risk Engine — the opening order needs an `Approval`, the three closing ones are recorded and never refused |
 | **Risk Status** | 33+ veto codes — weekly loss, consecutive losses and correlation added at P4. RiskEngine is the final veto on **both** paths as of P2 |
 | **Windows Build Status** | **exists.** `dist/trade-research/` onedir, rebuilt 09-15 09:36, plus a legacy onefile `dist/trade-research.exe` from 09-12. Built by `build_exe.py`. *(This row said "none" until 09-18; it was stale.)* |
-| **Stability** | **Measured 2026-09-20 with `tools/session_gaps.py` over all 38 session logs.** The three long sessions on mains ran **6.7–7.2h with no gap at all**; the two that gapped lost 239 and 112 minutes and were almost certainly on battery. AC sleep is `never` on this host across all four power schemes (Armoury Crate enforces it), so on mains the failure mode does not exist. See [Modern standby](#modern-standby-is-eating-the-soak) |
+| **Stability** | **A live session slept 41 minutes ON MAINS on 2026-09-21** (`overnight-20260921-191852`, last pass 20:30:33, resumed 21:11:38; Windows events 506 at 20:30:45 and 507 at 21:11:39), with AC sleep reading `0x00000000` = never and the power request held. Seven positions were open and unmanaged. The harness detected it, re-established the venue and harvested on the next pass — recovery works, prevention does not. The earlier reading that the 239- and 112-minute gaps were "almost certainly battery" rested on mains being safe and is withdrawn. See [Modern standby](#modern-standby-is-eating-the-soak) |
 | **Tests** | **toolkit lane green: all ten files pass** (re-run 2026-09-19). **Backend suite green at 3242 passed, 12 skipped in 19:02** on the same date — up from 2,976 on 09-12, the difference being the Tier-1 work below. `ruff` + `mypy` are clean over `backend/` — **and only `backend/`**: `.github/workflows/tests.yml` runs both with `working-directory: backend`, so `tools/` has never been lint- or type-gated and carries pre-existing findings in both |
 
 ## What changed overnight on 2026-09-19
@@ -403,20 +406,33 @@ venue's week is Mon 21 Sep."*
   source exists. Not stubbed; they return `insufficient_data` naming the gap.
 - **Path B end-to-end demo validation** — `accounts_broker: 0`, so the platform
   path refuses with `no_venue`.
-- **Overnight soak evidence** — blocked on the host, not the code. Every
-  full-length run since 09-12 has lost hours to modern standby.
+- **Overnight soak evidence** — blocked on the host, not the code, and as
+  of 2026-09-21 the host is known to sleep on mains too. A gap-free run is
+  not something this machine can be configured into; the soak has to be
+  read with gaps in it, or run somewhere else.
 
 ## Critical Issues
 
-1. ~~**Modern standby sleeps through sessions, and the fix does not hold.**~~
-   **Root cause found and fixed 2026-09-18, pending a live soak.** The two
-   earlier fixes both reached for `SetThreadExecutionState`, which cannot
-   express the request that matters: the Desktop Activity Moderator SUSPENDS
-   desktop applications under Modern Standby, and only
-   `PowerRequestExecutionRequired` — which has no `ES_` constant — exempts a
-   process from it. The session now takes a real power request, verified
-   GRANTED on this machine. **Not closed until a full-length session runs
-   without a gap**, because that is the evidence the last two fixes lacked.
+1. **Modern standby sleeps through sessions, and NO fix holds. REOPENED
+   2026-09-21 — this was marked fixed-pending-soak and the soak refuted
+   it.** `PowerRequestExecutionRequired` is the right API and it is
+   verified GRANTED, and the host entered Modern Standby anyway: 41
+   minutes on a LIVE session, on mains, with AC sleep at `never`, seven
+   positions open and unmanaged. Windows events 506/507 confirm it
+   independently of the harness's own detection.
+
+   Three things this does NOT mean. It is not a battery problem — it
+   happened on mains. It is not a misconfiguration — the idle timeout
+   reads `0x00000000`. And the mechanism is NOT identified: something
+   other than the idle path triggered the transition, and nothing
+   measured here says what.
+
+   **Stop trying to prevent it and price it instead.** The harness
+   already detects the gap, names it, re-establishes the venue and
+   resumes — it did all four tonight. The open question is no longer
+   "how do we stay awake" but "what is the worst a 41-minute blind
+   window can cost a book with seven positions and a 1.5xATR stop", and
+   that is answerable from the data rather than from Windows.
    Detail in [Modern standby](#modern-standby-is-eating-the-soak).
 2. ~~**The flush retry budget is counted in attempts, not wall-clock.**~~
    **Fixed 2026-09-18.** Attempts are a floor, the budget is 10 minutes of

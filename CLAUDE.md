@@ -953,48 +953,65 @@ every gap:
 | 2026-09-14 23:16 | 6.66h | **4** | **239 min** | system only |
 | 2026-09-15 20:10 | 8.93h | **1** | **112 min** | **system AND screen (S0 fix)** |
 
-**The sleep problem is a BATTERY problem, and the table says so once you
-know the machine's power configuration.** Measured 2026-09-20: AC sleep,
-display and hibernate are all `never` on this host, DC is 30/30/60 minutes,
-and the `never` holds across **all four** power schemes (Performance,
-Balanced, Silent, Turbo). It is not a group policy -- there is none on
-`Sleep after`, and the setting reports itself writable -- it is Armoury
-Crate: `AsusOptimization`, `ArmouryCrate.Service` and a dozen ASUS services
-re-apply the profile, and `powercfg /change standby-timeout-ac 30` does not
-survive them, elevated or not.
+**THE S0 FIX DOES NOT WORK, AND THE CHARGER IS NOT THE ANSWER. Measured
+2026-09-21 on a LIVE session.** This section said the opposite for one day
+and every word of that is retracted below, because the machine did the thing
+it was documented as unable to do.
 
-So **on mains this host cannot sleep at all**, which is exactly what the
-three unbroken 6.7-7.2h sessions show. The two that gapped were almost
-certainly on battery, where Windows ends an execution power request five
-minutes after the sleep timeout expires and no code prevents it.
+`overnight-20260921-191852` was on mains, with the execution power request
+and the screen hold both in force. Its last pass was **20:30:33**; it resumed
+at **21:11:38** and printed
 
-That reframes `overnight-20260915-201059`. It ran with the screen hold in
-force and still slept 112 minutes; the harness caught it (`THE MACHINE
-SLEPT`), lost the venue with it, refused all seven closes at the 06:00
-deadline with retcode 10031 and did not go flat until 08:13. Read as a
-verdict on the fix that looks damning. Read against the power
-configuration it is most likely a DC session doing the documented thing.
-**The S0 fix is therefore not disproven -- and not proven either.** It
-cannot be tested on this machine on AC, because the host will not attempt
-to sleep however the hold behaves.
+    THE MACHINE SLEPT: 41 minutes passed between passes, not 20s ...
+    It was ON MAINS -- the execution power request did NOT hold
 
-What the log could NOT tell you is which it was, because until 2026-09-19
-the banner named mains and said NOTHING on battery -- silent in the one
-case that explains a sleep. It now states the source either way and
-re-reads it AT the sleep, since a laptop can be unplugged mid-session.
-Every session from here answers the question for itself.
+The Windows System log says the same thing from the other side, and it is the
+evidence that settles this rather than the harness's own inference:
 
-**The operational rule is the charger, not the code.** Plug it in and the
-failure mode is gone; run on battery and no fix exists to save the session.
-`preflight.py` FAILS on `on_ac_power` for that reason, and that refusal is
-the whole control -- on 2026-09-20 it correctly stopped a scheduled session
-from starting on battery.
+| time | event | message |
+|---|---|---|
+| 20:30:45 | **506** | The system is entering Modern Standby |
+| 21:11:39 | **507** | The system is exiting Modern Standby |
 
-So do not read a clean overnight run on mains as evidence that the power
-request works. It shows the session survived, which is worth having, and
-shows nothing about the hold. `run.bat` option 18 says this in its own
-banner rather than letting a green ladder close Critical 1 for the wrong
-reason.
+And at that moment `powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE`
+reported `Current AC Power Setting Index: 0x00000000` -- AC sleep **is** set
+to never, and the host entered Modern Standby anyway, on mains, with the hold
+held. Seven positions were open and unmanaged for 41 minutes.
+
+So the three claims made here on 2026-09-20 are refuted:
+
+  * "on mains this host cannot sleep at all" -- **false.** It just did, with
+    the idle timeout at never.
+  * "the S0 fix is not disproven, and cannot be tested on AC" -- **it is now
+    disproven.** It was tested by the machine rather than by us, and the hold
+    did not prevent the transition.
+  * "the operational rule is the charger, not the code" -- **false.** The
+    charger does not prevent this. `preflight.py` FAILING on `on_ac_power` is
+    still right, because battery is strictly worse, but it is no longer
+    sufficient and must not be read as the control.
+
+**What is NOT established is the mechanism.** `standby-timeout-ac = 0`
+governs the IDLE transition, and something else put the host into S0 -- lid,
+an OEM policy, a maintenance window, a user action. Nothing here identifies
+which, and the earlier Armoury Crate finding (the `never` is re-applied
+across all four schemes and survives `powercfg /change`) is about the setting
+holding, not about what bypassed it. Do not fill that in from memory.
+
+This also undercuts the attribution in the table above. The 239-minute and
+112-minute gaps were recorded as "almost certainly on battery" on the
+reasoning that a mains session could not sleep. That reasoning is now known
+to be wrong, so those two remain unexplained rather than explained -- the
+power source at the moment of the sleep was not recorded for either, which is
+exactly why the banner now re-reads it AT the sleep. Tonight's line is the
+first time that re-read has actually answered the question, and the answer
+was the unwelcome one.
+
+**The operational consequence.** A session on mains can lose 41 minutes with
+positions open and nothing prevents it. What survives the gap is the harness:
+it DETECTED the sleep, said so, re-established the venue and harvested on the
+next pass. Treat detection and recovery as the control, not prevention, and
+do not read an unbroken ladder as evidence the hold works -- it is evidence
+the host happened not to sleep.
 
 `--paper` is the safe way to run any of this: it sends no orders, so a
 sleep costs an abandoned book nothing, and the weekend guard exempts it for
