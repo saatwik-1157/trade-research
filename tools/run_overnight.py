@@ -188,6 +188,27 @@ class _Tee:
         return getattr(self._stream, name)
 
 
+def is_rival_session(pid: int, name: str, cmdline: str, mine: set[int]) -> bool:
+    """Whether one process row is an order-sending session OTHER than this one.
+
+    Pulled out of `other_sessions` so it can be tested against a fabricated
+    process table. It could not be before, and that mattered: the test written
+    for the launcher-stub bug passed WITH the bug present, because the test
+    process runs `test_crash_report.py` and so its own ancestors never matched
+    `SESSION_SCRIPTS` in the first place. Only a source-text assertion caught
+    the revert, which is the same weakness that let the `--session-arg` bug
+    live in a green suite.
+    """
+    if pid in mine or not cmdline:
+        return False
+    if not (name or "").lower().startswith("python"):
+        return False
+    if not any(s in cmdline for s in SESSION_SCRIPTS):
+        return False
+    # A paper or dry run sends no orders and holds no position slot.
+    return not ("--paper" in cmdline or "--dry-run" in cmdline)
+
+
 def other_sessions():
     """Order-sending sessions other than this process, as (pid, started, cmd).
 
@@ -199,6 +220,21 @@ def other_sessions():
 
     A --paper or --dry-run process is not a session. It sends no orders and
     holds no position slot, so it is not something to refuse for.
+
+    **This process's ANCESTORS are not rivals either, and excluding only
+    `os.getpid()` is not enough to say so.** On Windows a virtualenv's
+    `Scripts\\pythonw.exe` is a launcher stub: it spawns the base interpreter
+    as a CHILD and stays alive with a byte-identical command line. Measured
+    2026-09-21 - `Start-Process` reported pid 18944 for the stub while the
+    Python code ran as pid 11520, both visible to psutil running
+    `run_overnight.py`. So a live session launched that way scanned, found its
+    own parent, and refused to start, naming the pid the operator had just
+    been handed.
+
+    It went unnoticed because `--paper` masks it: a paper run's cmdline
+    contains `--paper`, so the stub is filtered by the clause above and the
+    pid check never has to be right. Every unattended launch since the
+    scheduled task was written has been a paper one.
     """
     try:
         import psutil
@@ -208,18 +244,21 @@ def other_sessions():
         return []
 
     me = os.getpid()
+    # Walk up rather than taking just the parent: a stub may itself be
+    # launched by a shell that carries the same command line on its own.
+    mine = {me}
+    try:
+        for ancestor in psutil.Process(me).parents():
+            mine.add(ancestor.pid)
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        pass
+
     found = []
     for proc in psutil.process_iter(["pid", "name", "cmdline", "create_time"]):
         try:
             info = proc.info
-            if info["pid"] == me or not info["cmdline"]:
-                continue
-            if not (info["name"] or "").lower().startswith("python"):
-                continue
-            cmdline = " ".join(info["cmdline"])
-            if not any(s in cmdline for s in SESSION_SCRIPTS):
-                continue
-            if "--paper" in cmdline or "--dry-run" in cmdline:
+            cmdline = " ".join(info["cmdline"] or [])
+            if not is_rival_session(info["pid"], info["name"] or "", cmdline, mine):
                 continue
             found.append((info["pid"],
                           datetime.fromtimestamp(info["create_time"]),

@@ -696,6 +696,7 @@ def main():
     test_a_full_session_is_supervised_and_a_wind_down_is_not()
     test_the_watchdog_adopts_rather_than_starting_a_second_session()
     test_the_watchdog_handoff_parses_on_the_other_side()
+    test_the_guard_does_not_refuse_on_its_own_launcher()
 
     if FAILED:
         print(f"\n{len(FAILED)} check(s) failed")
@@ -762,6 +763,76 @@ def test_the_watchdog_handoff_parses_on_the_other_side():
           watchdog_argv(6, forwarded).count("--until-hour"), 1)
     check("and --adopt is always present, or it would start a SECOND session",
           "--adopt" in watchdog_argv(6, forwarded), True)
+
+def test_the_guard_does_not_refuse_on_its_own_launcher():
+    """A venv stub is this session, not a rival.
+
+    On Windows `\.venv\Scripts\pythonw.exe` is a LAUNCHER: it spawns the base
+    interpreter as a child and stays alive with a byte-identical command
+    line. Measured 2026-09-21 - Start-Process reported pid 18944 for the stub
+    while the Python ran as pid 11520, both visible to psutil. The guard
+    excluded only os.getpid(), so a LIVE session scanned, found its own
+    parent and refused to start, printing the pid the operator had just been
+    handed.
+
+    `--paper` masked it for months: a paper cmdline is filtered by the
+    dry-run clause, so the stub never reached the pid check. Every unattended
+    launch until tonight was a paper one.
+    """
+    print()
+    print("The duplicate-session guard - a launcher stub is not a rival")
+    import psutil
+
+    me = psutil.Process()
+    ancestors = [p.pid for p in me.parents()]
+    check("this process has at least one ancestor to confuse it with",
+          len(ancestors) >= 1, True)
+
+    # Against the LIVE process table: the guard must never name this process
+    # or one of its ancestors. Necessary but weak on its own - this process
+    # runs test_crash_report.py, so its ancestors do not match
+    # SESSION_SCRIPTS and would be skipped even by the broken version.
+    mine = {me.pid, *ancestors}
+    named = {pid for pid, _started, _cmd in run_overnight.other_sessions()}
+    check("the guard never names this process or an ancestor of it",
+          sorted(named & mine), [])
+
+    # The check that actually bites, against a fabricated table. STUB is the
+    # venv launcher: same cmdline as the session, different pid, and a
+    # genuine ancestor. It must be excluded BY PID, because nothing else
+    # about the row distinguishes it from a real rival.
+    SESSION = "pythonw.exe tools/run_overnight.py --until-hour 6"
+    stub, real, rival = 18944, 11520, 4242
+    live = {real, stub}          # this process plus its launcher
+
+    check("the launcher stub is not a rival, though its cmdline is identical",
+          run_overnight.is_rival_session(stub, "pythonw.exe", SESSION, live), False)
+    check("nor is this process itself",
+          run_overnight.is_rival_session(real, "pythonw.exe", SESSION, live), False)
+    check("but an unrelated live session with the SAME cmdline still is",
+          run_overnight.is_rival_session(rival, "pythonw.exe", SESSION, live), True)
+
+    # The two exclusions must hold independently. A paper run's stub was
+    # filtered by the dry-run clause, which is why the pid bug went unseen
+    # for months - so check the pid path with a cmdline that is NOT a paper
+    # run, and the paper path with a pid that is NOT ours.
+    PAPER = SESSION + " --paper"
+    check("a paper run is not a session even from an unrelated pid",
+          run_overnight.is_rival_session(rival, "pythonw.exe", PAPER, live), False)
+    check("and a dry run is not either",
+          run_overnight.is_rival_session(rival, "pythonw.exe",
+                                         SESSION + " --dry-run", live), False)
+
+    # Things that are not sessions at all.
+    check("the watchdog is not a session",
+          run_overnight.is_rival_session(
+              rival, "pythonw.exe", "pythonw.exe tools/watchdog.py --adopt", live), False)
+    check("a non-python process is not, whatever its command line says",
+          run_overnight.is_rival_session(
+              rival, "cmd.exe", SESSION, live), False)
+    check("and an empty command line is not",
+          run_overnight.is_rival_session(rival, "python.exe", "", live), False)
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
