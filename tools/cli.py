@@ -57,6 +57,7 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "swap": ("swap", "overnight financing, in points"),
     "carry-check": ("carry_check", "does a paid long side survive the spot drift"),
     "cross-search": ("cross_search", "dollar-neutral cross-sectional currency portfolios"),
+    "autopsy": ("trade_autopsy", "which live trades made money, and which of that is real"),
 }
 
 RECORDS: dict[str, tuple[str, str]] = {

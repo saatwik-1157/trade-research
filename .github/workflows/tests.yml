@@ -68,6 +68,14 @@ jobs:
       - name: Cross-sectional portfolios, lookahead and neutrality
         run: python tests/test_cross_search.py
 
+      # The autopsy reads 900+ live trades and its failure mode is being too
+      # encouraging. A DEAL_REASON guessed rather than read put the harvest's
+      # +297 under the stop loss's name; the permutation test has to be able
+      # to say no as well as yes; and cost attribution has to use a quantity
+      # measured independently of the outcomes it explains.
+      - name: Live-trade autopsy - enum, null and cost attribution
+        run: python tests/test_trade_autopsy.py
+
       # Eight overnight sessions in a row were terminated from outside and
       # not one left a record of why. The journal that fixes that must never
       # be able to end a session itself, so "it reports failure rather than
