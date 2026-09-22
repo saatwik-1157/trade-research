@@ -661,6 +661,62 @@ algebraic -- a single planted return must be invisible at the bar it is acted
 on and visible on the next -- rather than a t-statistic hoping to notice.
 Reverting the off-by-one now turns three checks red.
 
+"Do not close at the deadline, hold until it is in profit" was asked for
+on 2026-09-23 and measured rather than argued about. It is the worst exit of
+the ten now tested (`reports/exit_search_holdprofit.json`, D1, 25 entries x
+10 exits, 249 combinations judged).
+
+| exit | median out-of-sample expectancy | win rate |
+|---|---|---|
+| bracket_2.0_4.0 | -8.7 | 33.2% |
+| **bracket_1.5_1.5** (what the harness runs) | **-51.2** | 49.2% |
+| time_120 | -216.6 | 28.4% |
+| **hold_for_profit** | **-272.7** | 6.4% |
+| **hold_for_profit_nostop** | **-727.4** | 0.0% |
+
+Two mechanisms produce that, and both are worth keeping because neither is
+obvious from the description.
+
+**Closing at the first profit closes at BREAKEVEN.** The moment the
+favourable excursion covers the spread is the moment the exit fires, so the
+winner captures the spread and nothing more. Measured on a random walk with
+149 signals: `hold_for_profit` exited 111 trades on "profit" at a mean net of
+**-0.000** and was stopped out on the other 38 at up to -1.09. The bracket on
+the same path ran 80 stops against 69 targets. Removing the upside while
+keeping the downside is why it scores worse than the exit it replaces: -0.278
+a trade against -0.103.
+
+**Refusing to close does not remove a loss, it hides it in the open book.**
+With the stop removed, the same 149 signals produced only **46 closed
+trades**, every one exiting at exactly -0.000, for a mean of -0.000 and a
+worst trade of -0.000. A perfect record - and the other 103 positions were
+still open, carrying their losses unrealised. On the real D1 data, where
+unclosed positions are marked to market at the end rather than dropped, the
+same exit scores **-727.4**. The two readings are the same fact seen with and
+without the open book counted, which is exactly why a live account cannot use
+the flattering one.
+
+**And with a stop in place the request is not actionable at all.** `sl` and
+`tp` are transmitted with the order as absolute GTC levels, so the venue
+closes the position at -1R whether or not this program agrees. `simulate_exit`
+shows it: on a dip that later recovers, `bracket_1.5_1.5` and
+`hold_for_profit` exit at the SAME bar for the SAME loss. Only
+`sl_atr=None` - deleting the stop - changes the outcome, and that is the
+-727.4 row.
+
+Financing compounds it. Every major bills swap on both sides here, triple on
+Wednesday, so a position held waiting for a recovery pays -0.27 to -10.59
+points a night (`reports/swap_profile.json`) for the privilege.
+
+`tests/test_exit_search.py` pins all of this, including the counter-intuitive
+part: `profit_exit` must return ~zero net, because an edit that let it
+capture upside would erase the comparison. One caution found writing those
+tests - the intrabar band decides the outcome. At an 0.0005 band on a price
+of 100 the wiggle is 0.05 against an 0.02 spread, so `profit_exit` fires on
+the next bar's high before the price can reach the stop. That is realistic,
+and it means in live trading this exit fires on noise within a bar or two,
+capturing nothing, far more often than it waits for any recovery.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by

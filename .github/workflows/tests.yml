@@ -76,6 +76,15 @@ jobs:
       - name: Live-trade autopsy - enum, null and cost attribution
         run: python tests/test_trade_autopsy.py
 
+      # simulate_exit produces published numbers, and two exits added on
+      # 2026-09-23 can restate them silently: sl_atr=None removes the stop
+      # entirely, and profit_exit closes at the first NET-positive bar. The
+      # finding they measure is that closing at the first profit captures the
+      # spread and nothing more, so an edit that made it capture upside would
+      # quietly erase the comparison.
+      - name: Exit simulator - no-stop path and profit exit
+        run: python tests/test_exit_search.py
+
       # Eight overnight sessions in a row were terminated from outside and
       # not one left a record of why. The journal that fixes that must never
       # be able to end a session itself, so "it reports failure rather than

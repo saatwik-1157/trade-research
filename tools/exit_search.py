@@ -58,6 +58,13 @@ def simulate_exit(o, h, l, c, sig, atr, spread, exit_kind, params, max_hold=480)
     trail_atr = params.get("trail_atr")
     hold_bars = params.get("hold_bars")
     be_trigger = params.get("be_trigger")
+    # "Hold until it shows a profit, then close" -- the exit an operator asks
+    # for when a deadline flush books a loss. `profit_exit` closes at the
+    # first bar whose favourable excursion covers the spread, and `sl_atr`
+    # None removes the stop entirely, which is the literal form of never
+    # taking a loss. Both are here to be MEASURED rather than argued about.
+    profit_exit = params.get("profit_exit")
+    max_hold = params.get("max_hold", max_hold)
 
     while i < n - 1:
         s = sig[i - 1]
@@ -66,7 +73,10 @@ def simulate_exit(o, h, l, c, sig, atr, spread, exit_kind, params, max_hold=480)
             continue
         entry, a = o[i], atr[i - 1]
         long = s > 0
-        stop = entry - sl_atr * a if long else entry + sl_atr * a
+        # sl_atr None means NO stop: the position is held however far it goes.
+        stop = None
+        if sl_atr is not None:
+            stop = entry - sl_atr * a if long else entry + sl_atr * a
         target = None
         if tp_atr:
             target = entry + tp_atr * a if long else entry - tp_atr * a
@@ -78,12 +88,20 @@ def simulate_exit(o, h, l, c, sig, atr, spread, exit_kind, params, max_hold=480)
             hi, lo = h[j], l[j]
             # Stop is always checked first: it is the adverse outcome and the
             # bar's path is unknown.
-            if (long and lo <= stop) or (not long and hi >= stop):
+            if stop is not None and ((long and lo <= stop) or (not long and hi >= stop)):
                 exit_px, exit_reason = stop, ("be" if moved_to_be else "sl")
                 break
             if target is not None and ((long and hi >= target) or (not long and lo <= target)):
                 exit_px, exit_reason = target, "tp"
                 break
+            # Close at the first bar that is NET positive. The spread has to be
+            # cleared or "in profit" is a gross figure that books a loss, which
+            # is the same error as reading a quote instead of a fill.
+            if profit_exit and j > i:
+                want = entry + spread if long else entry - spread
+                if (long and hi >= want) or (not long and lo <= want):
+                    exit_px, exit_reason = want, "profit"
+                    break
             if be_trigger and not moved_to_be:
                 reached = (hi - entry if long else entry - lo)
                 if reached >= be_trigger * a:
@@ -113,6 +131,16 @@ EXITS = [
     ("time_24", "time", {"sl_atr": 3.0, "hold_bars": 24}),
     ("time_120", "time", {"sl_atr": 3.0, "hold_bars": 120}),
     ("breakeven_trail", "breakeven", {"sl_atr": 2.0, "trail_atr": 3.0, "be_trigger": 1.0}),
+    # Added 2026-09-23 to measure an operator's request: "don't close at the
+    # deadline, hold until it is in profit". max_hold is raised to 5,000 bars
+    # so the hold is effectively unbounded rather than silently capped at 480.
+    ("hold_for_profit", "profit",
+     {"sl_atr": 1.5, "profit_exit": True, "max_hold": 5000}),
+    # The literal form, with NO stop at all. This is what "never take a loss"
+    # means once written down, and the point of running it is to put a number
+    # on the tail rather than to argue about it.
+    ("hold_for_profit_nostop", "profit",
+     {"sl_atr": None, "profit_exit": True, "max_hold": 5000}),
 ]
 
 
