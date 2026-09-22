@@ -61,7 +61,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import paths as _paths  # noqa: F401
 from rule_backtest import SYMBOLS, choose_spread, connect, fetch_rates
-from rule_search import t_crit_95, z_for
+from rule_search import z_for
 
 TRADING_DAYS = 252.0
 
@@ -285,8 +285,11 @@ def main() -> int:
         }
         if args.blocks > 1:
             edges = np.linspace(0, n_bar, args.blocks + 1).astype(int)
+            # strict=True: the two slices are the same length by
+            # construction, and if that ever stops being true a silent
+            # truncation would drop an era from the walk rather than fail.
             row["era_t"] = [tstat(series_full[a:b])[0]
-                            for a, b in zip(edges[:-1], edges[1:])]
+                            for a, b in zip(edges[:-1], edges[1:], strict=True)]
         candidates.append(row)
 
         for r in range(args.null_rounds):
