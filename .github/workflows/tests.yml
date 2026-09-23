@@ -85,6 +85,14 @@ jobs:
       - name: Exit simulator - no-stop path and profit exit
         run: python tests/test_exit_search.py
 
+      # A day-of-week study falls into the weekend: the Friday-to-Monday
+      # return spans three calendar days against every other return's one,
+      # and the first version of calendar_search also labelled it with the
+      # day it starts from. Together those produced a "Friday effect" that
+      # cleared a permutation null and was mostly exposure.
+      - name: Calendar search - weekend span and label alignment
+        run: python tests/test_calendar_search.py
+
       # Eight overnight sessions in a row were terminated from outside and
       # not one left a record of why. The journal that fixes that must never
       # be able to end a session itself, so "it reports failure rather than

@@ -717,6 +717,75 @@ the next bar's high before the price can reach the stop. That is realistic,
 and it means in live trading this exit fires on noise within a bar or two,
 capturing nothing, far more often than it waits for any recovery.
 
+The calendar is the eleventh search, and it came from the bookshelf rather
+than from this repository. Seven trading books in `trade books/` were read and
+mapped against what has been tested; the reference work among them is
+Kaufman's `Trading Systems and Methods`, whose 24 chapters cover trend
+systems, momentum and oscillators, charting, pattern recognition, volume and
+risk control -- all of which this project has already searched and refuted.
+The one prominent chapter with no counterpart here was **seasonality and
+calendar patterns**. `patterns.py` does day-of-week and month-of-year with FDR
+control, but it pulls equity tickers through yfinance and has never seen a
+currency pair.
+
+A calendar rule is the cleanest test available, which is the reason to run it:
+day-of-week has five buckets and NO free parameters, so unlike every other
+family here a null result cannot be answered with "maybe another setting
+works", and the correction is honest rather than a floor on a larger hidden
+search.
+
+**Two defects in the tool had to be fixed before its first result meant
+anything, and both flattered it.** The first version reported a Friday effect
+of +0.0306% against Tuesday's +0.0123%, clearing its permutation null at
+p = 0.0002 and stable in all four eras -- and it was mostly an artefact.
+
+  * **The Friday-to-Monday return spans THREE calendar days** while every
+    other return spans one. Three times the exposure is a larger mean by
+    arithmetic. Per day that bucket is **+0.0101%** against Tuesday's
+    +0.0123% -- lower, not higher.
+  * **It was labelled with the day the return STARTS from.** The convention
+    names a return for the bar it ENDS on, so the Friday-to-Monday move is
+    the MONDAY observation. The first version had relabelled the classic
+    weekend effect as a Friday effect.
+
+Corrected (`reports/calendar_search_d1.json`, D1, seven majors, 10 years,
+18,333 returns over 2,620 dates):
+
+| bucket | days | mean % | per day | t by date |
+|---|---|---|---|---|
+| Mon (Fri->Mon) | 3.0 | +0.0303 | +0.0101 | 4.21 |
+| Tue | 1.0 | +0.0077 | +0.0079 | 0.95 |
+| Wed | 1.0 | +0.0120 | +0.0124 | 1.41 |
+| **Thu** | 1.0 | -0.0186 | **-0.0183** | **-2.28** |
+| **Fri** | 1.0 | -0.0221 | **-0.0222** | **-2.58** |
+
+**This is the first candidate in this project's history to survive the era
+check**, which is where donchian_fade_55, the H4 exit grid and every other
+near-survivor died. Thursday and Friday are negative in all four era blocks
+and in both out-of-sample halves; the permutation null over shuffled calendar
+labels gives p = 0.0002 against a shuffled mean spread of 0.0202% (month
+p = 0.88 and turn-of-month p = 0.75, so the correction across the three kinds
+does not touch it). Per symbol, Friday is negative in **6 of 7** pairs and
+Thursday in 5 of 7, concentrated in AUDUSD, NZDUSD, USDCHF and GBPUSD with
+EURUSD flat.
+
+It is NOT an edge yet and must not be described as one. What has not been
+done: a walk-forward, a simulation through `simulate()` with the real bracket
+and measured spread, and any out-of-sample period this tool has not already
+seen. The effect is -0.0222% a day against a round-trip cost of **0.0031%**,
+so it clears cost by about 7x on paper -- which is exactly the shape that has
+dissolved here before once it was traded rather than tabulated. The direction
+is also a basket of pairs quoted inconsistently (four with USD as the counter
+currency, three with USD as the base), so "short the basket on Friday" is not
+yet a position anyone can take; `cross_search.py`'s foreign-currency
+normalisation is the fix and has not been applied here.
+
+Read the sign pattern before believing the mechanism. Friday is negative in
+AUD, NZD, GBP and in USDCHF and USDJPY -- that is high-beta currencies falling
+and CHF/JPY strengthening, which is a risk-off Friday rather than a dollar
+effect, since a dollar move would show opposite signs on the two quoting
+conventions. That is a coherent story and a story is not evidence.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
