@@ -59,6 +59,7 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "cross-search": ("cross_search", "dollar-neutral cross-sectional currency portfolios"),
     "autopsy": ("trade_autopsy", "which live trades made money, and which of that is real"),
     "calendar-search": ("calendar_search", "day-of-week, month and turn-of-month effects on FX"),
+    "calendar-rule": ("calendar_rule_search", "trade the day-of-week effect, with controls"),
 }
 
 RECORDS: dict[str, tuple[str, str]] = {

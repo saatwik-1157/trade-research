@@ -786,6 +786,58 @@ and CHF/JPY strengthening, which is a risk-off Friday rather than a dollar
 effect, since a dollar move would show opposite signs on the two quoting
 conventions. That is a coherent story and a story is not evidence.
 
+**The calendar effect does not survive being traded, and the CONTROLS are
+what proved it** (`reports/calendar_rule_d1.json`). Tabulating returns by
+weekday is not a strategy; `calendar_rule_search.py` runs the same days
+through `rule_search`'s pipeline -- entered at the next bar's open, bracketed
+at 1.5xATR, charged the measured spread, judged by the permutation null,
+Bonferroni, era blocks, walk-forward and date clustering.
+
+Twelve candidates: the measured days, their inverses, and Tuesday and
+Wednesday as controls, chosen because they showed NO effect in the table
+(t 0.95 and 1.41). Out-of-sample expectancy in points:
+
+| candidate | out-of-sample expectancy | out t |
+|---|---|---|
+| cal_long_mon | **+165.1** | 3.31 |
+| cal_long_fri | +86.9 | 1.75 |
+| **cal_long_thu** | +86.6 | 1.73 |
+| **cal_long_tue** (CONTROL) | **+86.0** | 1.72 |
+| **cal_long_wed** (CONTROL) | **+83.2** | 1.69 |
+| cal_short_tue (CONTROL) | -100.6 | -2.01 |
+| cal_short_mon | -175.3 | -3.52 |
+
+**The controls score the same as the tested days.** Tuesday +86.0 against
+Thursday +86.6 and Friday +86.9; every long is near +86 at an out-of-sample t
+near 1.7, and every short is its mirror. That is not a calendar effect -- it
+is that going long ANYTHING in the out-of-sample window earned about 86
+points, which is directional drift seen from inside a grid. It is the
+`time_120` and H4-exit diagnosis for the third time: a positive median across
+unrelated variants is what a directional era looks like, not what an edge
+looks like.
+
+The one outlier is Monday, at +165 long and -175 short, and that is the
+weekend again: the Monday bar carries three calendar days of exposure against
+every other bar's one, so it moves about twice as far in whichever direction
+the window went. The same artefact that inflated the table survived into the
+trade simulation, which is worth knowing -- `simulate()` does not normalise
+for bar span either.
+
+It fails the gates. Best in-sample is 2.36 against a 2.865 Bonferroni
+threshold, it does NOT beat its permutation null, and the only candidate that
+holds out of sample is the three-day-exposure Monday. So the eleventh search
+ends where the other ten did, with one difference worth recording: **it is the
+first whose table cleared the era check and whose TRADE did not.** The gap
+between those two is the whole reason this repository simulates rather than
+tabulates.
+
+**Do not train a model on these features.** The point is now measured rather
+than argued: a model handed day-of-week plus the L23 catalogue would be fed
+Tuesday and Thursday columns that score identically, and would fit the drift
+with more parameters and less ability to notice. That is the condition under
+which the 36-cell bracket sweep scored the RANDOM rule at 1.76 against the
+best real candidate's 0.83.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
