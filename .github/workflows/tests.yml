@@ -169,6 +169,14 @@ jobs:
       - name: The gross expectancy is a bound, set by the tie rule
         run: python tests/test_gross_bound.py
 
+      # Tick volume carries a 7.9x hour-of-day shape correlating +0.959
+      # across pairs, so an unnormalised rule measures the clock. The
+      # binding is the defect worth pinning: rule_search fetches every
+      # symbol before running any candidate, so a single module-level
+      # volume held only the last one and 0 of 16 candidates traded.
+      - name: Tick volume is per-symbol, causal, and not the clock
+        run: python tests/test_tick_volume.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able

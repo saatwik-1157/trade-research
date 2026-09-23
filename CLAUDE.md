@@ -1171,6 +1171,81 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## Tick volume on FX: the last untested input, and the clock inside it
+
+Twenty-third search, and it closes a gap this file has carried from the
+beginning. CLAUDE.md recorded tick volume as untested with the reason
+attached -- *"MT5 supplies TICK volume, a count of quote updates rather than
+traded size"* -- and `volume_search` tested real traded volume on Binance
+crypto, never this. Measured here, **`real_volume` is all zero on this venue's
+FX**, so tick volume is not a proxy for size; it is the only volume there is.
+
+**Kaufman's warning about intraday volume decides the design, and it is
+measured rather than taken on faith.** Across 50,000 H1 bars per pair, tick
+volume by server hour runs **0.27x at hour 0 to 2.13x at hour 17 -- a 7.9x
+range** -- and the hourly profile correlates **+0.959 across pairs**. A shape
+that agrees that closely across three different instruments is a property of
+the FX day, not of any market. So a rule comparing a bar to a rolling baseline
+spanning hours measures the clock, and every bar here is instead expressed
+against the SAME BAR-OF-DAY's own trailing history.
+
+**The unnormalised arm is kept as the control**, because if the raw candidates
+scored and the normalised ones did not, the finding would have been the clock.
+Sixteen candidates from Kaufman's own tick-volume family, each with its
+inverse: a spike against a LAGGED baseline, the Force Index in both its
+mean-reverting and trend readings, Accumulation/Distribution, the Chaikin
+line, the Money Flow Index and the Market Facilitation Index.
+
+**Both arms are null and neither is close.**
+
+| arm | best in | best out | null mean | cleared 1.96 OOS | date-clustered |
+|---|---|---|---|---|---|
+| normalised by bar-of-day | +0.35 | +0.44 | -0.15 | **0 of 16** (0.4 expected) | -0.69 |
+| raw volume (control) | -0.81 | +0.36 | -0.38 | **0 of 16** | +0.16 |
+
+Bonferroni is 2.955 and the best in-sample figure in either arm is +0.35. The
+normalised arm's best is marginally above the raw arm's, which is the
+direction Kaufman predicts, and both are so far from significance that the
+comparison carries nothing. Era expectancies swing sign in both.
+
+**A duplicate was found in the source, not in the data.** Kaufman lists
+Chaikin's Volume Accumulator and Intraday Intensity as two indicators. Their
+weights are `((C-L)/(H-L) - 0.5) * 2` and `((C-L) - (H-C)) / (H-L)`, and both
+reduce to `(2C - H - L)/(H - L)`; over 10,000 random bars they agree to
+**1.1e-16**. Carrying both would have put a hypothesis in the Bonferroni
+denominator twice, so one is kept and the identity is recorded.
+Accumulation/Distribution is genuinely distinct because it weights by
+`(C - O)/(H - L)` and therefore uses the open.
+
+**The defect worth keeping is the binding.** `rule_search` hands a candidate
+o/h/l/c and nothing else, so volume must be looked up rather than passed. The
+first version bound one module-level array at fetch time -- but `rule_search`
+fetches EVERY symbol into a dict before running any candidate, so the binding
+held only the last one, and `trim_to_years` then changed its length. The
+length guard refused the mismatch, which is correct, and the result was that
+**0 of 16 candidates produced a single trade**. Failing safe is right; failing
+safe unnoticed is not, and what caught it was reading the trade count rather
+than the verdict -- the verdict said only "no candidate produced enough trades
+to judge", which reads like a data problem rather than a wiring one. Volume is
+now keyed to its own close series, and the test requires that an unbound
+series returns nan rather than another symbol's numbers.
+
+**One test here was vacuous and is worth naming.** The pairing check was
+written as `sorted(x) == sorted(x)`, which is true of any list and could never
+fail. Replaced with a real assertion it immediately failed, because the
+direction token sits mid-name on the parameterised families
+(`vspike_ride_2.0`) and at the end on the rest (`ad_ride`) -- so the honest
+version had to be position-agnostic. A check that cannot fail is worse than no
+check, because it occupies the place where a real one would have gone.
+
+**With this the input catalogue is closed.** Every field MT5 supplies for FX
+-- open, high, low, close, tick volume, spread -- has now been searched, and
+`real_volume` is measured empty. There is no untested input left on this
+venue, only untested combinations of tested ones.
+
+    python tools/tick_volume_search.py
+    python tools/tick_volume_search.py --raw
+
 ## The +0.0064R gross does not survive measurement, and that closes the loop
 
 The spread-timing result below leaves the account a whisker from positive, and

@@ -32,6 +32,7 @@ import math
 import os
 import sys
 import time
+import tempfile
 import types
 from datetime import datetime, timedelta
 
@@ -2232,12 +2233,23 @@ def test_a_partial_disconnect_is_not_a_cosmetic_failure():
         minutes=5.0, interval=0, min_profit=0.50, relax_over=45.0,
         flat_by="06:00", harvest_only=True, live=True)
 
+    # Isolate the kill switch. take_profit polls it every pass, so with a
+    # real STOP file in the repository root this test halts for `kill_switch`
+    # and never reaches the terminal path it exists to check -- which is
+    # exactly what happened once an operator stopped a live session. A test
+    # whose outcome depends on whether trading is currently halted is not
+    # testing what it claims; the STOP file is left untouched.
+    import kill_switch
+    real_root = kill_switch._root
+    kill_switch._root = lambda: tempfile.mkdtemp()
+
     real_log = mt5_paper._log
     mt5_paper._log = lambda r: None
     try:
         out = take_profit.run(c, args)
     finally:
         mt5_paper._log = real_log
+        kill_switch._root = real_root
 
     check("a blind session halts instead of spinning", out["halted"], True)
     check("and names the terminal as the reason", out["halt_kind"], "terminal")
@@ -2316,6 +2328,14 @@ def test_a_stop_request_still_runs_the_flush():
         if calls["n"] >= 2:
             take_profit.STOP_REQUESTED = True
 
+    # Same isolation as the blind-session test above: the kill switch is
+    # polled BEFORE the STOP_REQUESTED branch, so a real STOP file in the
+    # repository root wins the race and this records `kill_switch` instead of
+    # the console stop it is checking. The STOP file is left untouched.
+    import kill_switch
+    real_root = kill_switch._root
+    kill_switch._root = lambda: tempfile.mkdtemp()
+
     real_log, real_hook = mt5_paper._log, take_profit.PASS_HOOK
     mt5_paper._log = lambda r: None
     take_profit.PASS_HOOK = hook
@@ -2325,6 +2345,7 @@ def test_a_stop_request_still_runs_the_flush():
         mt5_paper._log = real_log
         take_profit.PASS_HOOK = real_hook
         take_profit.STOP_REQUESTED = False
+        kill_switch._root = real_root
 
     check("it stopped early", out["passes"] <= 3, True)
     # NOT halted: a halt suppresses the flush, and a stop must not.

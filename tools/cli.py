@@ -63,6 +63,7 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "regime": ("regime_search", "does efficiency ratio or volatility rescue the trend nulls"),
     "spread-timing": ("spread_timing_search", "can the cost drag be timed from the previous day"),
     "gross-bound": ("gross_bound", "is the gross expectancy positive, or the tie rule"),
+    "tick-volume": ("tick_volume_search", "MT5 tick volume, normalised by bar-of-day, against a raw control"),
     "backtest": ("backtest", "does the composite score separate forward returns"),
     "swap": ("swap", "overnight financing, in points"),
     "carry-check": ("carry_check", "does a paid long side survive the spot drift"),
