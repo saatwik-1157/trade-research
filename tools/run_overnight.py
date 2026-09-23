@@ -86,12 +86,37 @@ import paths as _paths
 
 SETTINGS = [
     "--rule", "random",
-    "--symbols", "EURUSD,GBPUSD,USDJPY,USDCAD,AUDUSD,USDCHF,NZDUSD",
+    # THE THREE CHEAPEST PAIRS, changed 2026-09-23 at the operator's request.
+    # Was EURUSD,GBPUSD,USDJPY,USDCAD,AUDUSD,USDCHF,NZDUSD -- every figure in
+    # the live record up to 1,003 trades was measured on those seven.
+    #
+    # Cost per trade, in R, from cost_hurdle's measured spread via
+    # s/R = 2(w - 0.5), and independent of any outcome:
+    #   USDJPY 0.0096  EURUSD 0.0168  GBPUSD 0.0174   <- kept
+    #   USDCAD 0.0224  AUDUSD 0.0384  USDCHF 0.0502  NZDUSD 0.0548  <- dropped
+    # That moves the drag from 0.0299R a trade to 0.0146R, which is about 65%
+    # of the measured loss. It is the ONLY change this repository can defend,
+    # because the saving is a property of the broker rather than of these
+    # outcomes: the per-symbol RANKING was measured indistinguishable from
+    # shuffled labels at p = 0.62, so nothing here is "keeping the winners".
+    #
+    # IT IS STILL NEGATIVE. Expected -0.0082R a trade against -0.0235R
+    # observed. This makes a loser lose more slowly; it does not make a
+    # winner, and no reading of the record should imply otherwise.
+    #
+    # And it BREAKS COMPARABILITY: trades from here are a three-pair sample
+    # and everything before is a seven-pair one. track_record.py raises a
+    # data gap when bracket regimes are mixed for the same reason, and the
+    # same caution applies to the symbol set.
+    "--symbols", "USDJPY,EURUSD,GBPUSD",
     "--risk-usd", "5",
     "--sl-atr", "1.5",
     "--tp-atr", "1.5",
     "--min-profit", "0.50",
-    "--max-positions", "7",
+    # One position per symbol, so three symbols can hold at most three. Left
+    # at 7 this would never bind and the banner would claim a cap that does
+    # not exist. It also cuts money at risk per pass from 35 USD to 15.
+    "--max-positions", "3",
     "--max-daily-loss", "200",
     # OFF by default, deliberately, for the same reason --risk-usd and
     # --cost-swap are off: every figure in the live record was taken without

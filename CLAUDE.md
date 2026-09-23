@@ -888,6 +888,38 @@ spread, which is known before the trade and needs no model, and the part that
 varies is 0.6% of it. Size the addressable quantity before building anything
 to predict it.
 
+**The symbol set changed on 2026-09-23 and the record is not one sample
+across it.** `run_overnight.SETTINGS` now trades **USDJPY, EURUSD, GBPUSD**
+only; every figure above, up to 1,003 trades, was measured on all seven
+majors. `--max-positions` went 7 to 3 with it, since one position per symbol
+means three symbols can hold at most three, and money at risk per pass falls
+from 35 USD to 15.
+
+The change is defensible for exactly one reason and it is worth stating
+precisely, because the obvious reason is the wrong one. It is NOT that those
+three performed best -- the per-symbol ranking was measured
+**indistinguishable from shuffled labels at p = 0.62**, so live performance
+carries no information about which pair to trade. It is that their SPREAD is
+lower, measured by `cost_hurdle.py` independently of any outcome:
+
+    kept     USDJPY 0.0096R   EURUSD 0.0168R   GBPUSD 0.0174R
+    dropped  USDCAD 0.0224R   AUDUSD 0.0384R   USDCHF 0.0502R   NZDUSD 0.0548R
+
+That moves the drag from 0.0299R a trade to 0.0146R, about 65% of the
+measured loss, and the saving persists because it is a property of the broker
+rather than of these trades.
+
+**It is still negative: -0.0082R a trade expected, against -0.0235R
+observed.** It makes a loser lose more slowly. Nothing in the record from
+here should be read as an edge appearing, and a quieter loss is the predicted
+outcome rather than an improvement in the strategy.
+
+**Quote the two periods separately.** `track_record.py` raises a data gap
+when bracket regimes are mixed, because a trade's size is set by its stop
+distance; the symbol set is the same class of problem one level up. A pooled
+figure spanning the change adds a seven-pair sample to a three-pair one, and
+the cost per trade differs by 2x between them by construction.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
