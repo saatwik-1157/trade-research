@@ -43,7 +43,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "backend"))
 
 from walk_forward_models import (  # noqa: E402
-    _sigmoid, in_block, margin_of, time_fold_edges,
+    _sigmoid, account_rows, in_block, margin_of, time_fold_edges,
 )
 
 KEYS = ("eurusd_h1_v2", "gbpusd_h1_v2", "usdjpy_h1_v2", "usdcad_h1_v2",
@@ -108,6 +108,12 @@ async def run(folds: int, shuffle: bool, subset: bool) -> int:
 
     edges = time_fold_edges(times, folds)
     margins: list[float] = []
+    # Every row is either before the first edge (train-only, never tested) or
+    # in exactly one test block. Counting them and SAYING SO is how the last
+    # defect here would have announced itself: the final edge was clamped to
+    # the last timestamp, so 7 rows sat in no block at all, and the only way
+    # to see it was to add up five fold sizes by hand.
+    accounted = account_rows(times, edges)
     for i in range(folds):
         t_train_end, t_test_end = edges[i], edges[i + 1]
         train_idx = [j for j, t in enumerate(times) if t < t_train_end]
@@ -155,9 +161,16 @@ async def run(folds: int, shuffle: bool, subset: bool) -> int:
         print(f"  {i + 1:<6}{len(tr_y):>9,}{len(te_y):>8,}{share * 100:>9.2f}%"
               f"{acc * 100:>9.2f}%{m:>+9.2f}   {t_train_end:%Y-%m-%d}{varied}")
 
+    if accounted != len(pooled):
+        print(f"  ROWS LOST: {len(pooled) - accounted:,} of {len(pooled):,} are "
+              f"in no fold -- the boundary is dropping rows, do not read the "
+              f"margins below")
+
     good = [m for m in margins if m == m]
     if good:
         print("  " + "-" * 74)
+        print(f"  {accounted:,} of {len(pooled):,} rows accounted for "
+              f"(pre-first-edge training plus one test block each)")
         print(f"  mean margin {statistics.fmean(good):+.2f} points, "
               f"{sum(1 for m in good if m > 0)} of {len(good)} folds positive, "
               f"{sum(1 for m in good if m >= 1.50)} clearing the 1.50 hurdle")

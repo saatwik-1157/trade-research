@@ -88,6 +88,21 @@ def in_block(t, start, end) -> bool:
     return start <= t and (end is None or t < end)
 
 
+def account_rows(times: list, edges: list) -> int:
+    """How many rows the folds actually touch: pre-first-edge plus one block each.
+
+    A function rather than a running total inside the loop, because the
+    warning it feeds is a guard that should never fire and an unfired guard
+    is untestable by observation. Extracted, a test can hand it a CLAMPED
+    edge list and require the shortfall -- so the alarm is proven to work
+    before it is ever needed, rather than trusted because it has been quiet.
+    """
+    folds = len(edges) - 1
+    return (sum(1 for t in times if t < edges[0])
+            + sum(1 for t in times
+                  for i in range(folds) if in_block(t, edges[i], edges[i + 1])))
+
+
 def margin_of(predictions: list[int], truth: list[int]) -> float:
     """Accuracy minus the TEST block's own majority share, in win-rate points.
 

@@ -41,7 +41,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 from walk_forward_models import (  # noqa: E402
-    fold_edges, in_block, margin_of, time_fold_edges,
+    account_rows, fold_edges, in_block, margin_of, time_fold_edges,
 )
 
 FAILED: list[str] = []
@@ -120,6 +120,15 @@ for i in range(5):
     if tr and te and max(tr) >= min(te):
         _leaks.append(i)
 check("no fold trains on a stamp it also tests", _leaks, [])
+# The ROWS LOST warning is a guard that should never fire, and a guard nobody
+# has seen fire is indistinguishable from one that is broken. Hand it the
+# CLAMPED edges the defect produced and require it to notice.
+check("accounting reaches every row when the last edge is open",
+      account_rows(ROWS, ED), len(ROWS))
+_CLAMPED = [*ED[:-1], max(ROWS)]
+check("and it reports a SHORTFALL on the clamped edges that caused this",
+      len(ROWS) - account_rows(ROWS, _CLAMPED), 7)
+
 check("an index split on the same rows WOULD split a stamp",
       ROWS[fold_edges(len(ROWS), 5)[0] - 1] == ROWS[fold_edges(len(ROWS), 5)[0]],
       True)

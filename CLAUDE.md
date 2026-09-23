@@ -1171,6 +1171,97 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## Pooling all seven majors: the power objection, answered
+
+Every model verdict above carries the same available rebuttal, and it is a fair
+one. The per-symbol datasets are 4,926 rows against 22 features -- **224 rows a
+feature** -- where demonstrating the 1.50-point spread hurdle at 80% power needs
+**8,711**. A null from an underpowered test is not evidence of no effect; it is
+evidence of not having looked hard enough. That objection has stood since the
+first trained models. `tools/pooled_walk_forward.py` removes it: pooling the
+seven majors gives **34,482 rows over 4,928 distinct timestamps -- 1,567 rows a
+feature, four times the requirement.**
+
+**The unit question is answered before the pooling rather than after it.**
+`DatasetConfig` takes one symbol deliberately and its docstring says why, and
+the metals error above is what happens when that is waved at. Every feature used
+here is dimensionless -- returns and log returns, body/range/wick as
+percentages, distances in ATR or standard deviations, RSI, hour of day, a
+rollover flag -- so a USDJPY row and a EURUSD row are the same quantity. Price
+and points are not, which is exactly the pooling that produced the +4236
+palladium figure. The label is `bracket_outcome`, WIN or LOSS, path dependent
+and already scale free.
+
+**The fold boundary is a TIME, not an index**, and that is not a refinement.
+Seven symbols share the same hourly stamps, so 34,482 rows sorted by time come
+in groups of seven, and an index cut lands mid-group -- putting a bar's own
+siblings in training while its row is tested. The scaler is fitted per fold on
+that fold's own past, for the reason the corrected per-symbol walk-forward
+documents above.
+
+**With four times the required power, nothing clears the hurdle, and the real
+labels score WORSE than their own shuffle.**
+
+| fold | train | test | real margin | shuffled control |
+|---|---:|---:|---:|---:|
+| 1 (from 2026-01-25) | 5,740 | 5,746 | **-4.19** | -1.04 |
+| 2 (from 2026-03-13) | 11,486 | 5,748 | **-2.19** | -0.64 |
+| 3 (from 2026-04-30) | 17,234 | 5,747 | -0.16 | -0.42 |
+| 4 (from 2026-06-17) | 22,981 | 5,747 | -0.40 | +0.31 |
+| 5 (from 2026-08-05) | 28,728 | 5,754 | +0.17 | -0.30 |
+| **mean** | | | **-1.35** | **-0.42** |
+
+Zero of five folds clear 1.50 in either arm, one of five is positive in each,
+and the real arm beats its control in **2 of 5** folds. Do not read "worse than
+the control" as a finding in itself -- five folds cannot separate -1.35 from
+-0.42, and a model reliably ANTI-predicting would be an edge inverted. The
+supportable statement is the weaker and more useful one: **at four times the
+power the per-symbol results were criticised for lacking, the pooled model does
+not separate from its own shuffle, and neither arm approaches the spread
+hurdle.**
+
+**The convergence toward zero is in the CONTROL too, which is what makes it
+readable.** The real margins run -4.19, -2.19, -0.16, -0.40, +0.17 as the
+training set grows from 5,740 to 28,728 rows, and read alone that looks like a
+model learning. The shuffled arm does the same thing -- -1.04, -0.64, -0.42,
++0.31, -0.30 -- on labels with nothing in them. More training data moves a
+fitted logistic toward the majority-class prior whether or not there is signal,
+so the trend is a property of sample size and not of the market. Controls have
+dissolved apparent findings repeatedly in this file -- the volume weighting, the
+Tuesday calendar control, the GBPUSD shuffle that beat its own model -- but this
+is the first time one has dissolved a TREND rather than a level.
+
+**The defect found on the way is the usual shape.** `time_fold_edges` clamped
+its final edge to the last timestamp, and the test block is half-open, so every
+row at that stamp fell in no block at all -- not trained on, not tested on,
+silently gone. The arithmetic is what caught it: fold 5 trained on 28,728 and
+tested 5,747 against 34,482 pooled, and the missing **7 rows are one timestamp
+times seven symbols**. It changed no verdict: re-run on the fixed code every
+real-arm margin is identical to two decimal places and one control margin moved
+by 0.01. That is precisely why nothing would have noticed it. The
+final edge is now an open bound, `in_block()` exists so a caller cannot write
+the clamp back by hand, and the tool now PRINTS its own row accounting so the
+next such truncation announces itself instead of waiting to be summed by hand.
+
+`time_fold_edges` had no test at all, despite being the single thing that makes
+a pooled result believable. It now has ten, and reverting the clamp turns four
+of them red at 2,793 rows of 2,800 -- the same signature as the real run.
+
+**The ROWS LOST warning is itself proven rather than trusted.** A guard that
+should never fire and never has is indistinguishable from one that is broken,
+which is this repository's dominant defect class. So the accounting is a
+function, `account_rows`, and a test hands it the CLAMPED edge list the defect
+produced and requires the shortfall -- **7 rows**, the same number the real run
+lost. The alarm is known to work before it is ever needed.
+
+    python tools/pooled_walk_forward.py
+    python tools/pooled_walk_forward.py --shuffle-labels
+
+**Read this as closing the "not enough data" question rather than as a twelfth
+null.** The per-symbol models were genuinely underpowered and that was the right
+criticism of them. Given four times the data they needed, the answer did not
+change.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
