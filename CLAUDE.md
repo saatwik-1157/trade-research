@@ -1171,6 +1171,79 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## Gotobi: the one calendar claim with a mechanism, and its own controls
+
+Seventeenth search, and the first whose hypothesis names in advance which
+controls must come back empty.
+
+Japanese importers settle on days ending in 5 and 0 -- the 5th, 10th, 15th,
+20th, 25th and 30th, *gotobi* -- and must buy dollars by the Tokyo fix at
+**10:00 JST**. The claim (Archer, `Getting Started in Currency Trading`) is
+that the excess dollar demand lifts USDJPY into the fix.
+
+**This is not the calendar family already refuted here, and the difference is
+the reason it was worth a run.** Day-of-week and turn-of-month died when
+Tuesday and Wednesday CONTROLS scored +86.0 and +83.2 against Thursday's
++86.6: going long anything in that window earned about 86 points, so the
+effect was directional drift seen from inside a grid. That search had no way
+to say which controls SHOULD be empty. This one does, because the mechanism is
+specific -- Japanese importers buying dollars says nothing whatever about
+EURUSD.
+
+**The clock is the trap and it is this repository's recurring one.** MT5
+stamps a bar with the SERVER's wall clock rendered as a UTC epoch, and this
+broker is UTC+3; JST is UTC+9. So 10:00 JST is 01:00 UTC is **server hour 4**.
+Reading the local hour on this UTC+5:30 machine would have aimed the test five
+and a half hours away and produced an equally confident null about the wrong
+four hours.
+
+**Every arm comes back empty, and the pair controls are what settle it**
+(`reports/gotobi_search.json`, 402 gotobi dates, 2018-09-05 to 2026-09-23):
+
+| arm | gotobi % | other % | diff % | t |
+|---|---|---|---|---|
+| **USDJPY into the fix** | +0.0058 | +0.0087 | **-0.0029** | -0.27 |
+| USDJPY 12->16 (hour control) | -0.0151 | +0.0013 | -0.0164 | -0.90 |
+| EURUSD (pair control) | +0.0185 | +0.0143 | **+0.0043** | +0.66 |
+| GBPUSD (pair control) | +0.0215 | +0.0161 | **+0.0054** | +0.65 |
+| AUDUSD (pair control) | +0.0358 | +0.0306 | +0.0052 | +0.33 |
+| USDCHF (pair control) | +0.0194 | +0.0277 | -0.0083 | -1.17 |
+
+**The sign is wrong on the one pair the mechanism names.** USDJPY rises LESS
+on settlement days than on other days, and it is the only negative difference
+among the three pairs that should show nothing. A settlement-flow effect that
+appears more strongly in EURUSD and GBPUSD than in USDJPY is not a settlement
+effect; it is the same "positive across unrelated variants" signature that the
+`time_120` exit, the H4 exit grid and the day-of-week search all produced.
+
+Nothing else clears either. The permutation null, shuffling which dates carry
+the label while holding the count and the window fixed, puts **|t| >= 0.27 in
+78.0% of 2,000 relabellings**; the null's own |t| reaches 3.18. And the
+measured difference is **-0.0029% against a round-trip cost of 0.0045%** -- so
+even with the sign reversed the effect is smaller than the spread it would
+have to cross.
+
+**Power was established before the null was believed.** The detector finds a
+planted 0.02% effect at t = +3.24 and returns +0.61 on nothing. But the honest
+statement is the one made before the run rather than after: at 402 dates, one
+standard error of a four-hour USDJPY return is about 0.0075%, so an effect must
+reach roughly **0.015%** to be measurable and **0.0045%** to be worth trading.
+Those two numbers are close enough that a real but small gotobi effect and no
+effect at all are **not fully separable here** -- which is the same shape as
+the carry result and the 6,600-trade figure in the cost note, and is why this
+is recorded as "does not clear" rather than "does not exist".
+
+**The defect found was in the test, not the tool, and it is worth keeping.**
+The first version built a genuine 01:00 UTC timestamp and asserted that
+`server_hour` would read 4. It reads 1 -- correctly, because an MT5 stamp is
+the SERVER clock rendered as a UTC epoch, so a real bar at server hour 4
+carries an epoch whose hour is 4, while the epoch of the true 01:00 UTC
+instant carries 1. Constructing the second kind and expecting the first is
+exactly the confusion the whole window depends on not making.
+
+    python tools/gotobi_search.py
+    python tools/gotobi_search.py --window 0 4
+
 ## Kaufman's 28-80 day trend claim, tested at D1 on his own protocol
 
 One published claim contradicts the nulls in this file with numbers attached,

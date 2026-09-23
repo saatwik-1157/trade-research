@@ -105,6 +105,15 @@ jobs:
       - name: Kaufman's protocol is actually Kaufman's protocol
         run: python tests/test_kaufman_replication.py
 
+      # A calendar-and-clock search can be aimed at the wrong window and
+      # return a confident null about hours nobody claimed anything for.
+      # MT5 stamps a bar with the SERVER clock rendered as a UTC epoch and
+      # this broker is UTC+3, so 10:00 JST is server hour 4. The first
+      # version of this test built a real 01:00 UTC stamp and asserted the
+      # reader would return 4; it returns 1, correctly.
+      - name: The gotobi window is aimed at the Tokyo fix
+        run: python tests/test_gotobi_search.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able
