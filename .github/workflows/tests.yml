@@ -132,6 +132,15 @@ jobs:
       - name: Pip conversion has no rounding tie
         run: python tests/test_round_number.py
 
+      # Every other candidate here is a formula, and a wrong formula is
+      # usually wrong loudly. A state machine is not: it can drop into a
+      # branch that never fires, or fire on the wrong bar, and still emit
+      # a clean array of plausible signals. Each rule is driven on bars
+      # built to trigger that rule alone, including the recycling case
+      # where a monotone decline correctly emits no signal at all.
+      - name: The DeMark state machine follows its own rules
+        run: python tests/test_demark.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able

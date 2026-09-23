@@ -1171,6 +1171,87 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## DeMark Sequential: the control beat the treatment, for the second time
+
+Twentieth search, and the last fully-specified candidate from the twelve
+books. It is the only one that is a STATE MACHINE rather than a formula --
+nine-bar setup, an intersection test, a thirteen-count, and three cancellation
+rules -- and Kaufman notes the consequence: **it has no parameter to vary**, so
+robustness cannot be shown by sweeping a lookback the way every other search
+here does. Cross-market and cross-era are the only evidence available, so both
+were computed.
+
+**The internal control is what the run was designed around.** The setup is
+nine bars of ordinary momentum, which this repository has refuted several
+times. The intersection, the countdown and the cancellation rules are the
+elaborate part that is supposed to add something. So both were scored on the
+same instruments: the setup alone, and the completed thirteen-count.
+
+629 setups produced 306 signals across seven majors and 21,000 D1 bars, so
+48.6% survive to a signal.
+
+| horizon | setup only | t | full sequential | t | countdown adds |
+|---|---|---|---|---|---|
+| 5 | +0.0718% | +1.43 | **-0.1670%** | **-2.32** | **-0.2388%** |
+| 10 | +0.1297% | +2.01 | -0.1450% | -1.49 | -0.2747% |
+| 21 | +0.1918% | +2.02 | -0.0182% | -0.12 | -0.2100% |
+
+**The setup is positive at every horizon and the completed machine is negative
+at every horizon.** The countdown does not merely fail to add -- it subtracts
+0.21 to 0.27 points wherever it is measured, and the difference between the
+two carries a Welch t of **-2.72**. That is `volume_search`'s result for the
+second time: **the control beat the treatment, and it is only visible because
+the control was in the run.** Six of the earlier searches had no equivalent,
+and their nulls are weaker for it -- they establish that a family did not work,
+not that the thing being added subtracted.
+
+**The inverted signal is the closest this project has come to a survivor, and
+it still does not clear.** Fading the thirteen-count is -0.1670% at horizon 5
+over 306 signals, which inverted is 21x the 0.0079% round trip. It passes
+gates the other nineteen searches failed:
+
+| gate | result |
+|---|---|
+| permutation null (circularly shifted prices) | **beats it** -- \|t\| >= 2.32 in 2.2% |
+| consistency by symbol | 5 of 7 negative |
+| sign across eras | negative in **all four** |
+| **Bonferroni over 6 arms** | **FAILS** -- needs 2.64, has 2.32 |
+| **era magnitude** | **FAILS** -- see below |
+
+The era split is what retires it, and it is the same shape that retired
+`donchian_fade_55`, the H4 exit grid and the calendar effect:
+
+    2015-04 to 2017-12   n=76   -0.4143%   t=-2.87
+    2018-01 to 2021-02   n=77   -0.0955%   t=-0.82
+    2021-03 to 2024-01   n=76   -0.0294%   t=-0.16
+    2024-02 to 2026-08   n=77   -0.1302%   t=-1.03
+
+All four eras share the sign, which is more than most candidates here managed,
+but the magnitude is carried by the first and eras two and three are
+indistinguishable from zero. A candidate held up by one era is a regime, not
+an edge, and that judgement is not being softened because this one came closer
+than the others.
+
+**What the result actually says about the system.** DeMark Sequential is an
+EXHAUSTION system: the thirteen-count is supposed to mark a move that is
+spent, and price is supposed to reverse. Measured on this venue over this
+window, price CONTINUED instead. The premise is not merely unsupported, it
+points the wrong way -- while the nine bars of plain momentum underneath it
+pointed the right way and were then thrown away by the machinery built on top.
+
+**One implementation ambiguity, stated rather than buried.** The rules do not
+settle what a fresh setup does to a countdown already running. This restarts
+it, per the specification as written, and the consequence is visible and
+pinned in the tests: on a perfectly monotone decline a new setup completes
+every nine bars, so the countdown resets forever and no signal is ever
+emitted. That is the rule rather than a defect -- on real data setups are
+irregular and 48.6% reach a count -- but a different reading of recycling
+would produce a different signal set, and the result should be read knowing
+that.
+
+    python tools/demark_search.py
+    python tools/demark_search.py --timeframe H4
+
 ## Round numbers, and the rounding bug that invented a finding
 
 Nineteenth search, and the only candidate in this project with an external

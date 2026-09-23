@@ -59,6 +59,7 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "gotobi": ("gotobi_search", "Japanese settlement days into the 10:00 JST Tokyo fix"),
     "path-order": ("path_order_search", "did the high come before the low, beyond close-in-range"),
     "round-numbers": ("round_number_search", "do big-figure levels stop price, against offset controls"),
+    "demark": ("demark_search", "DeMark Sequential, countdown scored against its own setup"),
     "backtest": ("backtest", "does the composite score separate forward returns"),
     "swap": ("swap", "overnight financing, in points"),
     "carry-check": ("carry_check", "does a paid long side survive the spot drift"),
