@@ -57,6 +57,7 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "pugh-search": ("pugh_search", "all 16 two-bar and 64 three-bar high/low shapes"),
     "kaufman": ("kaufman_replication", "Kaufman's five trend methods at 28-80 days, D1"),
     "gotobi": ("gotobi_search", "Japanese settlement days into the 10:00 JST Tokyo fix"),
+    "path-order": ("path_order_search", "did the high come before the low, beyond close-in-range"),
     "backtest": ("backtest", "does the composite score separate forward returns"),
     "swap": ("swap", "overnight financing, in points"),
     "carry-check": ("carry_check", "does a paid long side survive the spot drift"),

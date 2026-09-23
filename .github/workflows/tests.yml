@@ -114,6 +114,15 @@ jobs:
       - name: The gotobi window is aimed at the Tokyo fix
         run: python tests/test_gotobi_search.py
 
+      # This feature is nearly a restatement of candle shape, which is
+      # already refuted: close-in-range runs 96.9% high-first in the
+      # bottom decile and 3.7% in the top. So everything rests on the
+      # null holding that confound EXACTLY -- shuffling inside each
+      # decile must leave P(high-first | decile) untouched, and that is
+      # asserted by counting rather than assumed from the code.
+      - name: Path ordering is tested beyond close-in-range, not through it
+        run: python tests/test_path_order.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able

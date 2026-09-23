@@ -1171,6 +1171,83 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## Did the high come before the low? The one thing OHLC does not record
+
+Eighteenth search, and the only one whose feature no book on the shelf could
+have computed. Two bars with **identical** open, high, low and close can have
+taken opposite paths: one rose to its high and then sold off, the other fell
+to its low and then rallied. OHLC cannot separate them. A finer series can,
+and there are H1 bars underneath every D1 bar here, so the ordering is
+recoverable for nothing.
+
+**Measured before any hypothesis: the ambiguity is 0.62%.** Only 91 of 14,623
+days across the seven majors put their high and low inside the SAME H1 bar.
+H1 resolves a D1 path cleanly; H4 would not, since four sub-bars is too
+coarse, so this runs at D1 and that is a measurement rather than a preference.
+
+**The confound is the whole problem and it is severe.** Where a bar closes in
+its own range very nearly determines which extreme came first:
+
+| close-in-range decile | 0 | 3 | 5 | 7 | 9 |
+|---|---|---|---|---|---|
+| share high-first | **96.9%** | 69.6% | 36.8% | 14.4% | **3.7%** |
+
+It is 89.3% high-first on down bars against 12.2% on up bars. So the RAW
+feature is close to a restatement of candle shape, and `shape_search` already
+refuted candle shape across 28 candidates. **An unconditional test here would
+have rediscovered that result and reported it as new.**
+
+So the question is narrowed to the only part that is genuinely new: does the
+ordering carry anything BEYOND what close-in-range already says? Bars are
+stratified into close-in-range deciles and compared only WITHIN a stratum --
+between bars that closed in the same place but travelled there differently.
+
+**The stratification is visibly doing the work.**
+
+| | difference | t |
+|---|---|---|
+| unconditional | +0.0074% | +0.83 |
+| **stratified** | **+0.0044%** | **+0.36** |
+
+Controlling for close-in-range removes about 40% of the apparent effect, which
+is the confound being taken out rather than a signal being found.
+
+**The null is permutation WITHIN strata**, and that design is what makes the
+answer mean anything. A global shuffle would destroy the close-in-range
+relationship as well as the path information, so it would test whether
+close-in-range predicts returns -- a question already answered. Shuffling
+inside each decile holds `P(high-first | decile)` EXACTLY fixed and destroys
+only the ordering. Over 2,000 rounds it puts **|t| >= 0.36 in 73.7%**, with
+the null's own |t| reaching 3.56.
+
+**And the point estimate is less than half the cost anyway**: +0.0044%
+against a round trip of 0.0099%.
+
+**The verdict does not depend on where the thin strata are cut**, which was
+checked rather than assumed. The bottom decile is judged on only 51 minority
+observations and carries the largest single difference (-0.1647%), so the
+floor was varied:
+
+    minimum per class    40      100      200      300
+    deciles used          9        8        6        4
+    stratified t      +0.36    +0.60    +0.32    +0.11
+
+Every setting is far from significance and every point estimate stays below
+cost. The top decile, at 22 against 1,380, is reported and NOT judged -- a
+t-statistic on twenty-two observations is not evidence, and pooling it would
+have let the emptiest stratum move the answer.
+
+**The defect found was in the test, and it is the same one the gotobi test
+made.** It asserted that a planted effect would be recovered to within a
+tenth of a basis point. The estimator returns the planted effect PLUS whatever
+difference that particular noise draw already had between the two classes, so
+the check was demanding that sampling error be removed. Asserted against the
+same draw the identity holds exactly. Twice now a test here has been written
+as though an unbiased estimator were an exact one.
+
+    python tools/path_order_search.py
+    python tools/path_order_search.py --horizon 2
+
 ## Gotobi: the one calendar claim with a mechanism, and its own controls
 
 Seventeenth search, and the first whose hypothesis names in advance which
