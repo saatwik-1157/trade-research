@@ -123,6 +123,15 @@ jobs:
       - name: Path ordering is tested beyond close-in-range, not through it
         run: python tests/test_path_order.py
 
+      # np.rint is banker's rounding: an exact half goes to the nearest
+      # EVEN integer. A tenth of this broker's quotes sit on a half pip,
+      # so converting with rint pushed them all onto even digits and
+      # produced a 1.07/0.93 even-odd skew in all seven majors correlating
+      # +0.607 across pairs -- indistinguishable from a real shared
+      # microstructure effect. It was the rounding mode.
+      - name: Pip conversion has no rounding tie
+        run: python tests/test_round_number.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able

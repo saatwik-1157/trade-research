@@ -1171,6 +1171,79 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## Round numbers, and the rounding bug that invented a finding
+
+Nineteenth search, and the only candidate in this project with an external
+citation behind it. Kaufman points at Carol Osler, *Support for Resistance:
+Technical Analysis and Intraday Exchange Rates* (FRBNY Economic Policy Review,
+July 2000), which found that support and resistance levels published by six
+trading firms predicted intraday price interruptions and stayed informative
+for about five days. The folklore version is that stop orders cluster at the
+big figure, so price pierces it and snaps back. **The two books on the shelf
+disagree on the sign** -- one trades the reversal, the other trades the
+round-figure breakout -- so the test is two-sided.
+
+**A rounding artefact in the first version produced a finding, and removing it
+reversed the answer. That is the most useful thing here.** Converting a price
+to whole pips with `np.rint` invokes numpy's banker's rounding: a value exactly
+on half a pip goes to the nearest EVEN pip. About a tenth of this broker's
+quotes sit exactly on a half pip, so every one of them was pushed onto an even
+digit. Measured across 350,000 H1 bars, the last whole-pip digit came out
+**1.07x expected on even digits and 0.93x on odd, identically in all seven
+majors**, and the digit profiles correlated **+0.607** across pairs. That is
+exactly what a real, shared microstructure effect looks like, and it was the
+rounding mode.
+
+| | with `np.rint` | through integer tenths |
+|---|---|---|
+| even / odd last pip digit | **1.07 / 0.93** | 1.0014 / 0.9986 |
+| cross-pair profile correlation | **+0.607** | +0.084 |
+| chi-square vs uniform | 3,861 | 510 |
+| **digit 00** | **1.059x, rank 34 of 100** | **0.950x, rank 97 of 100** |
+
+The cross-pair correlation is the tell. A per-pair price history cannot
+correlate at +0.607 across seven different instruments; only something in the
+code can. Corrected, it falls to +0.084 and the residual non-uniformity is
+each pair's own visited range, which is what it should have been all along.
+
+**Corrected, round numbers are UNDER-visited, not over.** Extremes land
+exactly on the round level 0.950x as often as expected, ranking **97th of 100
+positions**, and within three pips either side the figure is 0.947x. The half
+level is 0.984x at rank 74. No clustering test needs a permutation here,
+because the null is already inside the data: the mass at position *d* is
+precisely what the mass at "00" would be if the round number sat at *d*.
+
+**The tradable arm is decided by its controls, and the round level is the
+WORST of the eight.** A pierce is a bar crossing a level from either side,
+scored by the forward return signed against the pierce, so a positive number
+is the snap-back the folklore predicts:
+
+| grid offset | pierces | mean reversal | t |
+|---|---|---|---|
+| **+0 pips (ROUND)** | 48,688 | **+0.0001%** | **+0.08** |
+| +13 pips | 51,212 | +0.0024% | +3.82 |
+| +37 pips | 52,483 | +0.0021% | +3.37 |
+| +23 pips | 51,599 | +0.0016% | +2.58 |
+| +83 pips | 51,703 | +0.0016% | +2.52 |
+| +50 pips | 49,560 | +0.0012% | +1.90 |
+| +61 pips | 50,530 | +0.0008% | +1.31 |
+| +7 pips | 50,129 | +0.0008% | +1.27 |
+
+**All seven arbitrary offsets beat the round level.** Whatever small reversal
+exists after crossing a price level is generic short-horizon mean reversion
+that has nothing to do with roundness -- and at its best, +0.0024%, it is
+still a quarter of the 0.0099% round trip it would have to pay.
+
+**What this does not claim.** Osler measured levels PUBLISHED BY DEALERS on
+intraday data, not round numbers on hourly bars, and this project has neither
+her data nor those publications. This refutes the round-number folklore on
+this venue at H1; it does not touch her result. The distinction is the same
+one recorded for Kaufman: a claim tested outside its own window and its own
+instrument has been narrowed, not overturned.
+
+    python tools/round_number_search.py
+    python tools/round_number_search.py --spacing 50
+
 ## Did the high come before the low? The one thing OHLC does not record
 
 Eighteenth search, and the only one whose feature no book on the shelf could
