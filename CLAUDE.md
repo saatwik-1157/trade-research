@@ -838,6 +838,56 @@ with more parameters and less ability to notice. That is the condition under
 which the 36-cell bracket sweep scored the RANDOM rule at 1.76 against the
 best real candidate's 0.83.
 
+## Before building an execution or cost model
+
+The argument for modelling execution rather than direction is sound: cost is
+the one quantity this repository has measured to significance repeatedly,
+it has a known sign, it is a property of the broker rather than a bet against
+anyone, and direction has now failed eleven searches. So it was scoped on
+2026-09-23. **The scope came back empty, and the numbers are worth keeping so
+nobody scopes it again.**
+
+**Size the prize before building the model.** Measured over 935 live trades
+carrying a recorded fill:
+
+| target | addressable | verdict |
+|---|---|---|
+| slippage | **0.00018R per trade** | 0.6% of the spread cost |
+| refusals | 181 of 2,393 attempts (7.6%) | none are market prediction |
+| spread timing by hour | rollover is 1.0% of entries | already refuted on cost grounds |
+| symbol choice on measured cost | **0.0153R per trade** | needs NO model |
+
+Slippage is nonzero on 13.4% of trades and averages **0.00018R**, against a
+measured spread cost of 0.0299R and an observed loss of 0.0235R. A model that
+predicted slippage PERFECTLY and avoided all of it would recover 0.8% of the
+loss. The worst single instance is 0.041R, so even the tail is small.
+
+The refusals decompose, and not one is a modelling problem:
+
+  * **10031 no connection, 85 of 181.** Host and network, not the market. It
+    is the same failure family as the 41-minute Modern Standby sleep, and the
+    watchdog and `preflight.py` are the controls.
+  * **10018 market closed, 83.** Pure calendar. Knowable exactly from the
+    venue's week; `deadline_in_the_weekend` already encodes it. A model here
+    would be a lookup table with error bars.
+  * **10016 invalid stops, 10.** All inside the single minute 21:00-21:01 UTC,
+    which is server rollover -- documented above and fixable with a one-line
+    filter rather than a classifier.
+
+So the only lever with real size is **which symbols are traded**, and it
+needs no learning at all: `cost_hurdle.py` already measures the spread, and
+trading the three cheapest pairs moves the drag from 0.0299R to 0.0146R. That
+is arithmetic on numbers already computed, and it still leaves expectancy at
+-0.0082R -- better, and still negative.
+
+**The general lesson, which is the reusable part.** The case for an execution
+model was made from a true premise -- cost dominates this record -- and the
+premise does not imply the conclusion. Cost dominating does not mean cost is
+VARIABLE enough to be worth predicting. Here it is almost entirely the posted
+spread, which is known before the trade and needs no model, and the part that
+varies is 0.6% of it. Size the addressable quantity before building anything
+to predict it.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
