@@ -96,6 +96,15 @@ jobs:
       - name: The Pugh family is exhaustive and disjoint
         run: python tests/test_pugh_search.py
 
+      # This one checks a PUBLISHED claim, so what has to be right is the
+      # fidelity of the simulator rather than the verdict. His systems are
+      # always in the market with no stop; bracketing them, charging cost
+      # per bar instead of per reversal, or letting fast rules trade bars
+      # the slow ones spent warming up would each produce a number that
+      # looks like an answer to Kaufman and is not.
+      - name: Kaufman's protocol is actually Kaufman's protocol
+        run: python tests/test_kaufman_replication.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able

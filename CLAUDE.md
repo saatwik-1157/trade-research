@@ -1171,6 +1171,93 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## Kaufman's 28-80 day trend claim, tested at D1 on his own protocol
+
+One published claim contradicts the nulls in this file with numbers attached,
+so it was run rather than dismissed. Kaufman's 17-market study ranks **EURUSD
+the single most robust trending market, 87% of tests profitable**, with
+linear-regression slope at 93% and N-day breakout at 90%, over calculation
+periods of **28-80 days**. `book_rules_search` tested regression slope at H1
+with n=50 and n=200, where 200 bars is about eight days: **his hypothesis was
+never in the grid.** That was a gap in what was run, not a disagreement about
+what was found.
+
+**The protocol is his, not this repository's, and that distinction decides
+whether the number means anything.** His systems are ALWAYS IN THE MARKET and
+reverse on the signal, with no stop and no target. `rule_search` brackets every
+trade at 1.5xATR, and the exit searches already showed a bracket can flip a
+trend result's sign -- so running his entries through it would have tested a
+third strategy belonging to neither of us. `tools/kaufman_replication.py` is
+his simulator: one position, always on, reversed on a flip, marked to market,
+the spread charged on each crossing and twice on a reversal.
+
+Two of his own rules were adopted at the same time, and this repository was
+following neither. **The common start date**: every candidate begins where the
+LONGEST wind-up ends, or a 28-day rule silently trades 52 bars the 80-day rule
+spent warming up. Measured at H1 the spread was 1.00% and harmless; at D1 an
+80-bar wind-up is ~3% of the history. **Geometric spacing**: 28, 35, 44, 55,
+69, 80, because a 75-day and an 80-day average are nearly the same hypothesis
+and arithmetic spacing fills the correction's denominator with near-duplicates.
+
+**The claim does not survive, and it is not close.**
+
+| symbol | % of grid profitable | best t | best cell |
+|---|---|---|---|
+| **EURUSD** | **13.3%** (Kaufman: 87%) | +0.90 | slope 35 |
+| GBPUSD | 33.3% | +0.91 | slope 44 |
+| **USDJPY** | **93.3%** | +1.80 | breakout 44 |
+| USDCAD | 13.3% | +0.27 | slope 28 |
+| AUDUSD | 3.3% | +0.15 | slope 28 |
+| USDCHF | 0.0% | -0.02 | slope 35 |
+| NZDUSD | 0.0% | -0.05 | lwma 35 |
+
+Pooled, **22.4% of 210 tests are profitable at a best t of +1.80**, against a
+Bonferroni threshold of 3.675 (`reports/kaufman_replication.json`).
+
+**The null is the part that settles it.** Circularly shifting each signal --
+identical trade count, identical holding structure, alignment with returns
+destroyed -- gives **49.4% of the grid profitable (max 69.0%) at a best t of
++2.10 (max +3.19)**. So the real grid is profitable LESS than half as often as
+a shuffled one, and the shuffle scores a higher best t. That is the sixth time
+in this file a null has outscored the real candidates, and the first time the
+real result has been this far BELOW chance.
+
+**Cost is not the explanation, and that is new.** Gross and net are nearly
+identical: EURUSD is 13.3% profitable either way, AUDUSD 3.3% either way, and
+only USDCHF and NZDUSD move at all (3.3% to 0.0%, 6.7% to 0.0%). At D1 with a
+28-80 day hold there are few reversals, so the spread barely bites and the
+GROSS return is already bad. **Every other search in this file found cost to be
+the dominant effect; here the direction itself is wrong.** These pairs
+mean-reverted at these horizons over this window, which is why an uncorrelated
+signal beat a trend signal.
+
+**USDJPY is the single exception and it is one era.** Its +55.43% on the best
+cell is **72% from 2020-12 to 2023-11** -- the yen depreciation -- with the
+2018-2020 era negative, and the grid share swinging 76.7%, 6.7%, 100.0%, 76.7%
+across four eras. That is a regime seen from inside a grid, the same diagnosis
+that retired `donchian_fade_55`, the H4 exit grid and the calendar effect. Its
+best t is +1.80 against a 3.675 threshold and a null reaching +3.19.
+
+**What this does NOT establish, which matters as much as what it does.** The
+window here is **2015-03-06 to 2026-09-23** and Kaufman's study ran 1990-2011:
+**they do not overlap at all.** This cannot refute his measurement on his data,
+and it is not offered as doing so. What it shows is that the claim does not
+hold in the decade AFTER it was published. His own book predicts exactly that
+-- he documents noise rising over time across all regions and states that low
+noise favours trend-following and high noise does not -- so the honest reading
+is a decayed effect rather than a wrong one, and that is the same shape as the
+crypto search's monotonic decline to negative.
+
+**One calibration worth keeping, because it reframes his standard.** His
+acceptance rule is that ~70% of tests over a reasonable range should be
+profitable. Measured on a pure random walk, this grid already returns **56.7%
+profitable at a best t of +0.92**. So "70% of tests profitable" sits about
+thirteen points above what noise delivers, and is a much weaker filter than it
+sounds -- which is consistent with Chapter 21 offering it in place of the
+multiple-comparison correction it declines to make.
+
+    python tools/kaufman_replication.py
+
 ## Every two- and three-bar shape there is, with an exact correction
 
 Fifteenth search, and the only one here whose candidate list was not CHOSEN.
