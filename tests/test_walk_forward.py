@@ -148,3 +148,104 @@ if FAILED:
     print(f"\n{len(FAILED)} check(s) failed")
     raise SystemExit(1)
 print("\nall walk-forward checks passed")
+
+
+def _saturation_checks() -> None:
+    """The bug THIS SUITE MISSED, pinned so it cannot come back.
+
+    The first walk-forward vectorised RAW features where
+    `training/service.py` scales. A logistic over unscaled FX features
+    saturates: measured on the first fold, every training probability came
+    out at exactly 1.0000, spread 0.0000, with non-trivial weights and a
+    real bias. The model then emitted one constant class per fold, which
+    read as "the data has no signal" and was "the fitter was never given a
+    chance to look".
+
+    The checks above did not catch it because their synthetic features were
+    already gauss(0, 1) -- near enough to scaled that nothing saturated.
+    Real ones are not: a price is ~1.17, a return is ~1e-4, an RSI is ~50.
+    """
+    def probabilities(scale_them: bool) -> list[float]:
+        rng = random.Random(11)
+        rows, targets = [], []
+        for _ in range(900):
+            price = 1.17 + rng.gauss(0, 0.01)
+            ret = rng.gauss(0, 0.0001)
+            rsi = 50 + rng.gauss(0, 15)
+            targets.append(1 if ret > 0 else 0)
+            rows.append({"a": price, "b": ret, "c": rsi})
+        if scale_them:
+            for name in ("a", "b", "c"):
+                vals = [r[name] for r in rows]
+                mean = statistics.fmean(vals)
+                sd = statistics.pstdev(vals) or 1.0
+                for r in rows:
+                    r[name] = (r[name] - mean) / sd
+        x, keep = trainers.vectorise(rows, FEATS)
+        y = [targets[k] for k in keep]
+        coef, _ = trainers.fit_weighted_logistic(x, y, features=FEATS, config=CFG)
+        return [
+            _sig(coef.bias
+                 + sum(w * v for w, v in zip(coef.weights, vals, strict=True)))
+            for vals in x
+        ]
+
+    raw = probabilities(scale_them=False)
+    scaled = probabilities(scale_them=True)
+    raw_spread = max(raw) - min(raw)
+    scaled_spread = max(scaled) - min(scaled)
+
+    print()
+    print("Unscaled features change the fit, and the tool must scale")
+    # HONEST LIMIT OF THIS CHECK. The real saturation needed all 22 features
+    # at real FX magnitudes together; three synthetic ones do not reproduce
+    # it -- measured, the raw spread here is ~0.92 rather than ~0.00. So this
+    # does NOT assert saturation, because tuning a synthetic until it
+    # saturates would only prove what it was tuned to prove. What it does
+    # assert is that scaling materially changes the fit, which is true, and
+    # is the reason the tool cannot be allowed to skip it.
+    check("scaled features give a real spread of probabilities",
+          scaled_spread > 0.1, True)
+    check("and scaling materially changes the fitted probabilities",
+          abs(scaled_spread - raw_spread) > 0.01, True)
+
+    # THE CHECK THAT ACTUALLY BITES. The first version of this grepped
+    # `fit_fold`'s source for the word `scaled` -- and when half the scaling
+    # was reverted (train raw, test scaled) the grep still matched and NOT
+    # ONE check failed. A source-text assertion cannot tell you a thing ran,
+    # only that a string is present. So drive the real function with features
+    # at real FX magnitudes and read what comes out.
+    from walk_forward_models import fit_fold
+
+    rng = random.Random(3)
+    n = 1200
+    rows, targets = [], []
+    for _ in range(n):
+        price = 1.17 + rng.gauss(0, 0.01)      # ~1
+        ret = rng.gauss(0, 0.0001)             # ~1e-4
+        rsi = 50 + rng.gauss(0, 15)            # ~50
+        # A real, learnable relationship, so a working fold MUST vary.
+        targets.append(1 if rsi > 50 else 0)
+        rows.append({"a": price, "b": ret, "c": rsi})
+
+    preds, truth = fit_fold(rows, targets, 800, n, feats=FEATS,
+                            feature_version="v-test")
+    check("a fold returns a prediction per test row", len(preds), len(truth))
+    check("and the predictions VARY rather than collapsing to one class",
+          len(set(preds)), 2)
+    check("and it finds the planted relationship",
+          margin_of(preds, truth) > 20, True)
+
+    # Too little training data is refused rather than fitted on noise.
+    empty_preds, empty_truth = fit_fold(rows, targets, 50, 200, feats=FEATS,
+                                        feature_version="v-test")
+    check("a fold with too little history returns nothing",
+          (empty_preds, empty_truth), ([], []))
+
+
+_saturation_checks()
+
+if FAILED:
+    print(f"\n{len(FAILED)} check(s) failed")
+    raise SystemExit(1)
+print("\nall checks passed, including the saturation guard")

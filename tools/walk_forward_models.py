@@ -66,12 +66,75 @@ def margin_of(predictions: list[int], truth: list[int]) -> float:
 
 
 def _sigmoid(x: float) -> float:
-    if x >= 0:
-        import math
-        return 1.0 / (1.0 + math.exp(-x))
     import math
+    if x >= 0:
+        return 1.0 / (1.0 + math.exp(-x))
     e = math.exp(x)
     return e / (1.0 + e)
+
+
+def fit_fold(
+    feat_rows: list[dict[str, float | None]],
+    targets: list[int],
+    tr_end: int,
+    te_end: int,
+    *,
+    feats: tuple[str, ...],
+    feature_version: str,
+    dataset_key: str = "wf",
+    dataset_version: str = "1",
+) -> tuple[list[int], list[int]]:
+    """One fold: scale on its past, fit, predict its block. `([], [])` if too small.
+
+    A function rather than a loop body so a test can drive it with features
+    at REAL magnitudes and assert the behaviour, instead of grepping the
+    source for the word `scaled` -- which is what the first version of the
+    test did, and it did not notice when half the scaling was reverted.
+
+    **SCALING IS THE POINT.** The first walk-forward vectorised RAW features
+    where `training/service.py` scales. A logistic over unscaled FX features
+    saturates: measured, every training probability came out at exactly
+    1.0000, spread 0.0000, and the model emitted one constant class per fold.
+    That read as "the data has no signal" and was "the fitter was never given
+    a chance to look".
+
+    The scaler is fitted on THIS fold's training range and nothing else.
+    `scaler.fit` takes a Split precisely so that "fit on everything" has no
+    spelling; a scaler fitted over all the rows would leak each fold's own
+    future into its normalisation.
+    """
+    from app.datasets import scaler as scaler_mod
+    from app.datasets.splits import Split
+    from app.training import trainers
+    from app.training.config import ModelFamily, TrainingConfig
+
+    fold_split = Split(train=(0, tr_end), validation=(tr_end, tr_end),
+                       test=(tr_end, te_end), boundaries=(None, None))
+    fold_scaler = scaler_mod.fit(feat_rows, fold_split,
+                                 feature_version=feature_version, features=feats)
+    scaled = fold_scaler.transform(feat_rows)
+
+    tr_x, tr_keep = trainers.vectorise(scaled[:tr_end], feats)
+    te_x, te_keep = trainers.vectorise(scaled[tr_end:te_end], feats)
+    tr_y = [targets[k] for k in tr_keep]
+    te_y = [targets[tr_end + k] for k in te_keep]
+    if len(tr_y) < 200 or len(te_y) < 100 or len(set(tr_y)) < 2:
+        return [], []
+
+    cfg = TrainingConfig(
+        family=ModelFamily.trade_probability, dataset_key=dataset_key,
+        dataset_version=dataset_version, model_version="wf", features=feats,
+    )
+    coef, _report = trainers.fit_weighted_logistic(
+        tr_x, tr_y, features=feats, config=cfg
+    )
+    preds = [
+        1 if _sigmoid(
+            coef.bias + sum(w * v for w, v in zip(coef.weights, vals, strict=True))
+        ) >= 0.5 else 0
+        for vals in te_x
+    ]
+    return preds, te_y
 
 
 async def run(keys: list[str], folds: int, shuffle: bool,
@@ -80,8 +143,6 @@ async def run(keys: list[str], folds: int, shuffle: bool,
     from app.datasets.service import build_dataset_loader
     from app.db.session import make_engine, make_session_factory
     from app.models.datasets import DatasetRecord
-    from app.training import trainers
-    from app.training.config import ModelFamily, TrainingConfig
     from app.datasets import features as feature_engine
     from sqlalchemy import select
 
@@ -123,35 +184,21 @@ async def run(keys: list[str], folds: int, shuffle: bool,
                 random.Random(rec.key).shuffle(targets_all)
 
             feat_rows = [r.features for r in rows]
+            feature_version = str(
+                (ds.manifest().get("config") or {}).get("feature_set_version")
+            )
             margins: list[float] = []
             n = len(rows)
             # Equal blocks; fold i trains on [0, start_i) and tests on block i.
             edges = fold_edges(n, folds)
             for i in range(folds):
                 tr_end, te_end = edges[i], edges[i + 1]
-                tr_x, tr_keep = trainers.vectorise(feat_rows[:tr_end], feats)
-                te_x, te_keep = trainers.vectorise(feat_rows[tr_end:te_end], feats)
-                tr_y = [targets_all[k] for k in tr_keep]
-                te_y = [targets_all[tr_end + k] for k in te_keep]
-                if len(tr_y) < 200 or len(te_y) < 100 or len(set(tr_y)) < 2:
-                    margins.append(float("nan"))
-                    continue
-                cfg = TrainingConfig(
-                    family=ModelFamily.trade_probability,
+                preds, te_y = fit_fold(
+                    feat_rows, targets_all, tr_end, te_end,
+                    feats=feats, feature_version=feature_version,
                     dataset_key=rec.key, dataset_version=rec.version,
-                    model_version="wf", features=feats,
                 )
-                coef, _report = trainers.fit_weighted_logistic(
-                    tr_x, tr_y, features=feats, config=cfg
-                )
-                preds = [
-                    1 if _sigmoid(
-                        coef.bias
-                        + sum(w * v for w, v in zip(coef.weights, vals, strict=True))
-                    ) >= 0.5 else 0
-                    for vals in te_x
-                ]
-                margins.append(margin_of(preds, te_y))
+                margins.append(margin_of(preds, te_y) if preds else float("nan"))
 
             good = [m for m in margins if m == m]
             mean = statistics.fmean(good) if good else float("nan")

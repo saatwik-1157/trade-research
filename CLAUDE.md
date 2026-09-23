@@ -1093,12 +1093,15 @@ ranges of +-1-3%.
 | non-degenerate | tp 286, tn 294, fp 213, fn 193 -- predicts positive 48.6% of the time |
 | permutation null (shuffled labels) | real +7.40 against a control of **-0.81**; the control's best across all eight datasets is +0.81 |
 | Bonferroni over 8 datasets | +7.40 is **4.65 standard errors** at n=986; clears |
-| **walk-forward, 4 folds** | **0.00, -2.94, 0.00, 0.00 -- mean -0.74, 0 of 4 folds positive** |
+| **walk-forward, 4 folds** | **-9.95, +1.02, -3.35, +5.68 -- mean -1.65, 2 of 4 positive** (corrected; see the scaling note below) |
 
 It is the first candidate in this project's history to survive a permutation
 control, and it still died, in the same place `donchian_fade_55` and both
-exit grids died. Across all eight datasets the walk-forward gives **31 folds
-with one positive** (+0.30, itself under the hurdle), every mean negative.
+exit grids died. Across all eight datasets the walk-forward gives **10
+positive folds of 31 against the shuffled control's 4**, and a mean margin of
+**-1.61 against the control's -1.72** -- indistinguishable. Two datasets have
+a positive mean (+1.31 on the 638-row fixture, +0.99 on USDJPY) and neither
+reaches the 1.50 hurdle.
 
 **The training service does not run this gate, and says so itself.** Its
 comparison block reads *"this is a comparison on a held-out segment of one
@@ -1109,22 +1112,35 @@ nor the null were computed anywhere. `tools/walk_forward_models.py` and
 `train_models.py --shuffle-labels` supply both, and the first thing they did
 was retire the one result that looked like an edge.
 
-**Read the `+0.00` folds, and the statement is stronger than "it learns
-little".** Checked per fold on USDCAD rather than inferred: the model emits a
-SINGLE CONSTANT CLASS in every one of the four folds. It never produces a
-mixed prediction at all.
+**THE `+0.00` FOLDS WERE MY BUG, NOT A PROPERTY OF THE DATA, AND THE
+CORRECTION IS THE MOST INSTRUCTIVE THING HERE.** The first walk-forward
+reported 0 of 4 folds and a model emitting a single constant class in every
+fold. I checked that per fold, confirmed the constant class, and recorded it
+as "on a walk-forward this model makes no prediction". The observation was
+true. The conclusion drawn from it was wrong.
 
-    fold 1  margin +0.00   predicted only class 1   = the block's majority
-    fold 2  margin -2.94   predicted only class 0   = NOT the majority
-    fold 3  margin +0.00   predicted only class 1   = the block's majority
-    fold 4  margin +0.00   predicted only class 0   = the block's majority
+`training/service.py` SCALES before vectorising (`scaled = scaler.transform(
+rows)`), and my walk-forward vectorised the RAW features. A logistic over
+unscaled FX features saturates: measured on the first fold, every training
+probability came out at exactly **1.0000**, spread **0.0000**, with
+non-trivial weights (max +1.86) and a bias of -0.31. The fitter was not
+failing to find signal; it was never given a chance to look.
 
-So a `+0.00` fold is the fitter collapsing onto the prior, and the one
-negative fold is it collapsing onto the WRONG constant. On a walk-forward
-this model does not make a weak prediction; it makes no prediction. That is
-the honest outcome for a 22-feature logistic over ~3,000 rows of hourly FX,
-and it is worth stating plainly because "+0.00" in a results table reads like
-a rounding artefact rather than a model that never varied its answer.
+Corrected -- a scaler fitted on each fold's own training range, since
+`scaler.fit` takes a Split precisely so that "fit on everything" has no
+spelling -- the model varies its predictions and the numbers move a lot:
+
+| | positive folds of 31 | mean margin |
+|---|---|---|
+| raw features (WRONG) | 1 | -0.74 on USDCAD |
+| scaled, real labels | **10** | **-1.61** |
+| scaled, shuffled control | 4 | -1.72 |
+
+**The verdict is unchanged and the evidence for it was not.** No dataset
+clears 1.50 on a walk-forward mean, and the real runs sit on top of their own
+control. But "0 of 4, the model never varies" was an artefact I had verified
+the symptom of and not the cause. Check that a fitter was given scaled inputs
+before concluding anything from what it did or did not learn.
 
 **Excluding the refuted features makes the single split look better and the
 walk-forward worse**, which is the clearest statement of the gap between the
@@ -1136,17 +1152,17 @@ distances, `sma_distance_20`, `roc_10`, and `day_of_week`, which the calendar
 search measured as drift when a Tuesday control scored +86.0 against
 Thursday's +86.6. That leaves 15 features.
 
-| | single split | walk-forward, 4 folds |
+| | single split | walk-forward mean (scaled) |
 |---|---|---|
-| 22 features, USDCAD | **+7.40pt CLEARS** | -0.74, 0 of 4 |
-| 15 features, USDCAD | **+7.71pt CLEARS** | **-2.01, 0 of 4** |
-| 15 features, EURUSD | **+2.23pt CLEARS** | -8.27, 0 of 4 |
+| 22 features, USDCAD | **+7.40pt CLEARS** | -1.65, 2 of 4 |
+| 15 features, USDCAD | **+7.71pt CLEARS** | **-3.78, 2 of 4** |
+| 15 features, EURUSD | **+2.23pt CLEARS** | -0.10, 2 of 4 |
 
-Dropping the refuted columns raises every single-split margin and lowers
-every walk-forward mean. Across the eight datasets the 15-feature
-walk-forward gives **2 positive folds of 31** (+1.57 and +0.10, both under
-the 1.50 hurdle) against 1 of 31 at 22 features, and its means run -2.0 to
--16.5 where the full set ran -0.7 to -10.0.
+Dropping the refuted columns still raises the single-split margins and still
+does not rescue the walk-forward. Across the eight datasets the 15-feature
+version gives **13 positive folds of 31** against 10 at 22 features, but its
+mean margin is **-1.67** against **-1.61** -- more folds scraping above zero,
+no better on average, and no dataset reaching the 1.50 hurdle.
 
 Read that as a warning about the single split rather than about the features.
 A smaller feature set fits the held-out segment better and generalises across

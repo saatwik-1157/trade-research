@@ -581,15 +581,23 @@ hurdle is no longer inside the noise. With that fixed:
 
   * `trade_probability` over 22 features clears nothing. Best single-split
     margin is USDCAD at +7.40 points over the majority prior -- and its
-    **walk-forward is 0 of 4 folds at a mean of -0.74**. Across eight
-    datasets the walk-forward gives **1 positive fold in 31**.
+    **walk-forward mean is -1.65**. Across eight datasets the walk-forward
+    gives 10 positive folds of 31 against a shuffled control's 4, at a mean
+    margin of **-1.61 against the control's -1.72**: indistinguishable, and
+    no dataset reaches the 1.50-point hurdle.
   * It is the first candidate here ever to survive a permutation control
     (+7.40 real against -0.81 shuffled) and it still died at the fold check,
     where `donchian_fade_55` and both exit grids died.
   * Excluding the seven features that reconstruct refuted families makes the
-    single split BETTER (+7.71) and the walk-forward WORSE (-2.01). That is
-    overfitting seen from outside, and it is the sharpest reason not to read
-    the number the training service reports.
+    single split BETTER (+7.71) and does not rescue the walk-forward
+    (-1.67 mean against -1.61). The single split keeps saying yes and the
+    fold check keeps saying no, which is the reason not to read the number
+    the training service reports.
+  * **The first walk-forward figures were wrong and are corrected above.**
+    It vectorised RAW features where the training service scales, so the
+    logistic saturated -- every training probability exactly 1.0000 -- and
+    emitted one constant class per fold. That read as "the data has no
+    signal" and was "the fitter was never given scaled inputs".
 
 So the assessment is unchanged, but it is now a measurement rather than a
 prediction, and the machinery to re-check it exists: `tools/train_models.py
