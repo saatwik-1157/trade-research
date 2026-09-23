@@ -573,6 +573,30 @@ permutation nulls, and in the bracket regime holding 832 of the 863 live
 trades the measured result is significantly negative under both clusterings.
 A model would search the same space with more parameters.
 
+**Updated 2026-09-23: models were trained anyway, at the operator's request,
+and the verdict survives contact.** The dataset objection was real and has
+been removed -- `market_bars` went 705 -> 35,700, the 638-row fixture was
+replaced by seven READY datasets of 4,926 rows, and the 1.50-point spread
+hurdle is no longer inside the noise. With that fixed:
+
+  * `trade_probability` over 22 features clears nothing. Best single-split
+    margin is USDCAD at +7.40 points over the majority prior -- and its
+    **walk-forward is 0 of 4 folds at a mean of -0.74**. Across eight
+    datasets the walk-forward gives **1 positive fold in 31**.
+  * It is the first candidate here ever to survive a permutation control
+    (+7.40 real against -0.81 shuffled) and it still died at the fold check,
+    where `donchian_fade_55` and both exit grids died.
+  * Excluding the seven features that reconstruct refuted families makes the
+    single split BETTER (+7.71) and the walk-forward WORSE (-2.01). That is
+    overfitting seen from outside, and it is the sharpest reason not to read
+    the number the training service reports.
+
+So the assessment is unchanged, but it is now a measurement rather than a
+prediction, and the machinery to re-check it exists: `tools/train_models.py
+--shuffle-labels` and `tools/walk_forward_models.py`, both with their
+detection power verified against a planted signal before their nulls were
+believed.
+
 The pooled figure is deliberately not quoted there. It crossed its threshold
 on 09-18 and stopped crossing it thirteen trades later, which is the strongest
 argument on this page for not reading a live t-stat as a verdict — including
