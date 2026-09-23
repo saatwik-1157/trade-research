@@ -920,6 +920,58 @@ distance; the symbol set is the same class of problem one level up. A pooled
 figure spanning the change adds a seven-pair sample to a three-pair one, and
 the cost per trade differs by 2x between them by construction.
 
+## What the trading books on this shelf do and do not contain
+
+Seven books in `trade books/`, 4,519,514 characters, read and counted on
+2026-09-23. The reference work among them is Kaufman's `Trading Systems and
+Methods` (1,232 pages, 24 chapters). The strategy content is mapped in the
+calendar section above -- it is ground this repository has already searched.
+**The methodological content is the part worth recording, because of what is
+missing from it.**
+
+Term counts across all seven:
+
+| term | count | | term | count |
+|---|---|---|---|---|
+| robust | 116 | | **overfit / over-fit** | **0** |
+| optimi(se/sation) | 110 | | **statistically significant** | **0** |
+| out-of-sample | 41 | | sample size | 3 |
+| in-sample | 28 | | walk-forward | 2 |
+| risk of ruin | 26 | | curve-fit | 6 |
+| martingale | 59 | | degrees of freedom | 6 |
+
+**They say "optimise" 110 times and never once say "overfit".** Four and a
+half thousand pages of methods, with essentially nothing on how to tell
+whether a method worked. That gap is exactly the failure mode that has killed
+every candidate here: `donchian_fade_55` at a pooled t of 2.79, the D1 exit
+grid at an in-sample 6.59, the H4 exit grid's +23.5 median, and the calendar
+effect at p = 0.0002. Every one of those is a good result by the books'
+standard and dissolved under a permutation null, era blocks, date clustering
+or a control.
+
+So the machinery in this repository is not a local convention to be trimmed
+when it is inconvenient. It is the part the literature on this shelf does not
+supply, and it has now overturned four of its own findings.
+
+**Kaufman warns against the position sizing this project was asked for.** On
+the Trident system, which increases size after each loss, he writes that the
+concept "can result in ruin", and gives it a chapter section, *Martingales
+and Anti-Martingales*. On averaging down -- adding to positions making new
+losses -- chapter 23 does not recommend it; it RUNS THE TEST. That is the
+same idea as "do not close at the deadline, hold until it is in profit",
+which `exit_search` measured as the worst of ten exits at -272.7 with a stop
+and -727.4 without. The reference work and the measurement agree.
+
+**What the books supply that is already in use here.** Position sizing off
+the stop, stated in the beginners' guide exactly as `lot_for_risk` implements
+it -- decide the stop first and the size follows, never the reverse -- with
+1-2% of balance per trade. Transaction costs (73 mentions) and slippage (67).
+Correlation (184) and diversification (105). Risk of ruin as a closed-form
+expression rather than a rule of thumb.
+
+Read them for the catalogue of what to try. Do not read them for whether it
+worked.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
