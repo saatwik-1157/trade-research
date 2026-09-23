@@ -34,8 +34,9 @@ import random
 import statistics
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "..", "backend"))
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, "..", "backend"))
 
 
 def fold_edges(n: int, folds: int) -> list[int]:
@@ -73,7 +74,8 @@ def _sigmoid(x: float) -> float:
     return e / (1.0 + e)
 
 
-async def run(keys: list[str], folds: int, shuffle: bool) -> int:
+async def run(keys: list[str], folds: int, shuffle: bool,
+              subset: bool = False) -> int:
     from app.core.settings import get_settings
     from app.datasets.service import build_dataset_loader
     from app.db.session import make_engine, make_session_factory
@@ -86,9 +88,14 @@ async def run(keys: list[str], folds: int, shuffle: bool) -> int:
     settings = get_settings()
     engine = make_engine(settings.database_url)
     factory = make_session_factory(engine)
-    feats = feature_engine.DEFAULT_FEATURES
+    # The same exclusion train_models offers: five of the 22 features
+    # reconstruct refuted families and day_of_week was measured as drift.
+    from train_models import REFUTED
+    feats = tuple(f for f in feature_engine.DEFAULT_FEATURES
+                  if not (subset and f in REFUTED))
 
-    print(f"\n  walk-forward, {folds} folds, each trained only on its own past"
+    print(f"\n  walk-forward, {folds} folds, {len(feats)} features, each "
+          f"trained only on its own past"
           f"{'  [SHUFFLED LABELS - CONTROL]' if shuffle else ''}")
     print("  " + "-" * 74)
     head = f"  {'dataset':16}" + "".join(f"{'f' + str(i + 1):>9}" for i in range(folds))
@@ -167,9 +174,11 @@ def main() -> int:
     ap.add_argument("--key", default="", help="one dataset key, or all READY")
     ap.add_argument("--folds", type=int, default=4)
     ap.add_argument("--shuffle-labels", action="store_true")
+    ap.add_argument("--exclude-refuted", action="store_true")
     args = ap.parse_args()
     keys = [k.strip() for k in args.key.split(",") if k.strip()]
-    return asyncio.run(run(keys, args.folds, args.shuffle_labels))
+    return asyncio.run(run(keys, args.folds, args.shuffle_labels,
+                           args.exclude_refuted))
 
 
 if __name__ == "__main__":

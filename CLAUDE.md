@@ -1115,6 +1115,35 @@ On most folds the fitter learns nothing and returns the prior, which is the
 honest outcome and is what a 22-feature logistic over ~3,000 rows of FX
 should be expected to do.
 
+**Excluding the refuted features makes the single split look better and the
+walk-forward worse**, which is the clearest statement of the gap between the
+two gates this project has produced.
+
+`train_models.py --exclude-refuted` drops the seven columns that reconstruct
+families already searched -- `rsi_14`, `ema_spread_10_50`, the two Donchian
+distances, `sma_distance_20`, `roc_10`, and `day_of_week`, which the calendar
+search measured as drift when a Tuesday control scored +86.0 against
+Thursday's +86.6. That leaves 15 features.
+
+| | single split | walk-forward, 4 folds |
+|---|---|---|
+| 22 features, USDCAD | **+7.40pt CLEARS** | -0.74, 0 of 4 |
+| 15 features, USDCAD | **+7.71pt CLEARS** | **-2.01, 0 of 4** |
+| 15 features, EURUSD | **+2.23pt CLEARS** | -8.27, 0 of 4 |
+
+Dropping the refuted columns raises every single-split margin and lowers
+every walk-forward mean. Across the eight datasets the 15-feature
+walk-forward gives **2 positive folds of 31** (+1.57 and +0.10, both under
+the 1.50 hurdle) against 1 of 31 at 22 features, and its means run -2.0 to
+-16.5 where the full set ran -0.7 to -10.0.
+
+Read that as a warning about the single split rather than about the features.
+A smaller feature set fits the held-out segment better and generalises across
+eras worse, which is what overfitting looks like from the outside: the check
+the training service performs improves, and the check it does not perform
+degrades. **Anyone reading only the number the platform reports would
+conclude the opposite of the truth.**
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
