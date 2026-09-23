@@ -50,6 +50,44 @@ def fold_edges(n: int, folds: int) -> list[int]:
     return [int(n * (i + 1) / (folds + 1)) for i in range(folds + 1)]
 
 
+def time_fold_edges(times: list, folds: int) -> list:
+    """Fold boundaries as TIMESTAMPS, for a pooled multi-symbol set.
+
+    An index split is wrong once seven symbols share the same hourly
+    timestamps: 34,482 rows sorted by time come in groups of seven, and a cut
+    through a group puts a bar's own siblings in the training set while its
+    row is being tested. Not a dramatic leak, but it is a leak, and this
+    repository's whole record is candidates that looked fine until someone
+    checked what the split actually cut.
+
+    So the boundary is a time, and every row strictly before it trains while
+    rows in [t_i, t_i+1) test. A timestamp is never split across the two.
+
+    **The final edge is `None`, meaning no upper bound**, and it has to be.
+    An edge clamped to the last timestamp leaves every row AT that timestamp
+    in no block -- not trained on, not tested on, silently dropped. Measured
+    on the pooled run: fold 5 trained on 28,728 and tested 5,747 against
+    34,482 rows pooled, and the missing 7 were one timestamp times seven
+    symbols. Small, and exactly the kind of quiet truncation this repository
+    exists to catch.
+    """
+    uniq = sorted(set(times))
+    n = len(uniq)
+    inner = [uniq[int(n * (i + 1) / (folds + 1))] for i in range(folds)]
+    return [*inner, None]
+
+
+def in_block(t, start, end) -> bool:
+    """Is `t` in the half-open block [start, end), where `end=None` is open?
+
+    A function because the None sentinel is the whole point of
+    `time_fold_edges` and a caller writing `t < end` by hand would crash on
+    the last fold, or -- worse -- a caller writing the clamp back would
+    resurrect the dropped timestamp silently.
+    """
+    return start <= t and (end is None or t < end)
+
+
 def margin_of(predictions: list[int], truth: list[int]) -> float:
     """Accuracy minus the TEST block's own majority share, in win-rate points.
 

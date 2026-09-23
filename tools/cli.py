@@ -64,6 +64,8 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "build-datasets": ("build_datasets", "one L23 dataset per major, registered"),
     "train-models": ("train_models", "trade_probability per dataset, with a shuffled control"),
     "walk-forward": ("walk_forward_models", "walk a trained model across eras"),
+    "pooled-walk-forward": ("pooled_walk_forward",
+                            "one model over all seven majors, split by TIME"),
 }
 
 RECORDS: dict[str, tuple[str, str]] = {

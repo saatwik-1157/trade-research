@@ -40,7 +40,9 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
-from walk_forward_models import fold_edges, margin_of  # noqa: E402
+from walk_forward_models import (  # noqa: E402
+    fold_edges, in_block, margin_of, time_fold_edges,
+)
 
 FAILED: list[str] = []
 
@@ -83,6 +85,44 @@ check("a different test balance gives a different baseline",
       round(margin_of([1] * 100, [1] * 50 + [0] * 50), 6), 0.0)
 check("an empty block is nan rather than a divide by zero",
       margin_of([], []) != margin_of([], []), True)
+
+
+print()
+print("A pooled fold boundary is a TIME, and no row falls outside every block")
+# Seven symbols sharing 400 hourly stamps, the pooled shape exactly.
+STAMPS = list(range(400))
+ROWS = sorted(t for t in STAMPS for _ in range(7))
+ED = time_fold_edges(ROWS, 5)
+check("one more edge than folds", len(ED), 6)
+# The defect this replaces: the last edge WAS the final timestamp, and the
+# block being half-open meant every row at that stamp was in no block at all.
+# On the real run that silently dropped 7 of 34,482 rows.
+check("the last edge is open rather than the final stamp", ED[-1], None)
+check("the inner edges are real stamps in increasing order",
+      all(ED[i] < ED[i + 1] for i in range(4)), True)
+
+_tested = [t for t in ROWS if any(in_block(t, ED[i], ED[i + 1]) for i in range(5))]
+_before = [t for t in ROWS if t < ED[0]]
+check("every row is either pre-first-edge or tested, none lost",
+      len(_tested) + len(_before), len(ROWS))
+check("and the FINAL stamp is tested rather than dropped",
+      in_block(max(ROWS), ED[4], ED[5]), True)
+check("each row is tested at most once",
+      max(sum(1 for i in range(5) if in_block(t, ED[i], ED[i + 1]))
+          for t in set(ROWS)), 1)
+
+# The reason the boundary is a time at all: an index cut through 2,800 rows
+# sorted by stamp lands mid-group and puts a bar's own siblings in training.
+_leaks = []
+for i in range(5):
+    tr = [t for t in ROWS if t < ED[i]]
+    te = [t for t in ROWS if in_block(t, ED[i], ED[i + 1])]
+    if tr and te and max(tr) >= min(te):
+        _leaks.append(i)
+check("no fold trains on a stamp it also tests", _leaks, [])
+check("an index split on the same rows WOULD split a stamp",
+      ROWS[fold_edges(len(ROWS), 5)[0] - 1] == ROWS[fold_edges(len(ROWS), 5)[0]],
+      True)
 
 
 # ============================ fitter checks: need the backend =============
