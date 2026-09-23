@@ -1171,6 +1171,106 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## Every two- and three-bar shape there is, with an exact correction
+
+Fifteenth search, and the only one here whose candidate list was not CHOSEN.
+Every other search in this file picked its grid -- 41 rules, 28 shapes, 16
+bookshelf families -- and computed Bonferroni over the list somebody wrote
+down. That correction is honest about the trials RUN and silent about the
+trials AVAILABLE, so it is a floor on the real multiplicity rather than the
+real multiplicity.
+
+Pugh's encoding (Archer, `Getting Started in Currency Trading`) labels a bar
+by its high and low against the previous bar's: BULL, BEAR, OUTSIDE, INSIDE.
+Four labels, no parameters, so the two-bar family is exactly 16 and the
+three-bar family exactly 64. **Those are not selections, they are the complete
+families**, and correcting across 80 is therefore exact.
+
+| | |
+|---|---|
+| candidates | 80 tested, **78 with enough trades** |
+| best in-sample | **+1.48** (`bear_out_bear`) against a null of **+1.35** |
+| Bonferroni threshold | 3.414 |
+| best out of sample | +0.49; date-clustered 0.24; symbol-clustered 0.64 |
+| cleared 1.96 out of sample | **0 of 80** against **2.0 expected by chance** |
+
+The in-sample margin over the null is 0.13, well inside the 0.5 fence this file
+sets. Because the family is complete, the null is a closed statement rather
+than another open-ended family coming back empty: **no two- or three-bar
+configuration of highs and lows carries a tradable directional bias at this
+cost.** That also disposes of the Nofri congestion rule and the four "bathtub"
+conditionals from the same books, which are specific members of this family.
+
+**The exactness claim needed one qualification, and it was measured.** The
+family is complete but NOT uniformly powered: `out_out_out` occurs 72 times
+across seven majors and `in_in_in` 113, against 23,184 for `bull_bull`. Those
+two were exactly the two of 80 that failed the trade minimum. The correction is
+exact over the family; the evidence inside it is very uneven.
+
+**The defect found was a misclassification, not an arithmetic error.** Phrased
+as "higher high and higher low", a bar whose high and low EQUAL its
+predecessor's satisfies neither test, lands in the not-higher/not-higher corner
+and is labelled BEAR. A bar identical to the one before it is not bearish, it
+is contained. Measured: **2,597 of 139,993 H1 bars (1.855%) carry an equal high
+or low**, so this moved about 2,600 bars into the wrong class. Re-phrased as
+"strictly higher high" and "strictly lower low", the same two booleans send a
+flat bar to INSIDE, which is what containment means.
+
+    python tools/pugh_search.py
+
+## What Kaufman supplies that this repository does not, and the reverse
+
+Twelve books, 7.1 million characters, read in full. Kaufman's `Trading Systems
+and Methods` is the reference work, and **Chapter 21 states this file's thesis
+in its own words and then does not act on it.** The section is called *The
+Significance of "Significant"*. It poses the multiple-comparison problem
+exactly -- asking whether it is not the cumulative number of tests across all
+strategies that should count -- and supplies **no adjustment whatsoever**,
+substituting a heuristic that 70% of tests over a declared range be profitable.
+The permutation null is absent: Monte Carlo appears twice, once to sample the
+PARAMETER space and once for synthetic data, and he **abandoned** the latter
+because shuffling separates a bull market from the reversal that follows it.
+
+So of this project's five gates he supplies exactly one -- the walk-forward,
+and that one properly: an 8-step loop, two named failure modes (short-term
+bias, and feedback from repeating the procedure), an expected ~50%
+out-of-sample decay, and a hard rule that nothing may be fixed once the holdout
+has been touched.
+
+**Three things he has that this repository should take.**
+
+  * **Kurtosis as an overfitting screen.** On the strategy's OWN daily returns,
+    `K > 7-8` means "an overwhelming number of profitable trades of similar
+    size, which is not likely to happen in real trading". It is independent of
+    the permutation null and catches a class of fit a t-statistic will not.
+  * **The common start date.** Every candidate must begin where the LONGEST
+    wind-up ends, or a fast rule silently trades bars the slow one spent
+    warming up and the two are no longer judged on the same sample. Measured
+    here: the warm-up spread across `book_rules_search` is 0 to 199 bars,
+    **1.00% of a 20,000-bar sample** -- real, and an order of magnitude smaller
+    than the 6% his daily-data example implies. It manufactured nothing, since
+    the worst offender `linreg_ride_200` scored -3.46. **It matters about three
+    times more at D1**, where an 80-bar wind-up is 3% of a 2,600-bar history,
+    so it has to be fixed before any D1 replication rather than after.
+  * **Geometric parameter spacing.** 5, 10, 20, 40, 80, 160 rather than every
+    fifth day. A 75-day and an 80-day average are nearly the same strategy, so
+    arithmetic spacing fills the Bonferroni denominator with near-duplicates
+    and misstates how many independent hypotheses were really tried.
+
+**And one claim of his that contradicts a null here, with numbers attached.**
+His 17-market study ranks **EURUSD the single most robust trending market, 87%
+of tests profitable**, with linear-regression slope at 93%, over calculation
+periods of **28-80 DAYS**. `book_rules_search` tested regression slope at n=50
+and n=200 on H1 bars, where 200 bars is about eight days -- **his range was
+never tested here.** That is a gap in what was run rather than a disagreement
+about results, and it is the next thing to measure. His own caveats to carry
+into that run: the profit factor is computed on closed trades only, the $40
+round turn is below his own FX slippage estimate, there is no permutation null,
+and there is no correction across 40 periods x 5 methods x 17 markets.
+
+His two-MA crossover is his WORST method at 54%, which agrees with the MA-cross
+null here rather than contradicting it.
+
 ## The bookshelf, read in full, and the four rules that were left
 
 Twelve books, 7.1 million characters, read end to end on 2026-09-23 and mapped

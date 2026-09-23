@@ -54,6 +54,7 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "patterns": ("patterns", "event study over candlestick and calendar patterns"),
     "shape-search": ("shape_search", "candle-shape and volatility-regime rules"),
     "book-rules": ("book_rules_search", "SAR, regression slope, Heikin Ashi, multi-bar candles"),
+    "pugh-search": ("pugh_search", "all 16 two-bar and 64 three-bar high/low shapes"),
     "backtest": ("backtest", "does the composite score separate forward returns"),
     "swap": ("swap", "overnight financing, in points"),
     "carry-check": ("carry_check", "does a paid long side survive the spot drift"),

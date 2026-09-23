@@ -87,6 +87,15 @@ jobs:
       - name: Bookshelf rules fire, and are built as the books define them
         run: python tests/test_book_rules.py
 
+      # This search's claim is that its list is the COMPLETE family, so the
+      # correction is exact rather than conventional. That is a property of
+      # the encoding and not of the result, and it is false unless the labels
+      # are exhaustive and disjoint -- so both are asserted by COUNTING. The
+      # first version sent a bar identical to its predecessor to BEAR, and
+      # 1.855% of real H1 bars carry an equal high or low.
+      - name: The Pugh family is exhaustive and disjoint
+        run: python tests/test_pugh_search.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able
