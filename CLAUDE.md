@@ -1171,6 +1171,92 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## Inside the bar: a boundary bug that produced the best candidate yet
+
+Twenty-fifth search. The input catalogue is closed at H1, but that is a
+statement about RESOLUTION rather than data. Two bars with identical open,
+high, low and close can have travelled completely different distances getting
+there, and nothing above can see it -- `shape_search` measured body and wick
+from OHLC, and `path_order_search` asked only which extreme came first. M1
+bars expose the path.
+
+**Power stated before the result, as it has to be.** 50,000 M1 bars is 48
+days, about 833 H1 bars a pair and 5,824 pooled. One standard error of a win
+rate there is **0.66 points**, so the 1.50-point spread hurdle would show at
+**t = 2.3**. Adequate for an effect of the size that matters, useless for a
+subtle one, and 48 days is far too short to call any split an era.
+
+**The premise was checked before the search and it demoted the lead
+candidate.** Each feature was regressed on the OHLC-visible properties to ask
+whether it is new at all:
+
+| feature | R2 from OHLC | kept |
+|---|---|---|
+| **path efficiency** | **0.809** | **no -- mostly a restatement of body and range** |
+| path / range | 0.234 | yes |
+| open crossings | 0.147 | yes |
+| fraction above mid | 0.023 | yes |
+
+Net-move-over-travel is 81% explained by the bar's own body and range, which
+makes it close to ground `shape_search` already refuted. Reported and dropped
+rather than counted as a fourth family. The control throughout is
+RESIDUALISATION: only the part of each feature that OHLC cannot explain is
+tested, because testing the raw feature would rediscover candle shape and call
+it new.
+
+**THE FIRST RUN PRODUCED THE MOST CONSISTENT CANDIDATE THIS PROJECT HAS EVER
+SEEN, AND IT WAS A BOUNDARY BUG.**
+
+    open crossings   residual t = +1.98   permutation null p = 4.5%
+                     7 of 7 symbols positive
+
+Seven of seven is better consistency than `donchian_fade_55`, the calendar
+effect or DeMark managed. It beat its own permutation null. It failed
+Bonferroni over three features (needing p < 0.0167) and its spread was a fifth
+of the cost, so it was never tradable -- but it looked like structure.
+
+It was not. The crossing count was `diff(sign(close - open)) != 0`, and when a
+close sits EXACTLY on the open the sign passes through zero on the way in and
+again on the way out, so a bar that merely TOUCHED its open scored two
+crossings it never made. Counting only genuine above-to-below transitions:
+
+| open crossings | with the bug | corrected |
+|---|---|---|
+| residual t | **+1.98** | **+0.55** |
+| permutation null p | **4.5%** | **56.9%** |
+| symbols positive | **7 of 7** | 5 of 7 |
+
+Per symbol the collapse is uniform -- EURUSD +1.99 to +0.70, AUDUSD +1.17 to
++0.18, USDCAD +1.07 to +0.57 -- which is what an artefact shared by every pair
+looks like when it is removed.
+
+**What caught it was a trivial check**: *a monotone rise never crosses its
+own open*. That is true by inspection, it takes one line, and it is the only
+reason the search did not report a seven-of-seven candidate that beat its
+null.
+
+**Corrected, all three features are null.**
+
+| feature | residual t | null p |
+|---|---|---|
+| path / range | +0.40 | 68.0% |
+| fraction above mid | +0.53 | 60.9% |
+| open crossings | +0.55 | 56.9% |
+
+So the path a bar takes inside itself carries nothing beyond what its OHLC
+already says -- measured on the only three path statistics that are not
+themselves mostly OHLC.
+
+**The reusable lesson is about where bugs hide.** The last several defects
+here were in instruments rather than markets, and this one was at a BOUNDARY:
+the exactly-equal case, which is rare enough to be invisible in a sanity check
+and common enough to move a t-statistic from 0.55 to 1.98. Ties decided the
+Pugh classification (1.855% of bars), the gross expectancy bound (0.94% of
+trades), and now this. Three separate searches, three times the equality case
+carried the result.
+
+    python tools/intrabar_search.py
+
 ## Every model here was LINEAR, so interactions were never tested
 
 Twenty-fourth search, and the last untested cell in the modelling work.

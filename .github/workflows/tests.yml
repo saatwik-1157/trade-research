@@ -185,6 +185,16 @@ jobs:
       - name: The nonlinear learner can see what a linear one cannot
         run: python tests/test_nonlinear.py
 
+      # The crossing count scored a close sitting EXACTLY on the open as
+      # two crossings, because the sign passes through zero going in and
+      # again coming out. That produced residual t=+1.98 at null p=4.5%
+      # with 7 of 7 symbols positive -- the most consistent candidate this
+      # project has produced. Corrected it is +0.55 at p=56.9%. What
+      # caught it was one trivial check: a monotone rise never crosses
+      # its own open.
+      - name: Intrabar path features are new information, and tie-safe
+        run: python tests/test_intrabar.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able
