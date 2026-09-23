@@ -71,6 +71,11 @@ class Direction(StrEnum):
     flat = "FLAT"
 
 
+# No instrument here has a spread anywhere near a tenth of its own price, so
+# a value above this is a unit error rather than an expensive market.
+IMPLAUSIBLE_SPREAD_PRICE = Decimal("0.1")
+
+
 @dataclass(frozen=True)
 class LabelConfig:
     """Section 21's parameters, all of them explicit.
@@ -94,6 +99,29 @@ class LabelConfig:
             raise LabelError("horizon must be at least 1 bar")
         if self.spread_points < 0:
             raise LabelError("spread_points cannot be negative")
+        # A PLAUSIBILITY FENCE, on swap.py's reasoning, because the field name
+        # is misleading and cost this project a whole training round.
+        #
+        # `spread_points` is subtracted directly from a PRICE in
+        # `compute_labels` (`net_exit = closes[end] - spread`), so the value
+        # every caller passes is a price -- EURUSD's two points is 0.00002,
+        # not 2.0. A caller that reads the name and passes 2.0 gets
+        # `1.17 - 2.0 = -0.83`, a forward return of -1.71 on EVERY row, and a
+        # dataset where no bar is ever a winner. Measured 2026-09-23: 4,926
+        # rows, 0 positive, mean -1.720, and it reached a trained model and an
+        # economic report of "profit factor 0.0" before anyone noticed.
+        #
+        # Nothing traded here has a spread near a tenth of its own price, so
+        # the fence is unambiguous and names the likely cause rather than
+        # saying the value is invalid.
+        if self.spread_points > IMPLAUSIBLE_SPREAD_PRICE:
+            raise LabelError(
+                f"spread_points={self.spread_points} is larger than "
+                f"{IMPLAUSIBLE_SPREAD_PRICE} and is subtracted from a PRICE, so "
+                "this is almost certainly points passed where a price is "
+                "wanted. EURUSD's two points is 0.00002, not 2.0. Multiply by "
+                "the symbol's point size."
+            )
         if self.flat_threshold < 0:
             raise LabelError("flat_threshold cannot be negative")
         if self.stop_atr <= 0 or self.take_profit_atr <= 0:

@@ -189,8 +189,11 @@ async def run(keys: list[str], shuffle: bool, subset: bool, dry_run: bool) -> in
             print(f"  {rec.key:14}{rec.row_count:>7}{acc*100:>9.2f}%"
                   f"{maj*100:>9.2f}%{margin:>+8.2f}pt"
                   f"{'CLEARS' if margin >= 1.50 else 'below':>9}"
-                  f"   EV {ev if ev is None else round(ev, 2)}"
-                  f"  PF {pf if pf is None else round(pf, 2)}")
+                  # 6dp: a forward return here is ~1e-5, so rounding to 2
+                  # printed 0.0 for every run and hid the figure entirely.
+                  f"   EV {ev if ev is None else format(ev, '+.6f')}"
+                  f"  PF {pf if pf is None else round(pf, 2)}"
+                  f"  n {eco.get(chr(39)+chr(39)) if False else eco.get('trades')}")
 
     await service.shutdown()
     await engine.dispose()

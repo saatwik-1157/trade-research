@@ -40,6 +40,15 @@ MAJORS = ["EURUSD", "GBPUSD", "USDJPY", "USDCAD", "AUDUSD", "USDCHF", "NZDUSD"]
 # unit error, not an expensive instrument.
 IMPLAUSIBLE_POINTS = Decimal("1000")
 
+# MT5 point size: JPY pairs quote to three decimals, the rest to five.
+POINT_SIZE = {"USDJPY": Decimal("0.001")}
+DEFAULT_POINT_SIZE = Decimal("0.00001")
+
+
+def point_size(symbol: str) -> Decimal:
+    """Price movement of one point, used to turn a point spread into a price."""
+    return POINT_SIZE.get(symbol, DEFAULT_POINT_SIZE)
+
 
 def median_spread_points(rows, symbol: str) -> tuple[Decimal | None, str]:
     """Median recorded spread, ALREADY IN POINTS, from the bars themselves.
@@ -124,12 +133,13 @@ async def run(symbols: list[str], limit: int, dry_run: bool) -> int:
                 for r in stored
             ]
             cfg = build_mod.DatasetConfig(
-                key=f"{sym.lower()}_h1_v1",
+                key=f"{sym.lower()}_h1_v2",
                 symbol=sym,
                 timeframe=tf,
                 provider=Provider.mt5,
                 provider_symbol=sym,
-                label_config=label_engine.LabelConfig(spread_points=spread),
+                label_config=label_engine.LabelConfig(
+                    spread_points=spread * point_size(sym)),
             )
             if dry_run:
                 print(f"  {sym:9}{len(bars):>7}{str(spread):>9}{'-':>8}"
@@ -148,7 +158,11 @@ async def run(symbols: list[str], limit: int, dry_run: bool) -> int:
                     provider=Provider.mt5,
                     timeframe=tf,
                     horizon=cfg.label_config.horizon,
-                    spread_points=spread,
+                    # PRICE, not points. LabelConfig.spread_points is
+                    # subtracted straight from a close, so the value it wants
+                    # is points x point size. Passing 2.0 for EURUSD gave
+                    # 1.17 - 2.0 and a forward return of -1.71 on every row.
+                    spread_points=spread * point_size(sym),
                     limit=limit,
                 )
                 await db.commit()

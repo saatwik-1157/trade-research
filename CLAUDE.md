@@ -1061,6 +1061,60 @@ features over 4,926 rows per symbol, leakage-checked, cost-charged labels,
 and the best margin is below the spread hurdle with a control that reaches
 the same range. Eleven rule searches and a first pass at models agree.
 
+## The economic metric bug, and the model that cleared three gates and died at the fourth
+
+**The `economic` block reporting "profit factor 0.0, win rate 0.0" across 669
+trades was not a devastating result. It was a units bug, and it was mine.**
+`LabelConfig.spread_points` is subtracted straight from a PRICE in
+`compute_labels` (`net_exit = closes[end] - spread`), so the value it wants is
+points x point size -- EURUSD's two points is **0.00002, not 2.0**. Passing
+2.0 gives `1.17 - 2.0 = -0.83` and a forward return of **-1.71 on every row**.
+Measured: 4,926 rows, **zero positive**, mean -1.720.
+
+The field name is what made it invisible. Every existing caller passes a
+price under a name that says points, which is numerically harmless and makes
+the name a lie; a caller who reads the name is the one who gets hurt. The
+arithmetic in `labels.py` was correct all along.
+
+`LabelConfig` now carries a plausibility fence on `swap.py`'s reasoning:
+nothing here has a spread near a tenth of its own price, so a value above 0.1
+is refused with a message naming the likely cause rather than calling the
+value invalid. It caught a SECOND occurrence in the same script immediately,
+and it retroactively refuses to rebuild the seven poisoned `_v1` datasets --
+which are now demoted to CLEAN with the reason attached, so they cannot be
+trained on. Corrected, the labels are 45.6% / 47.9% / 62.4% positive with
+ranges of +-1-3%.
+
+**Then USDCAD cleared three gates and died at the fourth.**
+
+| gate | result |
+|---|---|
+| single chronological split | **+7.40pt** margin, 58.82% against a 51.42% prior, **CLEARS** the 1.50 hurdle |
+| non-degenerate | tp 286, tn 294, fp 213, fn 193 -- predicts positive 48.6% of the time |
+| permutation null (shuffled labels) | real +7.40 against a control of **-0.81**; the control's best across all eight datasets is +0.81 |
+| Bonferroni over 8 datasets | +7.40 is **4.65 standard errors** at n=986; clears |
+| **walk-forward, 4 folds** | **0.00, -2.94, 0.00, 0.00 -- mean -0.74, 0 of 4 folds positive** |
+
+It is the first candidate in this project's history to survive a permutation
+control, and it still died, in the same place `donchian_fade_55` and both
+exit grids died. Across all eight datasets the walk-forward gives **31 folds
+with one positive** (+0.30, itself under the hurdle), every mean negative.
+
+**The training service does not run this gate, and says so itself.** Its
+comparison block reads *"this is a comparison on a held-out segment of one
+dataset. It is not the L26 gate: no permutation null, no correction for the
+number of candidates tried, and no walk-forward,"* and its gate report adds
+*"Read the walk-forward folds before believing a result."* Neither the folds
+nor the null were computed anywhere. `tools/walk_forward_models.py` and
+`train_models.py --shuffle-labels` supply both, and the first thing they did
+was retire the one result that looked like an edge.
+
+**Read the `+0.00` folds.** They are not missing data: the model predicted the
+majority class for the whole block, so accuracy equals the prior exactly.
+On most folds the fitter learns nothing and returns the prior, which is the
+honest outcome and is what a 22-feature logistic over ~3,000 rows of FX
+should be expected to do.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by

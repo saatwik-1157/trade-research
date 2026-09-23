@@ -60,6 +60,10 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "autopsy": ("trade_autopsy", "which live trades made money, and which of that is real"),
     "calendar-search": ("calendar_search", "day-of-week, month and turn-of-month effects on FX"),
     "calendar-rule": ("calendar_rule_search", "trade the day-of-week effect, with controls"),
+    "ingest-bars": ("ingest_bars", "fill market_bars from MT5 through the platform service"),
+    "build-datasets": ("build_datasets", "one L23 dataset per major, registered"),
+    "train-models": ("train_models", "trade_probability per dataset, with a shuffled control"),
+    "walk-forward": ("walk_forward_models", "walk a trained model across eras"),
 }
 
 RECORDS: dict[str, tuple[str, str]] = {

@@ -972,3 +972,46 @@ def test_live_trading_is_still_disabled_by_default() -> None:
     assert settings.live_trading is False
     assert settings.trading_mode is TradingMode.paper
     assert all(value is False for value in LIVE_GATES.values())
+
+
+def test_label_config_refuses_a_spread_in_points_not_price() -> None:
+    """The fence that would have caught a whole wasted training round.
+
+    `spread_points` is subtracted straight from a PRICE in `compute_labels`
+    (`net_exit = closes[end] - spread`), so the value it wants is a price:
+    EURUSD's two points is 0.00002, not 2.0. A caller who reads the field
+    name and passes 2.0 gets `1.17 - 2.0 = -0.83` and a forward return of
+    -1.71 on EVERY row.
+
+    Measured 2026-09-23 before the fence existed: 4,926 rows, ZERO positive,
+    mean -1.720. It built cleanly, passed every leakage check, reached READY,
+    trained a model, and produced an economic report of "profit factor 0.0,
+    win rate 0.0" across 669 trades -- which read as a devastating result and
+    was arithmetic. Nothing in the pipeline objected.
+    """
+    # The mistake itself.
+    with pytest.raises(label_engine.LabelError) as caught:
+        label_engine.LabelConfig(spread_points=Decimal("2.0"))
+    message = str(caught.value)
+    # A refusal that does not name the cause sends the reader to the wrong
+    # place; this one has to say which unit is wanted.
+    assert "PRICE" in message
+    assert "0.00002" in message
+
+    # A real price is still accepted, including a wide one.
+    assert label_engine.LabelConfig(spread_points=Decimal("0.00002")).spread_points == Decimal("0.00002")
+    assert label_engine.LabelConfig(spread_points=Decimal("0.05")).spread_points == Decimal("0.05")
+
+    # Zero stays legal -- a caller may deliberately price a frictionless
+    # label for comparison, and the config's job is units, not policy.
+    assert label_engine.LabelConfig(spread_points=Decimal("0")).spread_points == Decimal("0")
+
+    # And the labels it produces are sane rather than uniformly negative.
+    bars = make_bars(120)
+    rows = label_engine.compute_labels(
+        bars, label_engine.LabelConfig(spread_points=Decimal("0.00002"), horizon=5)
+    )
+    returns = [r.forward_return for r in rows if r.forward_return is not None]
+    assert returns, "the fixture produced no labelled rows"
+    assert any(r > 0 for r in returns), "no winners at all is the -1.71 signature"
+    assert all(abs(r) < 0.5 for r in returns), "a bar return near 100% is a unit error"
