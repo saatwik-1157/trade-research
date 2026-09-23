@@ -972,6 +972,52 @@ expression rather than a rule of thumb.
 Read them for the catalogue of what to try. Do not read them for whether it
 worked.
 
+## Before training a model on the L23 dataset
+
+The pipeline is sound: 119 tests pass across `app/datasets` and
+`app/training`, the leakage checks are behavioural rather than structural
+(feed the pipeline future bars and require the output not to change), and
+`LabelConfig` has no zero-cost default -- `spread_points` must be stated,
+because a WIN label computed without the spread is a label for a market
+nobody trades in. None of that is the problem.
+
+**The dataset is too small to demonstrate the edge a model would have to
+find, by a factor of fourteen.** Measured 2026-09-23:
+
+| | |
+|---|---|
+| rows in the READY dataset | **638** |
+| features in the L23 catalogue | 22 -> **29 rows per feature** |
+| mean breakeven win rate (`cost_hurdle`, 7 pairs) | 51.50% |
+| edge a model must BEAT | **1.50 win-rate points** |
+| standard error of a win rate at n=638 | **1.98 points** |
+| so the edge is | **0.76 standard errors** -- significance needs 1.96 |
+| rows needed at 80% power | **8,744** |
+| shortfall | **13.7x** |
+
+**The target is smaller than the noise floor.** A model that was PERFECT --
+that found the whole 1.5-point edge the spread demands -- could not show it
+on 638 rows, because one standard error of a win rate at that sample size is
+1.98 points. Training here does not produce a weak result; it produces a
+result that cannot be read either way, and a fit over 22 features on 29 rows
+each will report a number regardless.
+
+So the sequence is the dataset, then the model, and not the reverse. The bars
+to fix it exist -- `rule_search` routinely runs 19,851 H1 bars per symbol
+across seven pairs -- so 638 is a property of how the dataset was built
+rather than of what is available.
+
+**And when it is large enough, do not hand it the whole feature catalogue.**
+`shape_search.py` documents that 5 of the 22 features reconstruct families
+already refuted: `rsi_14` is the RSI family, `ema_spread_10_50` is the EMA
+cross before thresholding, `high_20_distance`/`low_20_distance` are the
+Donchian break, `sma_distance_20` with `volatility_20` rebuilds the Bollinger
+band, and `roc_10` is momentum. Handing a model all 22 searches dead ground
+and new ground at once, and no result could be attributed to either. The
+calendar search made the same point empirically on 2026-09-23: a Tuesday
+control scored +86.0 against Thursday's +86.6, so a model given day-of-week
+columns would fit that drift with more parameters and less ability to notice.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by
