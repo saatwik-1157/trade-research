@@ -152,6 +152,15 @@ jobs:
       - name: Regime conditioners are prior information, not the bar's own
         run: python tests/test_regime.py
 
+      # The only search here that measured something usable, so it gets
+      # the hardest checks rather than the softest: a zero spread is
+      # UNRECORDED and not a free trade, the filter reads YESTERDAY so it
+      # cannot select on what it measures, and spread is converted to
+      # return units before pairs are pooled -- two points of USDJPY and
+      # two of EURUSD are the same integer and a 36% different cost.
+      - name: Spread timing is not zeros, lookahead, or pooled points
+        run: python tests/test_spread_timing.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able

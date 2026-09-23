@@ -1171,6 +1171,88 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## Spread timing: the first thing measured here that is actually usable
+
+Twenty-second search, and the first aimed at COST rather than direction.
+
+Twenty-one searches say direction is unforecastable on this venue. The ledger
+says something different about cost, and says it with numbers: **-0.0235R a
+trade observed against 0.0299R of measured drag**, so implied gross expectancy
+is **+0.0064R** and the cost is what makes the result negative. Choosing the
+three cheapest pairs already took the drag to 0.0146R. The question is whether
+timing can take it further.
+
+**Three measurements decided the design and all were made before building
+anything.**
+
+  * **41.4% of bars carry no recorded spread**, and the missingness trends --
+    44.9% of the first half of the sample against 57.0% of the second. Every
+    figure here is conditional on the recorded half.
+  * **67.7% of spread variance is BETWEEN days**, not within them.
+  * **Within-day autocorrelation is -0.120 at lag 1**, +0.035 at lag 2,
+    +0.007 at lag 6. The +0.6 autocorrelation visible at every lag in the raw
+    series is entirely the slow between-day component.
+
+So **timing entries inside a session is refuted before it is tried**: the last
+bar's spread says nothing about the next bar's. What remains is whether an
+expensive DAY can be recognised from the day before, which is where two
+thirds of the variance lives. Day-to-day persistence is **+0.245**.
+
+**Bucketing today by YESTERDAY's mean recorded spread, on the three pairs the
+harness actually trades** (`reports/spread_timing_search.json`, 5,980 days):
+
+| prior day | days | spread today | gross move | move per unit spread |
+|---|---|---|---|---|
+| **cheapest third** | 1,965 | **0.0242%** | 0.3512% | **14.53** |
+| middle | 1,965 | 0.0402% | 0.4040% | 10.05 |
+| dearest third | 1,966 | 0.0745% | 0.3749% | 5.03 |
+
+**Trading only after a cheap day saves 67.6% of the spread and forgoes 6.3% of
+the gross move.** That asymmetry is the finding, and the control that produces
+it was built in: cheap-spread days are plausibly also quiet days, and a filter
+that halves the cost and halves the move has bought nothing. Measured, it does
+not -- **move per unit of spread is 14.53 against 5.03, a 2.9x difference.**
+That is the largest cost lever this project has found, against 2x for the
+symbol-choice lever already in use.
+
+**It survives the checks that killed everything else.**
+
+  * **Not a data-coverage artefact.** Correlation between a day's recorded
+    coverage and its spread level is **-0.022**; coverage across the three
+    buckets is 63.2%, 64.4%, 59.6%. Restricted to well-covered days (>80% of
+    bars recorded, n=2,914) the saving **rises to 74.0%**.
+  * **Not one era.** All four blocks agree: savings of 76.9%, 64.5%, 43.7%,
+    74.2% against move forgone of 6.3%, 6.4%, 12.1%, 14.1%, with move per
+    spread better in the cheap bucket in every era.
+  * **Not a lookahead.** The filter uses only the PREVIOUS day, which is the
+    distinction `regime_search` failed: bucketing today by today's own spread
+    would be selecting cheap days by observing they were cheap.
+
+**AND IT STILL DOES NOT PRODUCE AN EDGE. Read this part before acting on any
+of the above.** Applying the measured reduction to the live record takes the
+drag from 0.0146R to 0.0076R and expectancy from **-0.0082R to about
+-0.0017R**. Closer to zero, still negative. Three separate reasons not to call
+it a result:
+
+  * **The +0.0064R gross it leans on is not demonstrated.** `trade_autopsy`
+    puts the residual after cost at **t = 0.43**. Reducing the cost of a
+    strategy whose gross edge is inside noise converges the loss toward zero;
+    it does not produce a profit.
+  * **The gross scaling is assumed, not measured.** The 6.3% forgone is the
+    day's absolute move, and translating that into a rule's gross R assumes
+    the rule's return scales with the day's range. That is plausible and
+    untested.
+  * **It is a cost measurement, not a strategy.** Nothing here says when to
+    trade, only when trading is dearer. It makes a loser lose more slowly,
+    which is the same thing the symbol-set change did and was recorded as.
+
+So the honest summary of twenty-two searches is unchanged in its conclusion
+and sharper in its reason: **direction is unforecastable here, cost is the one
+quantity with a measured sign, and the cost is now measurably timeable -- by
+enough to halve the drag and not nearly enough to cross zero.**
+
+    python tools/spread_timing_search.py --cheap-only
+
 ## Regime conditioning, and the one-bar error that manufactured 41% a year
 
 Twenty-first search, and the first that tests no new rule at all. Every search
