@@ -112,7 +112,14 @@ def main() -> int:
         missing_tot += int((sp == 0).sum())
         bars_tot += len(sp)
         days, dmean = daily_spread(r["time"], sp)
-        point = 1e-2 if sym.endswith("JPY") else 1e-4
+        # READ the point size, never assume it. MT5's `spread` field counts
+        # BROKER POINTS, and this broker quotes a fractional fifth digit, so a
+        # point is 1e-5 on EURUSD and 1e-3 on USDJPY -- not the pip. The first
+        # version hard-coded 1e-4 and 1e-2 and every absolute figure came out
+        # exactly 10x too large. It was caught by the cost in R landing at
+        # 0.1314 where this repository has measured 0.0096-0.0174R.
+        info = mt5.symbol_info(sym)
+        point = float(info.point)
         # Per-day realised move and the day's own mean spread, in RETURN units
         # so pairs pool: a spread in points is the instrument's point size,
         # which is the pooling error this repository documents.
@@ -139,6 +146,18 @@ def main() -> int:
     mt5.shutdown()
     if not rows:
         return 1
+
+    # A fence on swap.py's reasoning: nothing here has a round-trip spread
+    # anywhere near a percent of price, so a figure above that is a unit error
+    # rather than an expensive instrument, and it is named rather than
+    # reported.
+    IMPLAUSIBLE_SPREAD_FRACTION = 0.01
+    worst = max(r["spread"] for r in rows)
+    if worst > IMPLAUSIBLE_SPREAD_FRACTION:
+        raise SystemExit(
+            f"spread of {worst:.5f} of price is implausible; MT5's spread field "
+            f"counts BROKER POINTS and this broker quotes a fractional digit, "
+            f"so point is 1e-5 on a 5-digit pair, not the pip 1e-4")
 
     sprd = np.array([r["spread"] for r in rows])
     prior = np.array([r["prior_spread"] for r in rows])
@@ -182,21 +201,28 @@ def main() -> int:
     print(f"  move-per-unit-spread: {cheap['move_over_spread']:.2f} cheap vs "
           f"{dear['move_over_spread']:.2f} dear")
 
-    # The number that decides it: expectancy after the filter, using the
-    # repository's own measured figures.
+    # The number that decides it. The gross side is NOT scaled by the daily
+    # move: an earlier version did that and it was wrong. Simulating 22,847
+    # real bracketed trades shows the gross R difference between the cheap and
+    # dear buckets is -0.0139 with a standard error of 0.016 -- t = -0.86, and
+    # indistinguishable from zero, as it must be for random entries. The daily
+    # absolute move and a bracketed trade's R are different quantities, and
+    # only the second is what the account earns.
     GROSS_R, DRAG_R = 0.0064, 0.0146
     scale = cheap["spread_pct"] / float(np.average(
         [o["spread_pct"] for o in out], weights=[o["days"] for o in out]))
     new_drag = DRAG_R * scale
-    gross_scale = cheap["move_pct"] / float(np.average(
-        [o["move_pct"] for o in out], weights=[o["days"] for o in out]))
-    new_gross = GROSS_R * gross_scale
     print("  " + "-" * 72)
     print(f"  applying that to the live record ({GROSS_R:+.4f}R gross, "
           f"{DRAG_R:.4f}R drag on the cheap three):")
     print(f"    drag  {DRAG_R:.4f}R -> {new_drag:.4f}R   (x{scale:.3f})")
-    print(f"    gross {GROSS_R:+.4f}R -> {new_gross:+.4f}R   (x{gross_scale:.3f})")
-    print(f"    net   {GROSS_R - DRAG_R:+.4f}R -> {new_gross - new_drag:+.4f}R")
+    print(f"    gross {GROSS_R:+.4f}R unchanged -- simulated gross difference "
+          f"is t=-0.86, noise")
+    print(f"    net   {GROSS_R - DRAG_R:+.4f}R -> {GROSS_R - new_drag:+.4f}R")
+    print(f"  AND THAT SIGN IS NOT A RESULT: the {GROSS_R:+.4f}R gross it rests")
+    print(f"  on has t = 0.43 (trade_autopsy), so it is inside noise. Cutting")
+    print(f"  the cost of a strategy with no demonstrated gross edge converges")
+    print(f"  the loss toward zero; it does not produce a profit.")
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as fh:
@@ -205,9 +231,12 @@ def main() -> int:
                    "day_persistence": rho, "buckets": out,
                    "spread_saved_pct": saved, "move_forgone_pct": forgone,
                    "applied": {"gross_r": GROSS_R, "drag_r": DRAG_R,
-                               "new_drag_r": new_drag, "new_gross_r": new_gross,
+                               "new_drag_r": new_drag,
+                               "gross_held_constant": True,
+                               "simulated_gross_diff_t": -0.86,
                                "net_before": GROSS_R - DRAG_R,
-                               "net_after": new_gross - new_drag}}, fh, indent=2)
+                               "net_after": GROSS_R - new_drag,
+                               "gross_t_in_ledger": 0.43}}, fh, indent=2)
     print(f"  wrote {args.out}")
     return 0
 

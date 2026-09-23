@@ -1203,9 +1203,9 @@ harness actually trades** (`reports/spread_timing_search.json`, 5,980 days):
 
 | prior day | days | spread today | gross move | move per unit spread |
 |---|---|---|---|---|
-| **cheapest third** | 1,965 | **0.0242%** | 0.3512% | **14.53** |
-| middle | 1,965 | 0.0402% | 0.4040% | 10.05 |
-| dearest third | 1,966 | 0.0745% | 0.3749% | 5.03 |
+| **cheapest third** | 1,965 | **0.0024%** | 0.3512% | **145.3** |
+| middle | 1,965 | 0.0040% | 0.4040% | 100.5 |
+| dearest third | 1,966 | 0.0075% | 0.3749% | 50.3 |
 
 **Trading only after a cheap day saves 67.6% of the spread and forgoes 6.3% of
 the gross move.** That asymmetry is the finding, and the control that produces
@@ -1227,24 +1227,56 @@ symbol-choice lever already in use.
   * **Not a lookahead.** The filter uses only the PREVIOUS day, which is the
     distinction `regime_search` failed: bucketing today by today's own spread
     would be selecting cheap days by observing they were cheap.
+  * **Not eaten by volatility, which is the unit that matters.** The live
+    record measures cost in R, and R divides by ATR -- so if cheap-spread days
+    were also low-ATR days the saving would vanish on the way into the
+    account. Measured, **ATR per unit of price is flat across the buckets**
+    (0.1359%, 0.1455%, 0.1364%, a 0.4% difference end to end), and the cost
+    **in R** falls by **68.0%**, matching the 67.6% measured in price units.
 
-**AND IT STILL DOES NOT PRODUCE AN EDGE. Read this part before acting on any
-of the above.** Applying the measured reduction to the live record takes the
-drag from 0.0146R to 0.0076R and expectancy from **-0.0082R to about
--0.0017R**. Closer to zero, still negative. Three separate reasons not to call
-it a result:
+**A units defect was found here and it was mine.** MT5's `spread` field counts
+BROKER POINTS, and this broker quotes a fractional fifth digit -- so a point is
+**1e-5 on EURUSD and 1e-3 on USDJPY**, not the pip. The first version
+hard-coded the pip and every absolute spread figure came out **exactly 10x too
+large**. It surfaced because the implied cost in R was 0.1314 where this file
+has measured 0.0096-0.0174R. The bucket ratios are a constant scale apart and
+were therefore unaffected, so the saving and every conclusion below stand, but
+the printed percentages above are the corrected ones. The tool now READS
+`symbol_info(sym).point` instead of assuming it, and carries a fence on
+`swap.py`'s reasoning: a round-trip spread above 1% of price is a unit error
+rather than an expensive instrument, and is named rather than reported.
+
+**The gross side was ASSUMED in the first version and has since been
+MEASURED, which changed the answer.** That version scaled the gross expectancy
+by the ratio of daily absolute moves, forgoing 6.8%. A daily absolute move and
+a bracketed trade's R are different quantities, and only the second is what
+the account earns. Simulating **22,847 real bracketed trades** -- random
+entries, 1.5xATR brackets, each charged its own day's spread:
+
+| prior day | trades | gross R | cost R | net R |
+|---|---|---|---|---|
+| cheapest third | 7,616 | -0.0013 | **0.0132** | **-0.0145** |
+| middle | 7,615 | -0.0248 | 0.0206 | -0.0455 |
+| dearest third | 7,616 | +0.0126 | **0.0424** | -0.0298 |
+
+The cost reduction is confirmed at **68.9%**. The gross R difference between
+cheap and dear is **-0.0139 against a standard error of 0.016 -- t = -0.86**,
+indistinguishable from zero, which is what random entries must give. So the
+gross is held CONSTANT rather than scaled, and the corrected figure is
+**-0.0082R to -0.0012R**.
+
+**AND THAT IS STILL NOT AN EDGE. Read this part before acting on any of the
+above.** Two reasons, and the first is decisive:
 
   * **The +0.0064R gross it leans on is not demonstrated.** `trade_autopsy`
-    puts the residual after cost at **t = 0.43**. Reducing the cost of a
+    puts the residual after cost at **t = 0.43**. Cutting the cost of a
     strategy whose gross edge is inside noise converges the loss toward zero;
-    it does not produce a profit.
-  * **The gross scaling is assumed, not measured.** The 6.3% forgone is the
-    day's absolute move, and translating that into a rule's gross R assumes
-    the rule's return scales with the day's range. That is plausible and
-    untested.
+    it does not produce a profit. Note what that implies about the corrected
+    arithmetic: the net figure is only a whisker from positive, and the whole
+    distance is carried by a gross term that has not been shown to exist.
   * **It is a cost measurement, not a strategy.** Nothing here says when to
     trade, only when trading is dearer. It makes a loser lose more slowly,
-    which is the same thing the symbol-set change did and was recorded as.
+    which is what the symbol-set change did and was recorded as.
 
 So the honest summary of twenty-two searches is unchanged in its conclusion
 and sharper in its reason: **direction is unforecastable here, cost is the one
