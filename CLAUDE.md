@@ -1171,6 +1171,59 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## The +0.0064R gross does not survive measurement, and that closes the loop
+
+The spread-timing result below leaves the account a whisker from positive, and
+every bit of that distance is carried by an implied GROSS expectancy of
+**+0.0064R**. That figure was never measured. It is a residual: the observed
+-0.0235R a trade minus an assumed 0.0299R of drag. `trade_autopsy` already put
+its t at **0.43**. It can be measured directly, and it does not survive.
+
+**331,746 simulated random-entry bracketed trades** across seven majors,
+1.5xATR both sides, no spread charged:
+
+    gross R = -0.01284   SE 0.00174   t = -7.40
+    95% CI  [-0.01624, -0.00944]
+
+**The inferred +0.0064R is about eleven standard errors outside that
+interval.** The gross is significantly NEGATIVE, and a symmetric bracket on
+random entries is supposed to give exactly zero, so the cause is worth finding
+rather than reporting.
+
+**It is the tie rule, and the whole question lives inside 0.94% of trades.**
+When one bar's range covers both the stop and the target, intrabar order is
+unknown and `simulate` books the LOSS -- deliberately, as its docstring says,
+because assuming the win is how a backtest flatters itself. Ties are only
+**1,560 of 165,873 trades (0.94%)**, and they move the answer by more than the
+whole effect being argued about:
+
+| tie resolved as | gross R | t |
+|---|---|---|
+| LOSS (the conservative default) | **-0.01185** | -4.83 |
+| WIN (the optimistic bound) | **+0.00696** | +2.83 |
+
+**The +0.0064R the account's case rests on is almost exactly the optimistic
+bound of +0.00696R.** So the inference that gross expectancy is positive is
+equivalent to assuming every ambiguous bar resolved in the position's favour.
+Under a neutral 50/50 resolution the figure is about **-0.0024R**, and under
+the conservative one **-0.0119R**.
+
+**What that does to the spread-timing conclusion.** Cutting the drag by 69%
+still cuts the drag by 69% -- that measurement stands on its own and is
+unaffected. But it was reported as leaving expectancy at -0.0012R, a whisker
+from positive, and that whisker was made of the optimistic tie assumption.
+With gross at its neutral estimate the filtered expectancy is about
+**-0.0069R**, and with the conservative one **-0.0164R**. **Spread timing
+cannot flip the sign, because there is no positive gross for it to uncover.**
+
+Read this as the end of a chain rather than one more null. Twenty-two searches
+said direction is unforecastable; the cost work then said the drag is
+timeable; and this says the thing the timing was supposed to uncover is not
+there. The account does not lose because it pays too much for a small edge. It
+loses because there is no edge, and it also pays.
+
+    python tools/gross_bound.py
+
 ## Spread timing: the first thing measured here that is actually usable
 
 Twenty-second search, and the first aimed at COST rather than direction.
