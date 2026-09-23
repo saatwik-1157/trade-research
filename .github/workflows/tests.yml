@@ -177,6 +177,14 @@ jobs:
       - name: Tick volume is per-symbol, causal, and not the clock
         run: python tests/test_tick_volume.py
 
+      # A learner written inside the project it reports on can produce a
+      # false NULL as easily as a false signal, and null is what it was
+      # always most likely to say. So its power is proven on an XOR --
+      # where logistic is provably at chance and scores 0.490 while the
+      # ensemble scores 0.984 -- before any verdict on real data is read.
+      - name: The nonlinear learner can see what a linear one cannot
+        run: python tests/test_nonlinear.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able

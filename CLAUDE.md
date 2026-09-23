@@ -1171,6 +1171,90 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## Every model here was LINEAR, so interactions were never tested
+
+Twenty-fourth search, and the last untested cell in the modelling work.
+`train_models.py` and `pooled_walk_forward.py` both fit
+`trainers.fit_weighted_logistic`, which is linear in the features. A logistic
+model cannot represent *"feature A matters only when feature B is high"* --
+not poorly, but at all. So if the only structure in this data were an
+interaction, every model result above would have missed it **by construction
+rather than by measurement**, which is the same kind of gap the Kaufman
+replication closed when his 28-80 day range turned out never to have been in
+the grid.
+
+**The learner is written in the repository because it had to be.** sklearn,
+lightgbm, xgboost and scipy are all absent from this environment. So
+`tools/nonlinear_search.py` is a small gradient-boosted ensemble of
+depth-limited trees in numpy -- depth 3, 60 rounds, learning rate 0.1, minimum
+50 rows a leaf -- in the same spirit as this project writing its own Parabolic
+SAR and efficiency ratio rather than taking them on trust.
+
+**That is a risk, and the risk is a false NULL rather than a false signal.** A
+learner written for one search, in a project where every previous search came
+back empty, is most likely to report empty whether or not it works. So its
+power is proven first, and proven on the one thing that justifies the search:
+
+    XOR out of sample:   logistic 0.490   boosted 0.984
+    coin-flip label:                      boosted 0.489
+    plain linear signal:                  boosted 0.93
+
+The XOR label depends on the SIGN AGREEMENT of two features and on neither
+feature alone -- measured, each has a correlation under 0.05 with the label.
+Logistic is provably at chance there and scores 0.490. The ensemble scores
+0.984. It sees what every previous model in this file was blind to, and it
+does not learn a coin flip.
+
+**On the real data it finds nothing, and the control says why.**
+
+| fold | boosted | logistic |
+|---|---|---|
+| 1 | +0.02 | -4.00 |
+| 2 | -0.56 | -2.28 |
+| 3 | -3.62 | -0.44 |
+| 4 | -0.92 | -0.49 |
+| 5 | -0.57 | +0.36 |
+| **mean** | **-1.13** | **-1.37** |
+
+Neither clears the 1.50-point hurdle and neither is positive. The logistic
+column reproduces `pooled_walk_forward`'s tested result (-1.37 against -1.35),
+which is the consistency check that makes the boosted column worth reading.
+
+**The decisive figure is the control.** On SHUFFLED labels the boosted model
+scores **-1.10**, against **-1.13** on the real ones:
+
+| | real labels | shuffled control |
+|---|---|---|
+| boosted | **-1.13** | **-1.10** |
+| logistic | -1.37 | -0.40 |
+
+The nonlinear model performs **identically on real and random labels**. That
+-1.13 is not a small edge being eaten by cost; it is the model's own noise
+floor. It is not finding a little and losing it -- it is finding nothing, and
+a learner that can recover an XOR at 0.984 would have found an interaction if
+one were there.
+
+**One test check was written wrongly and the correction matters.** It asserted
+that an unscaled logistic "saturates to one class". It does not:
+`predict_logistic` thresholds the score at zero, so weight magnitude never
+collapses the prediction. The historical failure in this file was that the
+FITTER could not learn from features at wildly different magnitudes -- every
+training probability came out at exactly 1.0000 -- which is a different
+statement. The check now fits both learners on features scaled by 1e6 and
+1e-6 and requires the ensemble to recover the same accuracy, which is the
+property actually being claimed.
+
+**Read this as closing the modelling question rather than as one more null.**
+Twenty-two searches said no single rule works. The pooled walk-forward said no
+linear combination of the feature catalogue works, at four times the power
+needed. This says no INTERACTION among those features works either, on a
+learner demonstrated to find interactions. What remains untested is not a
+model class but a different feature space, and the input catalogue is closed.
+
+    python tools/nonlinear_search.py
+    python tools/nonlinear_search.py --self-test
+    python tools/nonlinear_search.py --shuffle-labels
+
 ## Tick volume on FX: the last untested input, and the clock inside it
 
 Twenty-third search, and it closes a gap this file has carried from the
