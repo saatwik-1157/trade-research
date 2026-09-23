@@ -78,6 +78,15 @@ jobs:
       - name: Pair spread reversion, lookahead and spurious regression
         run: python tests/test_pairs_search.py
 
+      # A candidate list's failure mode is not a wrong number, it is a rule
+      # that never fires: a signal stuck at zero produces "no trades", reads
+      # as a null, and is indistinguishable from a rule that was tried and
+      # failed. three_methods fired ZERO times in 3,000 synthetic bars while
+      # looking healthy. Every candidate must now fire, and the constructions
+      # are asserted against hand-built patterns rather than eyeballed.
+      - name: Bookshelf rules fire, and are built as the books define them
+        run: python tests/test_book_rules.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able

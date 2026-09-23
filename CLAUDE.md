@@ -1171,6 +1171,86 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## The bookshelf, read in full, and the four rules that were left
+
+Twelve books, 7.1 million characters, read end to end on 2026-09-23 and mapped
+against every search above. **Almost all of it is ground already refuted here**
+-- RSI, MA crosses, Donchian, Bollinger, momentum, single-bar candle shape,
+carry, calendar, hour filters. Four families came back both genuinely untested
+AND mechanically unambiguous, and those two conditions are the whole filter: a
+rule this repository cannot state without inventing a definition is a rule it
+would be testing on its own authorship rather than the book's.
+
+`tools/book_rules_search.py` runs them through `rule_search`'s pipeline -- same
+permutation null, Bonferroni, era blocks, walk-forward, date clustering,
+measured spread -- over 19,851 H1 bars per symbol across the seven majors
+(`reports/book_rules_search.json`). Sixteen candidates, each family with its
+inverse.
+
+**Nothing clears anything.** Best in-sample t is **+0.31**
+(`three_methods_ride`) against a 2.955 Bonferroni threshold and a permutation
+null averaging **+0.38** -- the shuffle timed these rules better than the rules
+did, for the fifth time in this file. Out of sample the best candidate is
+**-2.39** at -53.7 points. **Zero of 16** cleared 1.96 out of sample against 0.4
+expected by chance, the best is -3.63 clustered by symbol with 1 of 7 pairs
+positive, and its era blocks run -29.3, +20.6, +12.1, -49.7.
+
+Note also that the "best" candidate has **106 out-of-sample trades**. It leads
+the table on the thinnest evidence in it, which is what a leaderboard does when
+nothing has an edge.
+
+**The gross/net split is the finding, and it is the same one every time.**
+
+| candidate | net | gross | implied cost |
+|---|---|---|---|
+| `ha_ride` | -12.6 | -7.3 | 5.3 |
+| **`ha_fade`** | **-0.1** | **+5.2** | 5.3 |
+| `sar_ride_0.02_0.2` | -12.5 | -7.2 | 5.3 |
+| **`sar_fade_0.02_0.2`** | **-0.2** | **+5.1** | 5.3 |
+
+Every trend-following variant is significantly NEGATIVE in sample -- `ha_ride`
+at **t = -6.83**, `linreg_ride_50` at -5.62, `sar_ride_0.01_0.1` at -5.49,
+`sar_ride_0.02_0.2` at -5.29 -- and each inverse pays the identical 5.3 points.
+Flipping a rule reverses the timing and changes nothing about the cost, which
+is why the fades cluster just under break-even instead of mirroring into
+profit. That is `supertrend_search`'s result reproduced on four families that
+share none of its construction, and it is once again the only effect here large
+enough to measure.
+
+**Two rules were deliberately NOT tested, and the reasons are the useful part.**
+
+  * **Pivot points.** The level is (H+L+C)/3 of the PREVIOUS CALENDAR DAY, held
+    fixed through the next day. `rule_search`'s signal contract passes o/h/l/c
+    and no timestamps, so a calendar-day pivot cannot be computed inside it and
+    a rolling 24-bar substitute is a different rule. Untested with the reason
+    stated beats tested as something else.
+  * **Engulfing, Harami and the Star patterns.** Each needs "in a definable
+    trend" or "well into the body". Quantifying those would be authoring the
+    rule, and the result would measure this repository's threshold rather than
+    the book's pattern. The beginners' guide concedes the point itself: it
+    states that the Hanging Man and the Bullish Hammer are the SAME single bar
+    and that the prior-trend context is the entire signal.
+
+**The defect caught on the way is the silent-rule shape again.**
+`three_methods` fired **zero times in 3,000 synthetic bars** while looking
+perfectly healthy. A signal stuck at zero produces "no trades", reads as a
+null, and is indistinguishable in the report from a rule that was tried and
+failed. `tests/test_book_rules.py` now requires every candidate to fire at
+least 20 times on 20,000 realistic bars, and tightening one threshold to an
+impossible value turns it red by name.
+
+**And one measured curiosity that changes how the candle result is read.**
+`soldiers` fires once in 3,000 random-walk bars and **21,089 times** across
+seven real pairs. The reason is that an FX bar opens almost exactly on the
+previous close, so "opens inside the previous body" is nearly free -- and in FX
+the pattern degenerates towards three consecutive up-closes, which is momentum
+at n=3. Its null is therefore a weaker statement than it looks: it is mostly a
+re-refutation of ground already covered, not an independent test of the
+candlestick literature.
+
+    python tools/book_rules_search.py
+    python tools/book_rules_search.py --timeframe D1
+
 ## Spread reversion between two majors, and why the control decided it
 
 The twelfth search, and the first two-leg trade in this file.
