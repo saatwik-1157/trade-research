@@ -1109,11 +1109,22 @@ nor the null were computed anywhere. `tools/walk_forward_models.py` and
 `train_models.py --shuffle-labels` supply both, and the first thing they did
 was retire the one result that looked like an edge.
 
-**Read the `+0.00` folds.** They are not missing data: the model predicted the
-majority class for the whole block, so accuracy equals the prior exactly.
-On most folds the fitter learns nothing and returns the prior, which is the
-honest outcome and is what a 22-feature logistic over ~3,000 rows of FX
-should be expected to do.
+**Read the `+0.00` folds, and the statement is stronger than "it learns
+little".** Checked per fold on USDCAD rather than inferred: the model emits a
+SINGLE CONSTANT CLASS in every one of the four folds. It never produces a
+mixed prediction at all.
+
+    fold 1  margin +0.00   predicted only class 1   = the block's majority
+    fold 2  margin -2.94   predicted only class 0   = NOT the majority
+    fold 3  margin +0.00   predicted only class 1   = the block's majority
+    fold 4  margin +0.00   predicted only class 0   = the block's majority
+
+So a `+0.00` fold is the fitter collapsing onto the prior, and the one
+negative fold is it collapsing onto the WRONG constant. On a walk-forward
+this model does not make a weak prediction; it makes no prediction. That is
+the honest outcome for a 22-feature logistic over ~3,000 rows of hourly FX,
+and it is worth stating plainly because "+0.00" in a results table reads like
+a rounding artefact rather than a model that never varied its answer.
 
 **Excluding the refuted features makes the single split look better and the
 walk-forward worse**, which is the clearest statement of the gap between the
