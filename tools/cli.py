@@ -60,6 +60,7 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "path-order": ("path_order_search", "did the high come before the low, beyond close-in-range"),
     "round-numbers": ("round_number_search", "do big-figure levels stop price, against offset controls"),
     "demark": ("demark_search", "DeMark Sequential, countdown scored against its own setup"),
+    "regime": ("regime_search", "does efficiency ratio or volatility rescue the trend nulls"),
     "backtest": ("backtest", "does the composite score separate forward returns"),
     "swap": ("swap", "overnight financing, in points"),
     "carry-check": ("carry_check", "does a paid long side survive the spot drift"),

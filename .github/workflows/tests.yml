@@ -141,6 +141,17 @@ jobs:
       - name: The DeMark state machine follows its own rules
         run: python tests/test_demark.py
 
+      # Conditioning a rule's P&L on a regime variable is meaningful only
+      # if the variable is known BEFORE the bar it groups. Unlagged, the
+      # efficiency ratio contains the very return the trend rule earned,
+      # and bucketing an outcome by a variable containing it produced
+      # +41.6% annualised at t=+21.63 with perfect monotonicity and a
+      # null at p=0.000. The permutation null CANNOT catch this -- it
+      # destroys the alignment the artefact needs -- so the lag is what
+      # is tested, along with the null's blindness to it.
+      - name: Regime conditioners are prior information, not the bar's own
+        run: python tests/test_regime.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able

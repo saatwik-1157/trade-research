@@ -1171,6 +1171,87 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## Regime conditioning, and the one-bar error that manufactured 41% a year
+
+Twenty-first search, and the first that tests no new rule at all. Every search
+above judged its candidates UNCONDITIONALLY, and the strongest objection to
+that record is structural rather than about any one family: a rule that works
+in one regime and loses in another averages to nothing, and twenty
+unconditional nulls cannot separate "no edge" from "edge masked by regime".
+
+Kaufman makes that objection with numbers, which is why it was run rather than
+argued. He measures a 20-day **efficiency ratio**, applies a plain 40-day
+trend, and reports profit factor rising from about **0.7 at ER 0.204 to 3.2 at
+ER 0.266** -- *low noise is good for trend following and high noise is not*.
+He separately claims trend entries improve when filtered to **low realised
+volatility**. Both conditioners, both lookbacks and the predicted direction
+were published before this run, so this is confirmatory rather than a search,
+and the correction is one search's rather than twenty-one.
+
+**THE FIRST VERSION PRODUCED THE BEST RESULT IN THIS PROJECT'S HISTORY AND IT
+WAS A ONE-BAR TIMING ERROR.**
+
+    top bucket  +41.6% annualised    t = +21.63
+    Spearman(bucket, mean) = +1.000  -- perfectly monotone across five buckets
+    permutation null: top-minus-bottom spread exceeded in 0.0% of 1,000 rounds
+
+Every gate this repository owns was passed, and with room to spare. The cause:
+ER at bar t is computed from closes through c[t], so it contains the very
+return r[t] that the trend rule earned on bar t. A trend position profits
+precisely on bars where price travelled far in one direction, and that is
+exactly what raises ER. **The outcome was being bucketed by a variable
+containing the outcome.**
+
+| efficiency ratio | top minus bottom | Spearman | top bucket t |
+|---|---|---|---|
+| contemporaneous | **+28.44bp** | **+1.000** | **+21.63** |
+| lagged one bar | -1.29bp | -0.700 | -1.69 |
+| lagged two bars | -1.52bp | +0.000 | -2.55 |
+
+One bar of lag removes 100% of a 28.4bp effect.
+
+**The permutation null could not have caught it, and that is the lesson worth
+keeping.** Shifting the conditioner destroys exactly the contemporaneous
+alignment the artefact depends on, so the null passes whether the bug is
+present or absent -- it is not a safeguard against this class at all. The only
+check that finds it is a lag test, and `tests/test_regime.py` now reproduces
+the tautology in miniature, removes it with one bar of lag, and then shows a
+shifted conditioner collapsing too, so the null's blindness is pinned rather
+than assumed.
+
+A second defect was caught on the way and is smaller but the same shape. The
+rolling denominator was sliced at `[n-1 : len+n-1]`, which shifts the window
+FORWARD and pulls future bars into it: measured, ER came out at **1.65 on a
+straight line and as high as 10.6 on a random walk**, both impossible for a
+ratio bounded by 1. A quantity with a known bound should be checked against
+its bound.
+
+**Corrected, regime conditioning does not rescue trend following.**
+
+| bucket | ER (lagged) | realised vol |
+|---|---|---|
+| lowest | -0.088bp | -0.390bp |
+| 1 | -0.276bp | -0.298bp |
+| 2 | -0.078bp | -0.267bp |
+| 3 | -0.766bp | -1.027bp |
+| highest | -1.379bp | -0.623bp |
+| Spearman | **-0.700** | -0.500 |
+| null p | 23.8% | 42.4% |
+
+**Every bucket of both conditioners is negative.** Kaufman predicts a strongly
+POSITIVE relationship for ER and the measured one is mildly negative, with the
+shifted-conditioner null putting a |rho| that large in 23.8% of rounds. The
+low-volatility claim fares no better: the lowest vol bucket is -0.390bp and
+the ordering is -0.500.
+
+So the structural objection is answered on its own terms. The twenty
+unconditional nulls above are not hiding a regime -- there is no ER or
+volatility state in which this trend grid makes money on these pairs, and the
+best-conditioned bucket is still a loss.
+
+    python tools/regime_search.py
+    python tools/regime_search.py --lag 0    # reproduces the tautology
+
 ## DeMark Sequential: the control beat the treatment, for the second time
 
 Twentieth search, and the last fully-specified candidate from the twelve
