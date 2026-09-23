@@ -1018,6 +1018,49 @@ calendar search made the same point empirically on 2026-09-23: a Tuesday
 control scored +86.0 against Thursday's +86.6, so a model given day-of-week
 columns would fit that drift with more parameters and less ability to notice.
 
+## The first trained models, and what they show
+
+The dataset problem is fixed: `market_bars` went 705 -> 35,700 and seven
+READY datasets of 4,926 rows each replaced the 638-row fixture, so the
+1.50-point spread hurdle is no longer inside the noise. Models were then
+trained -- `trade_probability`, 22 features, all gates passed
+(`dataset_is_ready`, `leakage_report_passed`, `series_quality_usable`).
+
+**No model clears the hurdle, and the control overlaps the result.**
+
+| dataset | accuracy | majority | margin | shuffled-label control |
+|---|---|---|---|---|
+| eurusd_h1_v1 | 51.42% | 50.10% | **+1.32pt** | -0.51pt |
+| gbpusd_h1_v1 | 51.62% | 51.22% | +0.41pt | **+0.61pt** |
+| usdjpy_h1_v1 | 51.93% | 52.64% | **-0.71pt** | -4.56pt |
+
+The margin is accuracy over the majority-class prior, which is the only part
+that could be skill: `metrics.py` says in its own docstring that a dataset
+70% WIN gives 70% accuracy to a model that always says WIN. The best margin
+is **+1.32 against a 1.50 requirement**, one of three is negative, and on
+GBPUSD the SHUFFLED control (+0.61) beat the real model (+0.41). Three real
+margins spanning -0.71 to +1.32 sit inside a control spanning -4.56 to +0.61.
+
+**The shuffle control was a flag wired to nothing in the first version.** It
+was declared in the help text, passed into `run()`, and never consulted, so
+the output would have said CONTROL while training on real labels. It now
+wraps the loader and permutes the labels, preserving class balance, row
+count, features and fitting procedure exactly. That it works is visible in
+the trade counts changing between paired runs (EURUSD 241 -> 23).
+
+**DO NOT QUOTE THE `economic` BLOCK. It is degenerate.** Across all six runs
+-- three real, three shuffled, trade counts from 23 to 669 -- `gross_profit`
+is **exactly 0** and `win_rate` is **0.0**, making `profit_factor` 0.0 and
+`expected_value` simply minus the mean loss. Zero winning trades out of 669
+is not a result, it is a bug, and the figure is excluded here rather than
+reported as devastating evidence. It needs fixing before any economic claim
+is made from a training run.
+
+So the position is unchanged and now measured on the model side too: 22
+features over 4,926 rows per symbol, leakage-checked, cost-charged labels,
+and the best margin is below the spread hurdle with a control that reaches
+the same range. Eleven rule searches and a first pass at models agree.
+
 ## Before quoting the live paper-trading record
 
 `track_record.py` merges each MT5 read into `data/track_record.jsonl` keyed by

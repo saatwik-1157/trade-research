@@ -76,6 +76,7 @@ def median_spread_points(rows, symbol: str) -> tuple[Decimal | None, str]:
 async def run(symbols: list[str], limit: int, dry_run: bool) -> int:
     from app.core.settings import get_settings
     from app.datasets import builder as build_mod
+    from app.datasets import service as ds_service
     from app.datasets import labels as label_engine
     from app.db.session import make_engine, make_session_factory
     from app.marketdata.service import MarketDataService
@@ -135,8 +136,24 @@ async def run(symbols: list[str], limit: int, dry_run: bool) -> int:
                       f"{'-':>8}{'-':>9}   not built")
                 continue
             try:
-                ds = build_mod.build(bars, cfg)
+                # build_and_register, not build: the in-memory object is
+                # discarded when the process ends, and `project_state` reads
+                # the `datasets` table. A dataset nobody recorded is one
+                # nobody can train from or reproduce.
+                ds, record = await ds_service.build_and_register(
+                    db,
+                    key=cfg.key,
+                    symbol=sym,
+                    provider_symbol=sym,
+                    provider=Provider.mt5,
+                    timeframe=tf,
+                    horizon=cfg.label_config.horizon,
+                    spread_points=spread,
+                    limit=limit,
+                )
+                await db.commit()
             except Exception as exc:                  # noqa: BLE001
+                await db.rollback()
                 print(f"  {sym:9}{len(bars):>7}{str(spread):>9}{'-':>8}"
                       f"{'-':>8}{'FAILED':>9}   {type(exc).__name__}: {exc}")
                 continue
