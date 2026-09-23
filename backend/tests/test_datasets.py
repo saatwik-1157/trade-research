@@ -998,13 +998,11 @@ def test_label_config_refuses_a_spread_in_points_not_price() -> None:
     assert "PRICE" in message
     assert "0.00002" in message
 
-    # A real price is still accepted, including a wide one.
-    assert label_engine.LabelConfig(spread_points=Decimal("0.00002")).spread_points == Decimal("0.00002")
-    assert label_engine.LabelConfig(spread_points=Decimal("0.05")).spread_points == Decimal("0.05")
-
-    # Zero stays legal -- a caller may deliberately price a frictionless
-    # label for comparison, and the config's job is units, not policy.
-    assert label_engine.LabelConfig(spread_points=Decimal("0")).spread_points == Decimal("0")
+    # A real price is still accepted, including a wide one, and zero stays
+    # legal -- a caller may deliberately price a frictionless label for
+    # comparison, and the config's job is units, not policy.
+    for ok in (Decimal("0.00002"), Decimal("0.05"), Decimal("0")):
+        assert label_engine.LabelConfig(spread_points=ok).spread_points == ok
 
     # And the labels it produces are sane rather than uniformly negative.
     bars = make_bars(120)
