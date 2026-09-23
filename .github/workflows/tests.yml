@@ -93,6 +93,15 @@ jobs:
       - name: Calendar search - weekend span and label alignment
         run: python tests/test_calendar_search.py
 
+      # This tool retired the only model result that ever cleared a
+      # permutation control -- USDCAD went from +7.40 points on one split to
+      # 0 of 4 folds. A verdict that strong has to be earned, so the checks
+      # are that it CAN find a planted effect, does not invent one on a coin
+      # flip, trains strictly on each fold's past, and scores against the
+      # test block's own majority rather than the training set's.
+      - name: Walk-forward - power, restraint and no lookahead
+        run: python tests/test_walk_forward.py
+
       # Eight overnight sessions in a row were terminated from outside and
       # not one left a record of why. The journal that fixes that must never
       # be able to end a session itself, so "it reports failure rather than

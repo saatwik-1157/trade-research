@@ -38,6 +38,32 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "backend"))
 
 
+def fold_edges(n: int, folds: int) -> list[int]:
+    """Block boundaries. Fold i trains on [0, edges[i]) and tests on block i.
+
+    A function so a test can assert the property that matters: every fold's
+    training range ends exactly where its test range begins, so no fold ever
+    sees its own future. A walk-forward that leaked would report the one
+    thing this file exists to disprove.
+    """
+    return [int(n * (i + 1) / (folds + 1)) for i in range(folds + 1)]
+
+
+def margin_of(predictions: list[int], truth: list[int]) -> float:
+    """Accuracy minus the TEST block's own majority share, in win-rate points.
+
+    The test block's share, not the training set's. A model carried into a
+    block whose class balance has shifted would otherwise score against the
+    wrong baseline -- flattered when the balance moved its way and punished
+    when it did not, for reasons that have nothing to do with the model.
+    """
+    if not truth:
+        return float("nan")
+    acc = sum(1 for p, t in zip(predictions, truth, strict=True) if p == t) / len(truth)
+    share = max(truth.count(1), truth.count(0)) / len(truth)
+    return (acc - share) * 100
+
+
 def _sigmoid(x: float) -> float:
     if x >= 0:
         import math
@@ -93,7 +119,7 @@ async def run(keys: list[str], folds: int, shuffle: bool) -> int:
             margins: list[float] = []
             n = len(rows)
             # Equal blocks; fold i trains on [0, start_i) and tests on block i.
-            edges = [int(n * (i + 1) / (folds + 1)) for i in range(folds + 1)]
+            edges = fold_edges(n, folds)
             for i in range(folds):
                 tr_end, te_end = edges[i], edges[i + 1]
                 tr_x, tr_keep = trainers.vectorise(feat_rows[:tr_end], feats)
@@ -118,9 +144,7 @@ async def run(keys: list[str], folds: int, shuffle: bool) -> int:
                     ) >= 0.5 else 0
                     for vals in te_x
                 ]
-                acc = sum(1 for p, t in zip(preds, te_y, strict=True) if p == t) / len(te_y)
-                share = max(te_y.count(1), te_y.count(0)) / len(te_y)
-                margins.append((acc - share) * 100)
+                margins.append(margin_of(preds, te_y))
 
             good = [m for m in margins if m == m]
             mean = statistics.fmean(good) if good else float("nan")
