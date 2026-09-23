@@ -1171,6 +1171,64 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## Spread reversion between two majors, and why the control decided it
+
+The twelfth search, and the first two-leg trade in this file.
+`cross_search.py` is the closest thing to it and is a different mechanism: it
+RANKS the seven foreign currencies and holds the top n against the bottom n,
+so its signal is relative strength and its weights are +-1/n. A pairs trade
+fits a HEDGE RATIO between two specific series and bets their fitted spread is
+stationary. Ranking needs no stationarity claim; this one does, and that claim
+is what is being tested. AUDUSD against USDCAD is the cleanest story available
+-- two commodity currencies against one dollar, so the dollar cancels.
+
+**A pair crosses the spread FOUR times a round trip**, both legs in and both
+out, where every other search in this file paid two. A pair is not a cheaper
+way to trade, it is a twice-as-expensive one that has to earn the difference
+back before anything else.
+
+| arm | best in-sample | out | cleared 1.96 OOS | median OOS Sharpe |
+|---|---|---|---|---|
+| real pairs | **+2.30** (AUDUSD/USDCAD) | +0.32 | 0 of 42 (1.1 expected) | -0.097 |
+| **synthetic control** | **+2.17** | -1.68 | 0 of 42 | -0.244 |
+
+42 candidates, 21 pairs x two lookbacks, 19,990 H1 bars on a common window,
+Bonferroni threshold 3.241 (`reports/pairs_search.json`).
+
+**The shuffle is NOT the control that matters here, and that is the finding.**
+Two independent random walks regress on each other with a significant slope
+most of the time -- the Granger-Newbold spurious regression -- so a fitted
+spread that looks tradable is what the null DOES in this family, not evidence
+against it. The decisive control is therefore a SYNTHETIC pair: two
+independent random walks carrying the real series' own volatilities, traded by
+identical code. It scores **+2.17 against the real +2.30**. Nothing separates
+them. Without that arm this would have read as a near-miss worth pursuing, and
+every gate short of it would have agreed.
+
+**The engine was verified before its null was believed**, as in
+`cross_search.py` and unlike the nine searches before it. A planted
+cointegrated pair -- a random walk plus a strongly mean-reverting stationary
+error -- is found at **t = +18.57**. Independent walks score **+0.41**. So an
+effect of the size claimed would not have been missed.
+
+**The lookahead check here is worth copying, because the obvious version of it
+would have passed a bug.** Fitting beta over the whole sample is the classic
+trap: the spread is then constructed to be mean-zero across exactly the period
+being traded, so it reverts by construction. The test does not inspect the
+slice arithmetic, it TRUNCATES -- the signal at bar t must be identical whether
+or not the data after t exists -- and that fires on any peek regardless of
+where it hides.
+
+**Measured, that lookahead scored +1.82 in sample against the honest +2.30 --
+LOWER.** This one did not manufacture an edge, where `cross_search`'s
+off-by-one scored 2.47 and cleared both Bonferroni and its permutation null. A
+test that only caught bugs when they happened to be profitable would be
+useless, which is the reason the check is an identity about information and
+not a comparison of t-statistics.
+
+    python tools/pairs_search.py
+    python tools/pairs_search.py --self-test
+
 ## Pooling all seven majors: the power objection, answered
 
 Every model verdict above carries the same available rebuttal, and it is a fair

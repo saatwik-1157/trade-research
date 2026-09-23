@@ -57,6 +57,7 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "swap": ("swap", "overnight financing, in points"),
     "carry-check": ("carry_check", "does a paid long side survive the spot drift"),
     "cross-search": ("cross_search", "dollar-neutral cross-sectional currency portfolios"),
+    "pairs-search": ("pairs_search", "spread reversion between two majors, vs random walks"),
     "autopsy": ("trade_autopsy", "which live trades made money, and which of that is real"),
     "calendar-search": ("calendar_search", "day-of-week, month and turn-of-month effects on FX"),
     "calendar-rule": ("calendar_rule_search", "trade the day-of-week effect, with controls"),

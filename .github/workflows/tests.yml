@@ -68,6 +68,16 @@ jobs:
       - name: Cross-sectional portfolios, lookahead and neutrality
         run: python tests/test_cross_search.py
 
+      # A spread trade is the one family here where the NULL is what looks
+      # like a finding: two independent random walks regress on each other
+      # significantly most of the time. The checks prove power on a planted
+      # cointegrated pair, restraint on independent walks, and no lookahead
+      # BY TRUNCATION -- the signal at t must not move when the data after t
+      # is deleted, which fires on a whole-sample beta whether or not that
+      # beta happened to be profitable.
+      - name: Pair spread reversion, lookahead and spurious regression
+        run: python tests/test_pairs_search.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able
