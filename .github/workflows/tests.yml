@@ -161,6 +161,14 @@ jobs:
       - name: Spread timing is not zeros, lookahead, or pooled points
         run: python tests/test_spread_timing.py
 
+      # A symmetric bracket entered at random on a martingale must give
+      # EXACTLY zero gross. It does not, and the whole departure is the tie
+      # rule: under 1% of trades cover both levels in one bar, and resolving
+      # them as losses gives -0.0119R against +0.0070R as wins -- a swing
+      # larger than the effect the account's case argues about.
+      - name: The gross expectancy is a bound, set by the tie rule
+        run: python tests/test_gross_bound.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able
