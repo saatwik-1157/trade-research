@@ -1171,6 +1171,110 @@ the training service performs improves, and the check it does not perform
 degrades. **Anyone reading only the number the platform reports would
 conclude the opposite of the truth.**
 
+## What the nulls actually rule out: large edges, not profitable ones
+
+**Read this section before reading any null above as "there is no edge".**
+Twenty-five searches came back empty and the prose records that. What it did
+not record is the only thing a decision can be made on: how large an edge each
+search could have caught. `tools/ruled_out.py` computes it, and the answer
+reframes the whole record.
+
+Every input comes from a report on disk: sample sizes and Bonferroni
+thresholds from each search's own verdict, the hurdle per timeframe from
+`cost_profile.json`, and the per-trade standard deviation from
+`gross_bound.json` -- **0.9999R over 165,888 trades**, which is what a
+symmetric 1.5xATR bracket must give and what makes the conversion to R exact
+rather than assumed. The two gates every candidate faces are modelled -- the
+in-sample test at the search's own Bonferroni threshold and the out-of-sample
+test at 1.96, joint power as their product -- and the minimum detectable edge
+is where that joint power reaches 80%.
+
+| search | tf | k | trades/candidate (IS) | detectable edge | vs its own spread |
+|---|---|---|---|---|---|
+| bookshelf rules | H1 | 16 | 15,350 | 0.0368R | **1.6x** |
+| tick volume | H1 | 16 | 12,841 | 0.0403R | 1.8x |
+| candle shape / vol regime | H1 | 28 | 7,369 | 0.0543R | 2.4x |
+| **41-rule baseline** | H1 | 41 | 2,869 | 0.0867R | **3.9x** |
+| Supertrend | H1 | 14 | 2,665 | 0.0902R | 4.0x |
+| Pugh 2- and 3-bar | H1 | 78 | 1,327 | 0.1313R | 5.8x |
+| 41 rules at H4 | H4 | 39 | 724 | 0.1741R | 22.0x |
+| calendar rules | D1 | 12 | 1,374 | 0.1201R | 36.3x |
+| **41 rules at D1** | D1 | 36 | 363 | 0.2415R | **73.0x** |
+
+**Zero of nine could have detected an edge just large enough to pay its own
+spread.** The best-powered search needed an edge 1.6x the spread before it
+would reliably see it; the 41-candidate baseline needed 3.9x; the D1 searches
+needed 36-73x, which makes them close to uninformative about anything
+tradable. So these nulls exclude LARGE edges. A rule earning, say, 1.3x its
+spread would have come back null in every one of them.
+
+This is not new in kind -- the cost section above already says that "no edge"
+and "an edge too small to see here" are not separable with the data
+available. It is new in scope: that sentence was written about two rules, and
+it is true of every search in this file.
+
+**The data each search would have needed**, holding its own in- to
+out-of-sample ratio fixed, to see an edge exactly the size of its spread:
+
+| search | had (IS, per candidate) | needed | shortfall |
+|---|---|---|---|
+| bookshelf rules | 15,350 | 41,303 | 2.7x |
+| tick volume | 12,841 | 41,328 | 3.2x |
+| candle shape | 7,369 | 43,032 | 5.8x |
+| 41-rule baseline | 2,869 | 42,814 | 14.9x |
+| 41 rules at H4 | 724 | 349,162 | 482x |
+| **41 rules at D1** | 363 | **1,932,997** | **5,325x** |
+
+At H1 the requirement converges on **about 42,000 trades per candidate**
+regardless of the search, because the hurdle is the same and the correction
+varies little. That is the number that matters: an always-on candidate at H1
+across seven majors reached 15,350 in 2.24 years of in-sample history, so a
+spread-sized edge is within reach of about three times that history rather
+than out of reach entirely.
+
+**D1 is the instructive row.** It is where the spread is cheapest -- 0.0033R
+against 0.0225R at H1 -- and that is exactly why it is the hardest place to
+PROVE anything: a spread-sized edge at D1 is so small that seeing it needs
+nearly two million trades per candidate. Cheaper to trade and 5,000 times
+harder to verify are the same fact. `cost_profile` said lower cost "trades
+against verification"; this is the size of the trade.
+
+**Read these as LOWER bounds on the edge each search needed.** The
+permutation null, era blocks, walk-forward and date clustering are further
+gates every survivor must pass and none is modelled; each raises the edge
+required. So the true exclusion is WEAKER than the table, not stronger -- the
+direction of the error is the flattering one, and it is stated for that
+reason. Across all nine plus the five non-majors searches there are 442
+candidates, and correcting across the whole project rather than per search
+moves the best figure from 0.0368R to 0.0407R.
+
+**What this does and does not change.**
+
+  * It does NOT rescue the live strategy. That is a separate question with a
+    separate answer: the `random` entry rule is measured directly at -0.029R
+    over 1,097 trades (t -2.33), and `gross_bound` bounds its gross between
+    -0.0113R and +0.0075R. That is a measured negative, not an unseen edge.
+  * It DOES change how every "nothing works" above should be read. The
+    supportable statement across twenty-five searches is: **no candidate
+    tested here has an edge several times larger than its spread.** Whether
+    any has an edge between one and a few times its spread was never
+    testable at these sample sizes -- and is the only range in which a real
+    retail edge would plausibly live.
+  * The modelling searches (`pooled_walk_forward`, `nonlinear_search`,
+    `train_models`) are not in the table because they write no report; they
+    print only. Their conclusions rest on prose, which is a gap: a result
+    that cannot be recomputed from disk cannot enter this kind of summary.
+
+**Building this found that its own input did not exist.** `gross_bound.py`
+was committed and its figures recorded, but the tool had never been run to
+write `reports/gross_bound.json` -- the figures came from ad-hoc scripts, so
+the per-trade SD this section needs existed only in a conversation. It is now
+written. Re-run on a day's newer bars it reproduces the recorded measurement
+to the fourth decimal: tie-to-loss -0.01133R, tie-to-win +0.00751R, neutral
+-0.00191R, against -0.01185R, +0.00696R and about -0.0024R below.
+
+    python tools/ruled_out.py
+
 ## Inside the bar: a boundary bug that produced the best candidate yet
 
 Twenty-fifth search. The input catalogue is closed at H1, but that is a

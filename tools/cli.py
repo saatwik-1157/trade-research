@@ -66,6 +66,7 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "tick-volume": ("tick_volume_search", "MT5 tick volume, normalised by bar-of-day, against a raw control"),
     "nonlinear": ("nonlinear_search", "boosted trees on the pooled set: do interactions exist"),
     "intrabar": ("intrabar_search", "what the bar did inside itself, from M1, residualised on OHLC"),
+    "ruled-out": ("ruled_out", "what size of edge each null search could have detected"),
     "backtest": ("backtest", "does the composite score separate forward returns"),
     "swap": ("swap", "overnight financing, in points"),
     "carry-check": ("carry_check", "does a paid long side survive the spot drift"),

@@ -195,6 +195,14 @@ jobs:
       - name: Intrabar path features are new information, and tie-safe
         run: python tests/test_intrabar.py
 
+      # This turns twenty-five nulls into bounds, so a wrong power
+      # calculation would not look wrong -- it would quietly make the
+      # record claim to exclude edges it never could. Checked against
+      # closed forms, and dropping the out-of-sample gate from the joint
+      # power turns two checks red.
+      - name: The ruled-out bounds rest on correct power arithmetic
+        run: python tests/test_ruled_out.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able
