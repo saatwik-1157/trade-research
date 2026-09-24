@@ -1275,6 +1275,59 @@ to the fourth decimal: tie-to-loss -0.01133R, tie-to-win +0.00751R, neutral
 
     python tools/ruled_out.py
 
+## A pre-registered test on untouched history: built, not yet spent
+
+The section above ends on what a search with k candidates cannot see. The
+other design is k = 1: **one candidate, chosen mechanically from what the
+searches already saw, tested once at z = 1.96 on H1 bars no rule candidate
+has been evaluated on.** `tools/prereg.py` implements it in steps whose order
+is the point -- `select` reads reports only and writes `prereg/plan.json`;
+`rehearse` runs the whole MT5 path and a reproduction check on the selection
+window without computing one holdout trade; `confirm` refuses unless the plan
+and every analysis file are committed, clean and hash-identical to the plan,
+and refuses forever once a result has existed on disk or in git history.
+
+**The holdout** ends at 2023-06-05, the earliest date in any H1 report, and
+starts wherever 50,000 H1 bars reach (about 2018-09): some 4.75 years.
+"Untouched" is scoped: no rule CANDIDATE has been judged on those bars, but
+`gross_bound`, `gotobi`, `path_order`, `round_number` and `spread_timing` read
+them, and the D1 searches cover the period daily. None of those is the
+selected hypothesis, so none can have selected it.
+
+**The selection rule**: of the 193 candidates the six H1 FX-majors searches
+judged, the 8 with net expectancy above zero in BOTH halves, ranked on the
+weaker half's t. It picks `pugh_out_in_bear` (in-sample t 1.38 on 796 trades,
+out-of-sample t 0.95 on 393). The rule was written after reading those
+rankings, which is legitimate only because the holdout has not been looked at.
+
+**The decision rule**, fixed in code and tested at its boundaries: pooled net
+t strictly above 1.96 with positive net (primary); date-clustered t
+significant with agreeing signs, and 3 of 4 holdout eras net-positive
+(secondary). CONFIRMED needs all three; primary alone is recorded as PRIMARY
+ONLY, not an edge. Cost is the LARGER of the holdout's and the selection
+window's median spread per symbol; financing is not charged, as it was not in
+the searches, and that flatters.
+
+**Its power, projected before the run from trade rate and bar counts:**
+
+| | |
+|---|---|
+| projected holdout trades | 1,766 |
+| detectable net edge at 80% | 0.0667R -- **2.97x the H1 spread** |
+| power at the selection-period edge (0.0546R) | 0.632 |
+| power at half that, allowing for winner's curse | 0.208 |
+| power at a net edge of one spread | 0.155 |
+
+**So the test this data allows is weak, and that is the finding.** The only
+candidates positive in both halves are rare-firing, so even with no
+correction to pay, the holdout sees an edge only if it is about three times
+the spread. The frequent candidates that could be tested precisely are all
+net-negative in their own search. A null here would exclude net edges above
+0.067R and nothing smaller. The plan has NOT been written or committed and the
+holdout has not been touched: spending it is a decision, not a default.
+
+    python tools/prereg.py select --dry-run
+
 ## Inside the bar: a boundary bug that produced the best candidate yet
 
 Twenty-fifth search. The input catalogue is closed at H1, but that is a

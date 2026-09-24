@@ -67,6 +67,7 @@ MEASUREMENT: dict[str, tuple[str, str]] = {
     "nonlinear": ("nonlinear_search", "boosted trees on the pooled set: do interactions exist"),
     "intrabar": ("intrabar_search", "what the bar did inside itself, from M1, residualised on OHLC"),
     "ruled-out": ("ruled_out", "what size of edge each null search could have detected"),
+    "prereg": ("prereg", "one candidate, pre-registered, tested once on untouched H1 history"),
     "backtest": ("backtest", "does the composite score separate forward returns"),
     "swap": ("swap", "overnight financing, in points"),
     "carry-check": ("carry_check", "does a paid long side survive the spot drift"),

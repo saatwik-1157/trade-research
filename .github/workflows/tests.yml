@@ -203,6 +203,14 @@ jobs:
       - name: The ruled-out bounds rest on correct power arithmetic
         run: python tests/test_ruled_out.py
 
+      # The pre-registration spends a holdout that exists once, so its locks
+      # must lock: t = 1.96 exactly fails, a D1 date cannot set the H1
+      # holdout, an edited or re-committed analysis file is refused, and a
+      # result deleted from disk is still found in git history. Each of six
+      # guards was reverted and turned its check red.
+      - name: The pre-registration's locks actually lock
+        run: python tests/test_prereg.py
+
       # The autopsy reads 900+ live trades and its failure mode is being too
       # encouraging. A DEAL_REASON guessed rather than read put the harvest's
       # +297 under the stop loss's name; the permutation test has to be able
