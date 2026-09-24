@@ -134,6 +134,16 @@ with tempfile.TemporaryDirectory() as tmp:
     got = pool_candidates(tmp, (("r.json", "m", "b"),))
     check("99 in-sample trades is not judged, 100 is", [c["name"] for c in got], ["judged"])
 
+with tempfile.TemporaryDirectory() as tmp:
+    print()
+    print("A checkout's line endings are not a change to the code")
+    lf, crlf = os.path.join(tmp, "lf.py"), os.path.join(tmp, "crlf.py")
+    open(lf, "wb").write(b"a = 1\nb = 2\n")
+    open(crlf, "wb").write(b"a = 1\r\nb = 2\r\n")
+    check("LF and CRLF copies hash the same", sha256(lf) == sha256(crlf), True)
+    open(crlf, "wb").write(b"a = 1\r\nb = 3\r\n")
+    check("a real edit still changes the hash", sha256(lf) == sha256(crlf), False)
+
 with tempfile.TemporaryDirectory() as repo:
     print()
     print("The guard: committed, clean, unchanged, and never run before")

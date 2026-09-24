@@ -139,8 +139,14 @@ def from_epoch(t: float) -> str:
 
 
 def sha256(path: str) -> str:
+    """Content hash with line endings normalised.
+
+    Git on this Windows checkout converts LF to CRLF when it touches a file, so
+    a raw-byte hash would change on a plain checkout of unchanged code -- and
+    a guard keyed on it would lock confirm out for ever over whitespace.
+    """
     with open(path, "rb") as fh:
-        return hashlib.sha256(fh.read()).hexdigest()
+        return hashlib.sha256(fh.read().replace(b"\r\n", b"\n")).hexdigest()
 
 
 def r_points(views) -> float | None:
