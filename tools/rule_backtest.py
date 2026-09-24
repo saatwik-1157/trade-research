@@ -64,8 +64,25 @@ def choose_spread(rates, info, tick, source="median"):
 
 
 def timeframe_const(mt5, name):
-    return {"H1": mt5.TIMEFRAME_H1, "H4": mt5.TIMEFRAME_H4,
-            "D1": mt5.TIMEFRAME_D1}[name]
+    """Map a timeframe name to MT5's constant.
+
+    M1 is here because this repository analyses M1 bars in two places -- the
+    rollover-window study and `intrabar_search` -- and both had to reach past
+    this helper to `copy_rates_from_pos`, which loses the stepping-down that
+    `fetch_rates` does when the terminal refuses an over-large request. An
+    unknown name raises rather than defaulting: a silent fallback to H1 would
+    return real bars of the wrong size.
+    """
+    known = ("M1", "M5", "M15", "H1", "H4", "D1")
+    if name not in known:
+        raise KeyError(f"unknown timeframe {name!r}; known: {' '.join(known)}")
+    # getattr, not a dict literal: a literal evaluates EVERY entry, so it
+    # demands attributes the caller never asked for -- which broke the test
+    # suite's mock terminal, defining only the three timeframes it uses.
+    attr = f"TIMEFRAME_{name}"
+    if not hasattr(mt5, attr):
+        raise KeyError(f"this terminal has no {attr}")
+    return getattr(mt5, attr)
 
 
 def fetch_rates(mt5, symbol, want, timeframe="H1", min_bars=500):
