@@ -323,9 +323,9 @@ it, and every order passes the RiskEngine, the OMS and a broker adapter in that
 order.
 
 It has been driven end to end against a real MetaTrader demo venue, both by hand
-and from a TradingView alert. See [`DEMO_VENUE_LIFECYCLE.md`](DEMO_VENUE_LIFECYCLE.md),
-[`SIGNAL_PATH_FIRST_RUN.md`](SIGNAL_PATH_FIRST_RUN.md) and
-[`LEDGER_COMPARISON.md`](LEDGER_COMPARISON.md).
+and from a TradingView alert. See [`DEMO_VENUE_LIFECYCLE.md`](docs/broker/DEMO_VENUE_LIFECYCLE.md),
+[`SIGNAL_PATH_FIRST_RUN.md`](docs/broker/SIGNAL_PATH_FIRST_RUN.md) and
+[`LEDGER_COMPARISON.md`](docs/broker/LEDGER_COMPARISON.md).
 
 ## It is fail-closed
 
