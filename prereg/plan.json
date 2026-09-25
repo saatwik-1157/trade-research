@@ -1,0 +1,190 @@
+{
+  "pre_registered_at_utc": "2026-09-25T00:35:56",
+  "hypothesis": "pugh_out_in_bear (pugh_3bar, from pugh_search.json) has positive net expectancy on H1 FX-majors history no rule candidate has been evaluated on.",
+  "candidate": {
+    "name": "pugh_out_in_bear",
+    "family": "pugh_3bar",
+    "report": "pugh_search.json",
+    "module": "pugh_search",
+    "builder": "build_pugh_candidates"
+  },
+  "selection": {
+    "pool_reports": {
+      "rule_search_rerun.json": "a4162e8daf4ecfbc55ff9b16040b927737b92b3e36559facdb6b0b7c659e7dec",
+      "shape_search.json": "de22eca77d657bdb4f5d27d7fbd8f58cd8ce6e4936c812eb1a3d609c058a374c",
+      "supertrend_search_h1.json": "dd662d7d79aefc2dea1402e7dcdd16f48bf3de6e2cf171707e417fe225a1c417",
+      "book_rules_search.json": "5b5337520964f6b649bba9a8fbb56b4eb1a1d36104b334fa30af3712769189a4",
+      "pugh_search.json": "4170263f549a423c07e98e169fc84268087cf3eef63a47936112cdb804d71e7b",
+      "tick_volume_search.json": "c86a60a97ffba8a03d15f65d71cf578c9d2a5851acad4d25dd6bf77ed056d5fa"
+    },
+    "pool_size": 193,
+    "eligible": 8,
+    "rule": "net expectancy > 0 in both in-sample and out-of-sample; rank by min(in-sample t, out-of-sample t), ties by total trades",
+    "window": {
+      "from": "2023-07-12T22:00:00",
+      "to": "2026-09-23T17:00:00",
+      "bars_per_symbol": 19851,
+      "in_sample_bars": 13895,
+      "out_of_sample_bars": 5956
+    },
+    "figures": {
+      "in_sample": {
+        "trades": 796,
+        "t": 1.38,
+        "net": 12.25
+      },
+      "out_of_sample": {
+        "trades": 393,
+        "t": 0.95,
+        "net": 10.09
+      },
+      "combined": {
+        "trades": 1189,
+        "net": 11.5361
+      },
+      "r_points": 211.09
+    },
+    "ranked_eligible": [
+      {
+        "name": "pugh_out_in_bear",
+        "report": "pugh_search.json",
+        "is_trades": 796,
+        "is_t": 1.38,
+        "is_net": 12.25,
+        "oos_trades": 393,
+        "oos_t": 0.95,
+        "oos_net": 10.09
+      },
+      {
+        "name": "pugh_bear_out_bear",
+        "report": "pugh_search.json",
+        "is_trades": 1160,
+        "is_t": 1.48,
+        "is_net": 11.04,
+        "oos_trades": 452,
+        "oos_t": 0.49,
+        "oos_net": 4.74
+      },
+      {
+        "name": "vspike_ride_3.0",
+        "report": "tick_volume_search.json",
+        "is_trades": 673,
+        "is_t": 0.35,
+        "is_net": 3.83,
+        "oos_trades": 272,
+        "oos_t": 0.44,
+        "oos_net": 6.83
+      },
+      {
+        "name": "pugh_bear_out_out",
+        "report": "pugh_search.json",
+        "is_trades": 246,
+        "is_t": 0.31,
+        "is_net": 4.17,
+        "oos_trades": 114,
+        "oos_t": 1.12,
+        "oos_net": 20.47
+      },
+      {
+        "name": "pugh_out_bear",
+        "report": "pugh_search.json",
+        "is_trades": 3193,
+        "is_t": 0.14,
+        "is_net": 0.6,
+        "oos_trades": 1351,
+        "oos_t": 0.44,
+        "oos_net": 2.43
+      },
+      {
+        "name": "pugh_bear_out_in",
+        "report": "pugh_search.json",
+        "is_trades": 737,
+        "is_t": 0.06,
+        "is_net": 0.55,
+        "oos_trades": 407,
+        "oos_t": 0.47,
+        "oos_net": 5.06
+      },
+      {
+        "name": "pugh_out_bear_in",
+        "report": "pugh_search.json",
+        "is_trades": 637,
+        "is_t": 1.12,
+        "is_net": 10.92,
+        "oos_trades": 265,
+        "oos_t": 0.06,
+        "oos_net": 0.77
+      },
+      {
+        "name": "donchian_fade_55",
+        "report": "rule_search_rerun.json",
+        "is_trades": 3943,
+        "is_t": 0.77,
+        "is_net": 3.13,
+        "oos_trades": 1689,
+        "oos_t": 0.04,
+        "oos_net": 0.21
+      }
+    ]
+  },
+  "spec": {
+    "timeframe": "H1",
+    "sl_atr": 1.5,
+    "tp_atr": 1.5,
+    "split": 0.7,
+    "spread_source": "median",
+    "skip_hours": [],
+    "cost_swap": false,
+    "symbols": [
+      "EURUSD",
+      "GBPUSD",
+      "USDJPY",
+      "USDCAD",
+      "AUDUSD",
+      "USDCHF",
+      "NZDUSD"
+    ]
+  },
+  "holdout": {
+    "to_exclusive": "2023-06-05T00:00:00",
+    "from": "earliest bar of the last 50,000 H1 bars; estimated 2018-09-03",
+    "min_years_per_symbol": 3.0,
+    "untouched_means": "no rule candidate evaluated on these H1 bars; see the module docstring for what has read them"
+  },
+  "cost": "per symbol, the larger of the holdout and selection-window median recorded spread; no financing",
+  "decision": {
+    "primary": "pooled net t > 1.96 and net expectancy > 0",
+    "secondary": [
+      "date-clustered t significant, positive, signs agree",
+      "net positive in >= 3 of 4 equal-duration holdout eras"
+    ],
+    "labels": [
+      "CONFIRMED",
+      "PRIMARY ONLY",
+      "NOT CONFIRMED"
+    ]
+  },
+  "reproduction_gate": {
+    "trades_tolerance": 0.03,
+    "expectancy_tolerance": 0.25,
+    "note": "run on the selection window before any holdout trade"
+  },
+  "power": {
+    "projected_holdout_trades": 1766,
+    "projected_holdout_years": 4.75,
+    "per_trade_sd_r_assumed": 1.0,
+    "detectable_net_edge_r_at_80pct": 0.0667,
+    "selection_net_edge_r": 0.0546,
+    "power_at_selection_edge": 0.632,
+    "power_at_half_selection_edge": 0.208,
+    "h1_spread_r": 0.02245,
+    "power_at_net_edge_of_one_spread": 0.155,
+    "detectable_over_spread": 2.97
+  },
+  "analysis_sha256": {
+    "tools/prereg.py": "db62d20a17e3d80c399e6083de6a0bf79a4c59886dc6251836a1c1707ee7393b",
+    "tools/pugh_search.py": "5467ba951200e8783e13abd2195d3670f2ad8c22d724680e5be2c8ca567863ce",
+    "tools/rule_backtest.py": "2395d77f0ede622db770e7ebfa9ba93afaa8700c843eb80ac65938d476f984c9",
+    "tools/rule_search.py": "3d7b7f56e80b21b736277b9fbbbc375589c36b5dce189b91ee855f14d404d6d4"
+  }
+}
