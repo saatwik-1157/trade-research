@@ -1275,7 +1275,7 @@ to the fourth decimal: tie-to-loss -0.01133R, tie-to-win +0.00751R, neutral
 
     python tools/ruled_out.py
 
-## A pre-registered test on untouched history: built, not yet spent
+## A pre-registered test on untouched history: run once, not confirmed
 
 The section above ends on what a search with k candidates cannot see. The
 other design is k = 1: **one candidate, chosen mechanically from what the
@@ -1323,8 +1323,26 @@ candidates positive in both halves are rare-firing, so even with no
 correction to pay, the holdout sees an edge only if it is about three times
 the spread. The frequent candidates that could be tested precisely are all
 net-negative in their own search. A null here would exclude net edges above
-0.067R and nothing smaller. The plan has NOT been written or committed and the
-holdout has not been touched: spending it is a decision, not a default.
+0.067R and nothing smaller.
+
+**Run on 2026-09-25, once: NOT CONFIRMED.** The plan was committed as
+6a74cf2 after a rehearsal reproduced the selection exactly (1,189 trades, net
+11.54 points against 1,189 and 11.54). On the holdout -- 2018-09-07 to
+2023-06-02, about 29,450 H1 bars per major -- the candidate took 1,697 trades
+at **net -6.73 points, t -1.10, -0.0274R**, win rate 0.5003. It lost before
+cost too: gross -1.38 points. Date-clustered t -1.06 over 892 entry dates;
+net-positive in 1 of 4 eras and 1 of 7 symbols (AUDUSD, t 0.60). Every gate
+failed, and the sign reversed from the selection period.
+
+What it rules out, and what it does not: at 1,697 trades the test detects a
+net edge of 0.068R with 80% power, so an edge that size in this rule is
+excluded. The selection-period estimate was 0.0546R, and the holdout measured
+the opposite sign -- the ordinary signature of a winner's-curse survivor
+rather than of a small real edge the test was too weak to see. It does NOT
+exclude edges below about three times the spread, as stated before the run.
+The holdout is now spent for this hypothesis and, in practice, for the Pugh
+family it came from; the result is `prereg/result.json`, and `confirm` will
+refuse to run again.
 
     python tools/prereg.py select --dry-run
 

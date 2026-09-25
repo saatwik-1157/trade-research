@@ -1,0 +1,197 @@
+{
+  "run_at_utc": "2026-09-25T00:36:44",
+  "plan_commit": "6a74cf28935ac7c86bd2ba1adcabb74486b349a7",
+  "candidate": "pugh_out_in_bear",
+  "verdict": "NOT CONFIRMED",
+  "primary": false,
+  "date_clustering_ok": false,
+  "eras_positive": 1,
+  "eras_ok": false,
+  "holdout_window": {
+    "EURUSD": {
+      "from": "2018-09-07T01:00:00",
+      "to": "2023-06-02T23:00:00",
+      "bars": 29445
+    },
+    "GBPUSD": {
+      "from": "2018-09-07T02:00:00",
+      "to": "2023-06-02T23:00:00",
+      "bars": 29446
+    },
+    "USDJPY": {
+      "from": "2018-09-07T04:00:00",
+      "to": "2023-06-02T23:00:00",
+      "bars": 29444
+    },
+    "USDCAD": {
+      "from": "2018-09-07T01:00:00",
+      "to": "2023-06-02T23:00:00",
+      "bars": 29445
+    },
+    "AUDUSD": {
+      "from": "2018-09-07T03:00:00",
+      "to": "2023-06-02T23:00:00",
+      "bars": 29444
+    },
+    "USDCHF": {
+      "from": "2018-09-07T01:00:00",
+      "to": "2023-06-02T23:00:00",
+      "bars": 29445
+    },
+    "NZDUSD": {
+      "from": "2018-09-07T09:00:00",
+      "to": "2023-06-02T23:00:00",
+      "bars": 29438
+    }
+  },
+  "spread_points": {
+    "EURUSD": {
+      "selection": 3.0,
+      "holdout": 2.0,
+      "charged": 3.0
+    },
+    "GBPUSD": {
+      "selection": 4.0,
+      "holdout": 4.0,
+      "charged": 4.0
+    },
+    "USDJPY": {
+      "selection": 3.0,
+      "holdout": 3.0,
+      "charged": 3.0
+    },
+    "USDCAD": {
+      "selection": 4.0,
+      "holdout": 3.0,
+      "charged": 4.0
+    },
+    "AUDUSD": {
+      "selection": 6.0,
+      "holdout": 3.0,
+      "charged": 6.0
+    },
+    "USDCHF": {
+      "selection": 9.0,
+      "holdout": 4.0,
+      "charged": 9.0
+    },
+    "NZDUSD": {
+      "selection": 8.0,
+      "holdout": 6.0,
+      "charged": 8.0
+    }
+  },
+  "reproduction": "trades 1189 vs 1189, net 11.54 vs 11.54",
+  "pooled": {
+    "trades": 1697,
+    "win_rate": 0.5003,
+    "expectancy_points_net": -6.73,
+    "expectancy_points_gross": -1.38,
+    "profit_factor": 0.943,
+    "total_points_net": -11417.8,
+    "avg_win_points": 221.1,
+    "avg_loss_points": -234.8,
+    "t_stat": -1.1,
+    "significant_at_95": false,
+    "avg_bars_held": 7.7,
+    "exit_mix": {
+      "tp": 849,
+      "sl": 846,
+      "timeout": 2
+    }
+  },
+  "by_date": {
+    "entry_dates": 892,
+    "obs_per_date": 1.9,
+    "t_stat_clustered_by_date": -1.06,
+    "mean_per_date": -7.66,
+    "signs_disagree": false,
+    "date_cluster_threshold_95": 2.042,
+    "date_cluster_significant": false
+  },
+  "eras": [
+    {
+      "block": 1,
+      "from": "2018-09-07T09:00:00",
+      "to": "2019-11-13T18:30:00",
+      "trades": 447,
+      "win_rate": 0.4899,
+      "expectancy_points_net": -15.32,
+      "t_stat": -1.59
+    },
+    {
+      "block": 2,
+      "from": "2019-11-13T18:30:00",
+      "to": "2021-01-19T04:00:00",
+      "trades": 424,
+      "win_rate": 0.4906,
+      "expectancy_points_net": -5.46,
+      "t_stat": -0.42
+    },
+    {
+      "block": 3,
+      "from": "2021-01-19T04:00:00",
+      "to": "2022-03-27T13:30:00",
+      "trades": 386,
+      "win_rate": 0.513,
+      "expectancy_points_net": 2.57,
+      "t_stat": 0.24
+    },
+    {
+      "block": 4,
+      "from": "2022-03-27T13:30:00",
+      "to": "2023-06-02T23:00:00",
+      "trades": 440,
+      "win_rate": 0.5091,
+      "expectancy_points_net": -7.38,
+      "t_stat": -0.49
+    }
+  ],
+  "per_symbol": {
+    "AUDUSD": {
+      "trades": 234,
+      "win_rate": 0.5299,
+      "expectancy_points_net": 8.73,
+      "t_stat": 0.6
+    },
+    "EURUSD": {
+      "trades": 240,
+      "win_rate": 0.5083,
+      "expectancy_points_net": -1.27,
+      "t_stat": -0.09
+    },
+    "GBPUSD": {
+      "trades": 253,
+      "win_rate": 0.498,
+      "expectancy_points_net": -4.49,
+      "t_stat": -0.21
+    },
+    "NZDUSD": {
+      "trades": 254,
+      "win_rate": 0.5,
+      "expectancy_points_net": -11.96,
+      "t_stat": -0.93
+    },
+    "USDCAD": {
+      "trades": 203,
+      "win_rate": 0.4975,
+      "expectancy_points_net": -5.28,
+      "t_stat": -0.29
+    },
+    "USDCHF": {
+      "trades": 259,
+      "win_rate": 0.4749,
+      "expectancy_points_net": -27.56,
+      "t_stat": -2.03
+    },
+    "USDJPY": {
+      "trades": 254,
+      "win_rate": 0.4961,
+      "expectancy_points_net": -3.03,
+      "t_stat": -0.18
+    }
+  },
+  "net_r_mean": -0.02736,
+  "net_r_sd": 1.0,
+  "detectable_net_edge_r_at_80pct": 0.068
+}
