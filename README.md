@@ -467,6 +467,9 @@ frontend/           Next.js 16 + React 19 + TypeScript + Tailwind
 Run the matching suite after touching a tool — the mapping is in
 [`CLAUDE.md`](CLAUDE.md). All seven run in CI against Python 3.10, 3.12 and 3.14.
 
+Design, policy, runbook and audit documents are indexed in
+[`docs/README.md`](docs/README.md).
+
 ---
 
 ## Design rules
