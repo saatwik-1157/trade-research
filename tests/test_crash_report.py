@@ -512,6 +512,75 @@ def test_the_offset_from_a_dead_tick_is_not_a_measurement():
           run_overnight.weekend_deadline(target, live, local), None)
 
 
+def test_the_venue_clock_is_read_as_the_venue_reads_it():
+    """The weekend guard placed the venue 3.0h AHEAD of an IST laptop when a
+    live tick measured it 2.5h BEHIND, and refused every Friday-evening
+    deadline as a venue Saturday. Measured 2026-09-25: local 11:41:40, server
+    wall 09:11:41.
+
+    Invisible on a UTC machine, where both readings agree -- so the zone is
+    forced to IST where the OS allows it, and the check bites on CI too.
+    """
+    print()
+    print("the venue's clock comes from the tick stamp, not this machine's zone")
+    import calendar
+    import time
+    from datetime import datetime, timedelta
+
+    old_tz = os.environ.get("TZ")
+    if hasattr(time, "tzset"):
+        os.environ["TZ"] = "Asia/Kolkata"
+        time.tzset()
+    try:
+        stamp = calendar.timegm((2026, 9, 25, 9, 11, 41, 0, 0, 0))
+        check("a stamp reads as the server's wall clock, whatever the local zone",
+              run_overnight.venue_wall_clock(stamp), datetime(2026, 9, 25, 9, 11, 41))
+
+        if datetime.now().astimezone().utcoffset() != timedelta(hours=5, minutes=30):
+            print("  (skipped the end-to-end half: this OS cannot be put in IST)")
+            return
+
+        # End to end through the guard, with a venue at UTC+3 quoting live.
+        class Tick:
+            def __init__(self, ms):
+                self.time_msc = ms
+                self.time = ms // 1000       # both fields, as a real tick has
+
+        class Venue:
+            calls = 0
+
+            def symbol_info_tick(self, sym):
+                Venue.calls += 1
+                return Tick(int((time.time() + 3 * 3600) * 1000) + Venue.calls)
+
+        now = datetime.now()
+        ahead = (4 - now.weekday()) % 7
+        friday = (now + timedelta(days=ahead)).replace(hour=23, minute=0, second=0,
+                                                       microsecond=0)
+        if friday <= now:
+            friday += timedelta(days=7)
+        saved = run_overnight.mt5_paper.connect
+        run_overnight.mt5_paper.connect = lambda *_a, **_k: Venue()
+        try:
+            got = run_overnight.deadline_in_the_weekend(friday)
+            check("Friday 23:00 IST is Friday 20:30 at a UTC+3 venue: allowed", got, None)
+            saturday = friday + timedelta(hours=7)          # Sat 06:00 IST
+            got = run_overnight.deadline_in_the_weekend(saturday)
+            check("Saturday 06:00 IST is still refused, as Saturday 03:30 there",
+                  got is not None and got[0].strftime("%a %H:%M"), "Sat 03:30")
+            check("and the offset it would quote is the measured -2.5h",
+                  got is not None and round(got[1].total_seconds() / 3600, 1), -2.5)
+        finally:
+            run_overnight.mt5_paper.connect = saved
+    finally:
+        if hasattr(time, "tzset"):
+            if old_tz is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = old_tz
+            time.tzset()
+
+
 def test_the_watchdog_restarts_the_session_it_was_watching():
     """**A supervisor that restarts a different, looser session is a hazard.**
 
@@ -769,6 +838,7 @@ def main():
     test_a_weekend_deadline_is_refused_in_the_venues_week_not_ours()
     test_a_paper_run_is_exempt_from_the_weekend_guard()
     test_the_offset_from_a_dead_tick_is_not_a_measurement()
+    test_the_venue_clock_is_read_as_the_venue_reads_it()
     test_the_watchdog_restarts_the_session_it_was_watching()
     test_the_refusal_says_when_the_answer_changes()
     test_a_session_that_failed_its_flush_is_not_completed()

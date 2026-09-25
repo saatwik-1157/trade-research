@@ -360,6 +360,25 @@ def weekend_deadline(target, server_now, local_now):
     return None
 
 
+def venue_wall_clock(tick_epoch: float) -> datetime:
+    """The venue's own wall clock, read from a tick stamp. No I/O, no zone.
+
+    MT5 stamps a tick with the SERVER's wall clock written as if it were UTC,
+    so reading the stamp as UTC gives the venue's clock and nothing about this
+    machine enters. `datetime.fromtimestamp` -- which `mt5_paper.server_now`
+    uses, rightly, because MT5 turns a naive datetime back into the same
+    epoch for a history query -- converts it into THIS machine's zone instead.
+
+    The weekend guard used that value as the venue's clock. On this IST laptop
+    it read the venue as 3.0h AHEAD when a live tick measures it 2.5h BEHIND
+    (UTC+3 against UTC+5:30), so every Friday-evening deadline landed on a
+    venue Saturday and was refused. Measured 2026-09-25 at 11:41 local: server
+    wall 09:11:41. On a UTC machine the two readings agree, which is why no
+    test on CI could have seen it.
+    """
+    return datetime(1970, 1, 1) + timedelta(seconds=float(tick_epoch))
+
+
 def next_viable_deadline(target, offset, limit_days=7):
     """The first deadline after `target` that lands inside the venue's week.
 
@@ -453,18 +472,26 @@ def deadline_in_the_weekend(target):
 
     try:
         mt5 = mt5_paper.connect(None)
-        server = mt5_paper.server_now(mt5)
         # Are quotes actually ARRIVING? Sampled twice rather than assumed,
-        # because `server_now` is the last tick's stamp and a stale one looks
-        # exactly like a live one. Without this the guard printed "server is
-        # -5.6h from this clock" on a Saturday -- a plausible figure, measured
-        # from a tick seven hours dead, and quoting it as the venue's offset
-        # would be inventing a number rather than reporting a gap.
+        # because the venue clock is the last tick's stamp and a stale one
+        # looks exactly like a live one. Without this the guard printed
+        # "server is -5.6h from this clock" on a Saturday -- a plausible
+        # figure, measured from a tick seven hours dead, and quoting it as the
+        # venue's offset would be inventing a number rather than reporting a
+        # gap.
         first = _stamps(mt5)
         _time.sleep(1.5)
-        live = _stamps(mt5) != first or not first
+        second = _stamps(mt5)
+        live = second != first or not first
     except Exception:
         return None
+    stamps = second or first
+    if not stamps:
+        return None
+    # The venue's WALL clock, not `mt5_paper.server_now`: that one is built for
+    # history-query bounds and lands in this machine's zone. See
+    # `venue_wall_clock` for what reading it as a wall clock did.
+    server = venue_wall_clock(max(stamps.values()) / 1000.0)
     decided = weekend_deadline(target, server, _dt.now())
     if decided is None:
         return None
